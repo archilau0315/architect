@@ -1,0 +1,30 @@
+{
+  "name": "test23商业开发版0217首席图像架构师-(chief-image-architect)",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@google/genai": "1.35.0",
+    "@google/generative-ai": "^0.24.1",
+    "lucide-react": "^0.575.0",
+    "piexifjs": "^1.0.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "terser": "^5.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

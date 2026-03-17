@@ -1,0 +1,8 @@
+{
+  "name": "logo-29V0302版首席图像架构师 (Chief Image Architect)",
+  "description": "专业级 AI 图像架构师，集提示词优化、高保真图像生成与视觉解析于一体。由高级图像架构师助手深度驱动。",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}

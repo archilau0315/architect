@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables - 包含敏感信息
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Config files with secrets - 包含 API Key
+config/gateway_config.json
+config/secrets.json
+*.pem
+*.key
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Build outputs
+build
+.cache
+
+# Test coverage
+coverage
+
+# Temporary files
+*.tmp
+*.temp
