@@ -8,7 +8,7 @@
   "price_unit": "CNY/M tokens",
   "api_keys": {
     "google_official": "",
-    "ph8": ""
+    "ph8": "sk-2f6ff8aba4d541d591d17e8eae60e75c"
   },
   "models": {
     "gemini-3-pro-preview": [
@@ -78,6 +78,19 @@
         "priority": 200,
         "active": true,
         "description": "Nano-Banana 图像加速"
+      }
+    ],
+    "gemini-3.1-flash-image-preview": [
+      {
+        "id": "hp8-3.1-flash-image",
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3.1-flash-image-preview",
+        "inputPrice": 2.5,
+        "outputPrice": 21.2,
+        "priority": 200,
+        "active": true,
+        "description": "Gemini 3.1 Flash Image 图像生成"
       }
     ],
     "Nano-Banana": [

@@ -8,6 +8,7 @@ import ImageAnalyzer from './components/ImageAnalyzer.tsx';
 import VideoGenerator from './components/VideoGenerator.tsx';
 import SettingsPanel from './components/SettingsPanel.tsx';
 import BetaPolicyBanner from './components/BetaPolicyBanner.tsx';
+import InviteVerify from './components/InviteVerify.tsx';
 import { AppTab, VersionRecord, UserPreferences, CustomModel, HistoryItem, CreativeDomain, UserTier } from './types.ts';
 import { GeminiService, DEFAULT_SYSTEM_PRESETS, EnhancedPrompt } from './services/geminiService.ts';
 import { Ph8UsageService, Ph8UsageData } from './services/ph8UsageService.ts';
@@ -44,6 +45,7 @@ const App: React.FC = () => {
   const [enhancedPrompt, setEnhancedPrompt] = useState<EnhancedPrompt>({ zh: '', en: '', analysis: '' });
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [userTier, setUserTier] = useState<UserTier>('pro');
+  const [needsInviteVerify, setNeedsInviteVerify] = useState(false);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   
   // Points State
@@ -76,7 +78,7 @@ const App: React.FC = () => {
   const [analyzeKey, setAnalyzeKey] = useState(0);
   const [videoKey, setVideoKey] = useState(0);
   const [isSystemVisible, setIsSystemVisible] = useState(false);
-  const [useThirdPartyGateway, setUseThirdPartyGateway] = useState(false);
+  const [useThirdPartyGateway, setUseThirdPartyGateway] = useState(true);
   const [usePromptEnhance, setUsePromptEnhance] = useState(true);
   const [showTokenMonitor, setShowTokenMonitor] = useState(false);
   const [lastOpTokens, setLastOpTokens] = useState({ prompt: 0, completion: 0, total: 0 });
@@ -115,24 +117,29 @@ const App: React.FC = () => {
 
         const savedGatewayMode = localStorage.getItem(GATEWAY_MODE_KEY);
         console.log('[初始化] localStorage 中的网关模式值:', savedGatewayMode, '类型:', typeof savedGatewayMode);
-        // 非开发者模式下，强制使用商业模式（网关模式=true）
-        // 只有开发者模式才能使用开发模式（官方通道=false）
         const isEnabled = savedGatewayMode === null ? true : savedGatewayMode === 'true';
         console.log('[初始化] 解析后的布尔值:', isEnabled);
-        setUseThirdPartyGateway(isEnabled);
-        GeminiService.setGatewayMode(isEnabled);
-        // 强制保存为商业模式，确保非开发者模式下始终使用商业网关
+        setUseThirdPartyGateway(true);
+        GeminiService.setGatewayMode(true);
         localStorage.setItem(GATEWAY_MODE_KEY, 'true');
-        console.log('[初始化] 已设置网关模式:', isEnabled ? '商业/网关' : '开发/官方');
+        console.log('[初始化] 已设置网关模式: 商业/网关');
         const savedDomain = localStorage.getItem(DOMAIN_KEY) as CreativeDomain;
         if (savedDomain) setCurrentDomain(savedDomain);
 
         const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
-        setUserTier(savedTier);
         
-        // Beta Banner initialization
+        // 检查是否需要邀请码验证
+        const savedInviteSession = localStorage.getItem('architect-invite-session');
+        if (!savedInviteSession) {
+          setNeedsInviteVerify(true);
+        } else {
+          setUserTier(savedTier);
+        }
+        
+        // Beta Banner initialization - 对所有用户显示，先清除之前的关闭状态
+        localStorage.removeItem('architect-beta-banner-closed');
         const betaBannerClosed = localStorage.getItem('architect-beta-banner-closed');
-        if (savedTier === 'beta' && betaBannerClosed !== 'true') {
+        if (savedTier !== 'free' && betaBannerClosed !== 'true') {
           setShowBetaBanner(true);
         }
 
@@ -141,21 +148,38 @@ const App: React.FC = () => {
         const savedPointsData = localStorage.getItem(POINTS_KEY);
         if (savedPointsData) {
           const { daily, purchased, lastReset } = JSON.parse(savedPointsData);
-          setPurchasedPoints(purchased || 0);
-          if (lastReset === today) {
-            setDailyPoints(daily);
-            setLastResetDate(lastReset);
-          } else {
-            const newDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG].daily;
-            setDailyPoints(newDaily);
+          
+          // Beta 用户特殊处理：确保注册赠送积分
+          if (savedTier === 'beta' && (!purchased || purchased < 1000)) {
+            setPurchasedPoints(1000);
+            setDailyPoints(200);
             setLastResetDate(today);
-            savePoints(newDaily, purchased || 0, today);
+            savePoints(200, 1000, today);
+          } else {
+            setPurchasedPoints(purchased || 0);
+            if (lastReset === today) {
+              setDailyPoints(daily);
+              setLastResetDate(lastReset);
+            } else {
+              const newDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
+              setDailyPoints(newDaily);
+              setLastResetDate(today);
+              savePoints(newDaily, purchased || 0, today);
+            }
           }
         } else {
-          const initialDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG].daily;
-          setDailyPoints(initialDaily);
-          setLastResetDate(today);
-          savePoints(initialDaily, 0, today);
+          // 新用户初始化
+          if (savedTier === 'beta') {
+            setDailyPoints(200);
+            setPurchasedPoints(1000);
+            setLastResetDate(today);
+            savePoints(200, 1000, today);
+          } else {
+            const initialDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
+            setDailyPoints(initialDaily);
+            setLastResetDate(today);
+            savePoints(initialDaily, 0, today);
+          }
         }
         
         const savedInstructions = localStorage.getItem(CURRENT_INSTRUCTIONS_KEY);
@@ -303,6 +327,34 @@ const App: React.FC = () => {
       return true;
     }
 
+    // Beta 用户特殊逻辑：每日最多消耗 200 积分，从总余额中扣除
+    if (userTier === 'beta') {
+      const dailyLimit = 200;
+      const todayConsumed = 200 - dailyPoints; // 今日已消耗
+      
+      if (todayConsumed + amount > dailyLimit) {
+        window.alert(`内测用户每日限额 200 积分，今日已使用 ${todayConsumed} 积分，剩余 ${dailyPoints} 积分可用。`);
+        return false;
+      }
+      
+      if (purchasedPoints < amount) {
+        return false;
+      }
+      
+      const newPurchased = purchasedPoints - amount;
+      const newDaily = dailyPoints - amount; // 用于追踪今日剩余额度
+      
+      setPurchasedPoints(newPurchased);
+      setDailyPoints(Math.max(0, newDaily));
+      savePoints(Math.max(0, newDaily), newPurchased, lastResetDate);
+      
+      const newTotalConsumed = totalConsumedPoints + amount;
+      setTotalConsumedPoints(newTotalConsumed);
+      localStorage.setItem(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString());
+      
+      return true;
+    }
+
     const total = dailyPoints + purchasedPoints;
     if (total < amount) return false;
 
@@ -369,6 +421,18 @@ const App: React.FC = () => {
 
   const activeModel = models.find(m => m.id === activeModelId) || models[0];
 
+  const handleInviteVerified = (userData: { email: string; tier: string; points: number }) => {
+    setUserTier(userData.tier as UserTier);
+    setNeedsInviteVerify(false);
+    setDailyPoints(200);
+    setPurchasedPoints(userData.points || 1000);
+    savePoints(200, userData.points || 1000, new Date().toDateString());
+  };
+
+  if (needsInviteVerify) {
+    return <InviteVerify onVerified={handleInviteVerified} />;
+  }
+
   return (
     <Layout 
       activeTab={activeTab} 
@@ -384,7 +448,7 @@ const App: React.FC = () => {
       currentModelName={dynamicModelName}
       modelStatus={modelStatus}
       dailyUsage={TIER_CONFIG[userTier].daily - dailyPoints}
-      balance={dailyPoints + purchasedPoints}
+      balance={userTier === 'beta' ? purchasedPoints : dailyPoints + purchasedPoints}
     >
       <div className="w-full h-full p-8 md:p-12 overflow-y-auto custom-scrollbar relative">
         {/* Token Monitor Window */}
@@ -511,10 +575,6 @@ const App: React.FC = () => {
         usePromptEnhance={usePromptEnhance}
         onTogglePromptEnhance={handleTogglePromptEnhance}
       />
-      
-      {showBetaBanner && userTier === 'beta' && (
-        <BetaPolicyBanner onClose={() => setShowBetaBanner(false)} />
-      )}
     </Layout>
   );
 };

@@ -74,6 +74,26 @@ const Layout: React.FC<LayoutProps> = ({
         document.documentElement.classList.remove('light');
       }
     } catch (err) { console.warn(err); }
+    
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AVATAR_KEY && e.newValue) {
+        setAvatarUrl(e.newValue);
+      }
+      if (e.key === COMPANY_LOGO_KEY && e.newValue) {
+        setCompanyLogoUrl(e.newValue);
+      }
+    };
+    
+    const handleAvatarEvent = (e: CustomEvent<string>) => {
+      setAvatarUrl(e.detail);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('avatarChanged', handleAvatarEvent as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('avatarChanged', handleAvatarEvent as EventListener);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -261,8 +281,8 @@ const Layout: React.FC<LayoutProps> = ({
             
             <div className="flex items-center gap-3 shrink-0 ml-auto">
               <div className="flex flex-col items-end leading-tight gap-0.5">
-                <span className={`text-[8px] font-black tracking-tighter transition-colors text-slate-400 opacity-60 uppercase`}>消耗: {Math.round(dailyUsage * 10)} 点</span>
-                <span className={`text-[8px] font-black tracking-tighter transition-colors ${balance < 10 ? 'text-rose-500' : 'text-slate-400'}`}>余额: {Math.round(balance * 10)} 点</span>
+                <span className={`text-[8px] font-black tracking-tighter transition-colors text-slate-400 opacity-60 uppercase`}>消耗: {dailyUsage} 点</span>
+                <span className={`text-[8px] font-black tracking-tighter transition-colors ${balance < 10 ? 'text-rose-500' : 'text-slate-400'}`}>余额: {balance} 点</span>
               </div>
               <button 
                 onClick={onOpenSettings} 

@@ -191,3 +191,20 @@ INSERT INTO tier_limits (tier, daily_token_limit, monthly_token_limit, requests_
 ('pro', 300000, 9000000, 30, 10),
 ('plus', 1000000, 30000000, 60, 20)
 ON DUPLICATE KEY UPDATE updated_at = NOW();
+
+-- 内测申请表
+CREATE TABLE IF NOT EXISTS beta_applications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(64) NOT NULL COMMENT '申请人姓名',
+  email VARCHAR(128) NOT NULL COMMENT '邮箱',
+  phone VARCHAR(20) COMMENT '手机号',
+  company VARCHAR(128) COMMENT '公司/机构',
+  purpose ENUM('architecture', 'product', 'education', 'research', 'entertainment', 'other') NOT NULL COMMENT '使用场景',
+  experience ENUM('none', 'beginner', 'intermediate', 'expert') DEFAULT NULL COMMENT 'AI使用经验',
+  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '申请时间',
+  status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending' COMMENT '审核状态',
+  approved_at TIMESTAMP NULL COMMENT '批准时间',
+  INDEX idx_email (email),
+  INDEX idx_status (status),
+  INDEX idx_applied_at (applied_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='内测申请表';

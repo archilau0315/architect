@@ -6,6 +6,7 @@ const db = require('./db');
 const inviteRoutes = require('./routes/invite');
 const watermarkRoutes = require('./routes/watermark');
 const usageRoutes = require('./routes/usage');
+const betaRoutes = require('./routes/beta');
 
 const app = express();
 app.use(cors({
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use('/api/invite', inviteRoutes);
 app.use('/api/watermark', watermarkRoutes);
 app.use('/api/usage', usageRoutes);
+app.use('/api/beta', betaRoutes);
 
 // ==================== 用户认证 API ====================
 

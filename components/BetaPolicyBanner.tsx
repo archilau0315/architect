@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import BetaApplicationBanner from './BetaApplicationBanner.tsx';
 
 interface BetaPolicyBannerProps {
   onClose: () => void;
 }
 
 const BetaPolicyBanner: React.FC<BetaPolicyBannerProps> = ({ onClose }) => {
+  const [showApplication, setShowApplication] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -80,16 +82,22 @@ const BetaPolicyBanner: React.FC<BetaPolicyBannerProps> = ({ onClose }) => {
           
           <div className="mt-4 p-3 bg-white/10 rounded-xl text-center">
             <p className="text-white/70 text-xs">
-              内测期间无水印下载暂不可用<br/>
-              正式上线后解锁全部权益
+              本应用仅限邀请注册、内部试用，不向公众提供服务，不涉及商业收费。所有数据仅用于系统测试与内部使用，严格遵守网络安全与个人信息保护相关法律法规。
             </p>
           </div>
           
-          <button className="w-full mt-4 py-3 bg-white text-indigo-600 rounded-xl font-black text-sm uppercase tracking-wider hover:bg-white/90 transition-all shadow-lg">
+          <button 
+            onClick={() => setShowApplication(true)}
+            className="w-full mt-4 py-3 bg-white text-indigo-600 rounded-xl font-black text-sm uppercase tracking-wider hover:bg-white/90 transition-all shadow-lg"
+          >
             申请内测资格
           </button>
         </div>
       </div>
+      
+      {showApplication && (
+        <BetaApplicationBanner onClose={() => setShowApplication(false)} />
+      )}
     </div>
   );
 };

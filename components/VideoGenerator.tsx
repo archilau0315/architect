@@ -14,12 +14,46 @@ interface VideoGeneratorProps {
   points: { daily: number; purchased: number };
   onConsumePoints: (amount: number) => boolean;
   useThirdPartyGateway?: boolean;
+  isDeveloperMode?: boolean;
 }
 
 const STORAGE_KEY = 'ARCHITECT_VIDEO_WORKBENCH_V2';
+const VIDEO_DOWNLOAD_KEY = 'ARCHITECT_VIDEO_DOWNLOAD_COUNT';
 
-const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false }) => {
-  const isDeveloper = userTier === 'pro' || userTier === 'plus';
+const getDownloadLimits = (tier: UserTier | 'dev'): { daily: number; label: string } => {
+  switch (tier) {
+    case 'pro': return { daily: 5, label: '5段/天' };
+    case 'plus': return { daily: Infinity, label: '无限' };
+    case 'dev': return { daily: Infinity, label: '无限' };
+    default: return { daily: 0, label: '无权限' };
+  }
+};
+
+const getTodayDownloadCount = (): number => {
+  try {
+    const saved = localStorage.getItem(VIDEO_DOWNLOAD_KEY);
+    if (!saved) return 0;
+    const data = JSON.parse(saved);
+    const today = new Date().toISOString().split('T')[0];
+    if (data.date === today) {
+      return data.count || 0;
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
+};
+
+const incrementDownloadCount = (): number => {
+  const today = new Date().toISOString().split('T')[0];
+  const current = getTodayDownloadCount();
+  const newCount = current + 1;
+  localStorage.setItem(VIDEO_DOWNLOAD_KEY, JSON.stringify({ date: today, count: newCount }));
+  return newCount;
+};
+
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false }) => {
+  const effectiveTier = (isDeveloperMode ? 'dev' : userTier) as UserTier | 'dev';
   const [prompt, setPrompt] = useState('');
   const [assets, setAssets] = useState<string[]>([]);
   const [aspectRatio, setAspectRatio] = useState<string>('16:9');
@@ -174,19 +208,26 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     if (!videoUrl) return;
 
     if (isPro) {
-      if (userTier === 'beta') {
-        window.alert("内测期间，无水印下载暂不可用。\n升级正式版即可解锁高清无水印下载。");
+      const limits = getDownloadLimits(effectiveTier as UserTier | 'dev');
+      const currentCount = getTodayDownloadCount();
+      
+      if (limits.daily === 0) {
+        window.alert("权限不足：无水印下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
         return;
       }
-      if (!isDeveloper) {
-        alert("权限不足：高清原片下载仅限授权用户。");
+      
+      if (currentCount >= limits.daily) {
+        window.alert(`今日无水印下载次数已用完。\n\n您的额度：${limits.label}\n已下载：${currentCount} 次\n\n请明天再试或升级套餐。`);
         return;
       }
+      
       const confirmed = window.confirm(
-        "【版权合规声明】\n本 AI 生成视频仅限个人/合法使用，禁止用于违法、侵权用途。平台已记录下载日志，请合规使用。\n\n确认下载高清原片？"
+        `【版权合规声明】\n本 AI 生成视频仅限个人/合法使用，禁止用于违法、侵权用途。平台已记录下载日志，请合规使用。\n\n今日剩余下载次数：${limits.daily - currentCount}\n\n确认下载无水印高清原片？`
       );
       if (!confirmed) return;
+      
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'pro' });
+      incrementDownloadCount();
       
       const link = document.createElement('a');
       link.href = videoUrl;
@@ -403,14 +444,44 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                     Preview Mode | Watermarked
                   </div>
                 </div>
-                <div className="flex gap-4 items-center">
+                <div className="flex gap-4 items-center flex-wrap">
                   <button 
-                    onClick={(e) => handleDownload(e, false)} 
-                    disabled={isWatermarkProcessing}
-                    className={`px-8 py-4 bg-slate-100 dark:bg-white/10 backdrop-blur-xl border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white rounded-full font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/20 transition-all ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={(e) => {
+                      if (effectiveTier === 'beta' || effectiveTier === 'free') {
+                        window.alert("权限不足：视频下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
+                        return;
+                      }
+                      handleDownload(e, false);
+                    }} 
+                    disabled={isWatermarkProcessing || effectiveTier === 'beta' || effectiveTier === 'free'}
+                    className={`px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${
+                      (effectiveTier === 'beta' || effectiveTier === 'free')
+                        ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50'
+                        : 'bg-slate-100 dark:bg-white/10 backdrop-blur-xl border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-white/20'
+                    } ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isWatermarkProcessing ? `处理中 ${watermarkProgress}%...` : '标准下载 (带水印)'}
+                    标准下载 (带水印)
                   </button>
+                  
+                  <button 
+                    onClick={(e) => {
+                      const limits = getDownloadLimits(effectiveTier);
+                      if (limits.daily === 0) {
+                        window.alert("权限不足：无水印下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
+                        return;
+                      }
+                      handleDownload(e, true);
+                    }} 
+                    disabled={isWatermarkProcessing || getDownloadLimits(effectiveTier).daily === 0}
+                    className={`px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest transition-all shadow-lg ${
+                      getDownloadLimits(effectiveTier).daily === 0 
+                        ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50' 
+                        : 'bg-theme text-white hover:bg-theme-light'
+                    } ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    无水印下载 {effectiveTier !== 'dev' && `(${getDownloadLimits(effectiveTier).label})`}
+                  </button>
+                  
                   {isWatermarkProcessing && (
                     <div className="flex items-center gap-2">
                       <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserPreferences, CustomModel, VersionRecord, UserTier, AppTheme } from '../types.ts';
 import SystemSpec from './SystemSpec.tsx';
 import { TERMS_OF_SERVICE } from '../legal/termsOfService.ts';
@@ -29,6 +29,12 @@ interface SettingsPanelProps {
   onToggleGateway: (enabled: boolean) => void;
   showTokenMonitor: boolean;
   onToggleTokenMonitor: (enabled: boolean) => void;
+  onLogout?: () => void;
+  userInfo?: {
+    email?: string;
+    name?: string;
+    avatar?: string;
+  };
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
@@ -38,7 +44,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   userTier, isDeveloperMode = false, onToggleDeveloper, isSystemVisible,
   points, onBuyPoints,
   useThirdPartyGateway, onToggleGateway,
-  showTokenMonitor, onToggleTokenMonitor
+  showTokenMonitor, onToggleTokenMonitor,
+  onLogout
 }) => {
   const isDeveloper = isDeveloperMode;
   const [activeTab, setActiveTab] = useState<'prefs' | 'account' | 'sub' | 'agreement' | 'about' | 'system'>('prefs');
@@ -56,9 +63,245 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [inputPassword, setInputPassword] = useState('');
   const [isPassVisible, setIsPassVisible] = useState(false);
 
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const AVATAR_KEY = 'user-architect-avatar-v120-locked';
+
+  useEffect(() => {
+    const loadAvatar = () => {
+      try {
+        const savedAvatar = localStorage.getItem(AVATAR_KEY);
+        if (savedAvatar) {
+          setUserAvatar(savedAvatar);
+        }
+      } catch (e) {
+        console.error('Failed to load avatar:', e);
+      }
+    };
+    
+    loadAvatar();
+    
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AVATAR_KEY && e.newValue) {
+        setUserAvatar(e.newValue);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert('图片大小不能超过 2MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setUserAvatar(result);
+        localStorage.setItem(AVATAR_KEY, result);
+        window.dispatchEvent(new CustomEvent('avatarChanged', { detail: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const getLoggedInUser = () => {
+    try {
+      const session = localStorage.getItem('architect-invite-session');
+      if (session) {
+        return JSON.parse(session);
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  };
+
+  const loggedInUser = getLoggedInUser();
+  const isLoggedIn = !!loggedInUser;
+
   if (!isOpen) return null;
 
-  const renderAccount = () => (
+  const handleLogout = () => {
+    localStorage.removeItem('architect-invite-session');
+    localStorage.removeItem('architect-user-tier-v150');
+    localStorage.removeItem('architect-user-points-v160');
+    localStorage.removeItem('architect-beta-application-submitted');
+    if (onLogout) {
+      onLogout();
+    } else {
+      window.location.reload();
+    }
+  };
+
+  const getTierLabel = (tier: string) => {
+    const labels: Record<string, string> = {
+      'beta': '内测用户',
+      'pro': '专业版',
+      'plus': '高级版',
+      'dev': '开发者',
+      'free': '免费版'
+    };
+    return labels[tier] || '免费版';
+  };
+
+  const getTierBenefits = (tier: string) => {
+    const benefits: Record<string, string[]> = {
+      'beta': ['注册赠送1000积分体验金', '每日可用200积分', '图像生成、图像分析、对话等功能全开放', '视频生成可体验（不支持下载）', '优先体验新功能'],
+      'pro': ['每日 300K 积分额度', '每月 9M 积分额度', '视频无水印下载（5次/日）', '优先体验新功能'],
+      'plus': ['每日 1M 积分额度', '每月 30M 积分额度', '视频无水印下载（无限）', '专属客服支持'],
+      'dev': ['无限积分额度', '开发者API访问', '优先技术支持', '内测功能抢先体验']
+    };
+    return benefits[tier] || ['每日 10K 积分额度', '每月 300K 积分额度', '基础图像生成'];
+  };
+
+  const getTierLimits = (tier: string) => {
+    const limits: Record<string, { daily: number; monthly: number }> = {
+      'free': { daily: 10000, monthly: 300000 },
+      'beta': { daily: 50000, monthly: 1500000 },
+      'basic': { daily: 100000, monthly: 3000000 },
+      'pro': { daily: 300000, monthly: 9000000 },
+      'plus': { daily: 1000000, monthly: 30000000 },
+      'dev': { daily: 999999999, monthly: 999999999 }
+    };
+    return limits[tier] || limits['free'];
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+    return num.toString();
+  };
+
+  const renderAccount = () => {
+    if (isLoggedIn && loggedInUser) {
+      const tierLimits = getTierLimits(loggedInUser.tier || userTier);
+      
+      return (
+        <div className="max-w-md mx-auto space-y-6 py-4 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="text-center space-y-4 mb-6">
+            <div 
+              onClick={() => avatarInputRef.current?.click()}
+              className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-indigo-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-all relative group"
+            >
+              {userAvatar ? (
+                <img src={userAvatar} alt="用户头像" className="w-full h-full object-cover" />
+              ) : (
+                <img src="./archi01.png" alt="默认头像" className="w-full h-full object-cover" />
+              )}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <span className="text-white text-[10px] font-black uppercase tracking-wider">更换头像</span>
+              </div>
+            </div>
+            <input 
+              type="file" 
+              ref={avatarInputRef} 
+              onChange={handleAvatarChange} 
+              accept="image/*" 
+              className="hidden" 
+            />
+            <div>
+              <h3 className="text-xl font-black italic">{loggedInUser.nickname || loggedInUser.email?.split('@')[0] || '内测用户'}</h3>
+              <p className="text-xs text-slate-400 font-mono">{loggedInUser.email}</p>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-full border border-indigo-500/20">
+              <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+                {getTierLabel(loggedInUser.tier || userTier)}
+              </span>
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            </div>
+          </div>
+
+          {(loggedInUser.tier || userTier) === 'beta' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">总积分</p>
+                <p className="text-xl font-black text-theme">1,000</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">注册赠送</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">总余额</p>
+                <p className="text-xl font-black text-green-500">{points.purchased.toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">可用总额</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">日积分</p>
+                <p className="text-xl font-black text-amber-500">200</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">每日可用</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">日余额</p>
+                <p className="text-xl font-black text-orange-500">{Math.min(200, points.purchased).toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">今日可用</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">积分余额</p>
+                <p className="text-xl font-black text-theme">{(points.purchased + points.daily).toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">购买: {points.purchased.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">日积分</p>
+                <p className="text-xl font-black text-amber-500">{points.daily.toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">每日: {formatNumber(tierLimits.daily)}</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 text-center">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2">月限额</p>
+                <p className="text-xl font-black text-purple-500">{formatNumber(tierLimits.monthly)}</p>
+                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[8px] text-slate-500">每月重置</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-5 space-y-3">
+            <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">内测专属权益</h4>
+            {getTierBenefits(loggedInUser.tier || userTier).map((benefit, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center">
+                  <span className="text-green-500 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-slate-600 dark:text-slate-300">{benefit}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/60">
+            <button 
+              onClick={handleLogout}
+              className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[11px] uppercase tracking-wider hover:bg-red-500 hover:text-white transition-all"
+            >
+              退出登录
+            </button>
+          </div>
+
+          <p className="text-center text-[10px] text-slate-400">
+            本应用仅限邀请注册、内部试用，不向公众提供服务
+          </p>
+        </div>
+      );
+    }
+
+    return (
     <div className="max-w-md mx-auto space-y-6 py-4 animate-in slide-in-from-bottom-4 duration-500">
       <div className="text-center space-y-2 mb-6">
         <h3 className="text-2xl font-black italic">{isLoginView ? '欢迎回归架构师' : '创建您的数字工坊'}</h3>
@@ -150,6 +393,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       </div>
     </div>
   );
+  };
 
   const renderCheckout = () => {
     const isTopup = !!selectedTopup;
