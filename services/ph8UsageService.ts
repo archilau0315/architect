@@ -39,7 +39,7 @@ export interface UsageStatsResponse {
 }
 
 const PH8_USAGE_CACHE_KEY = 'architect-ph8-usage-cache-v2';
-const BACKEND_URL = '/architect/backend';
+const BACKEND_URL = '/api';
 
 export const Ph8UsageService = {
   getApiKey(): string | null {
@@ -73,7 +73,7 @@ export const Ph8UsageService = {
     }
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/usage/stats/${userId}`);
+      const response = await fetch(`${BACKEND_URL}/usage/stats/${userId}`);
       
       if (!response.ok) {
         console.warn('[Ph8Usage] 后端返回错误:', response.status);
@@ -110,7 +110,7 @@ export const Ph8UsageService = {
         const response = await fetch(url, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            // Authorization 头由后端代理自动添加
             'Content-Type': 'application/json'
           }
         });
@@ -205,7 +205,7 @@ export const Ph8UsageService = {
 
   async checkLimit(userId: string): Promise<{ allowed: boolean; reason?: string; remaining?: number }> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/usage/check/${userId}`);
+      const response = await fetch(`${BACKEND_URL}/usage/check/${userId}`);
       
       if (!response.ok) {
         return { allowed: false, reason: '检查失败' };
@@ -230,7 +230,7 @@ export const Ph8UsageService = {
     requestType: string
   ): Promise<boolean> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/usage/record`, {
+      const response = await fetch(`${BACKEND_URL}/usage/record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

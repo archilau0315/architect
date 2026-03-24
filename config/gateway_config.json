@@ -6,6 +6,15 @@
     "failover_timeout_ms": 10000
   },
   "price_unit": "CNY/M tokens",
+  "gateways": {
+    "ph8": {
+      "name": "ph8.co",
+      "url": "https://ph8.co",
+      "api_key": "sk-2f6ff8aba4d541d591d17e8eae60e75c",
+      "enabled": true,
+      "proxy_path": "/api/ph8"
+    }
+  },
   "api_keys": {
     "google_official": "",
     "ph8": "sk-2f6ff8aba4d541d591d17e8eae60e75c"
@@ -72,12 +81,12 @@
         "id": "hp8-image-01",
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "Nano-Banana",
+        "remoteModelId": "gemini-3.1-flash-image-preview",
         "inputPrice": 2.5,
         "outputPrice": 21.2,
         "priority": 200,
         "active": true,
-        "description": "Nano-Banana 图像加速"
+        "description": "Gemini 3.1 Flash Image 图像加速"
       }
     ],
     "gemini-3.1-flash-image-preview": [
@@ -234,6 +243,32 @@
         "priority": 200,
         "active": true,
         "description": "Kbit Fast 视频模型"
+      }
+    ],
+    "qwen3-vl-flash": [
+      {
+        "id": "hp8-qwen3-vl-flash",
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "qwen3-vl-flash",
+        "inputPrice": 0.5,
+        "outputPrice": 2.0,
+        "priority": 200,
+        "active": true,
+        "description": "Qwen3 VL Flash 多模态模型"
+      }
+    ],
+    "gemini-3.1-flash-lite-preview": [
+      {
+        "id": "hp8-3.1-flash-lite",
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3.1-flash-lite-preview",
+        "inputPrice": 1.0,
+        "outputPrice": 4.0,
+        "priority": 200,
+        "active": true,
+        "description": "Gemini 3.1 Flash Lite 深度思考模型"
       }
     ]
   }

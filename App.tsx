@@ -522,18 +522,22 @@ const App: React.FC = () => {
         </div>
 
         <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
-          <ChatBot 
-            instructions={currentInstructions} 
+          <ChatBot
+            instructions={currentInstructions}
             fontSize={preferences.promptFontSize}
             modelConfig={activeModel}
+            points={{ daily: dailyPoints, purchased: purchasedPoints }}
+            onConsumePoints={handleConsumePoints}
           />
         </div>
 
         <div style={{ display: activeTab === 'analyze' ? 'block' : 'none' }}>
-          <ImageAnalyzer 
+          <ImageAnalyzer
             onImportToArchitect={handleImportFromAnalyzer}
             instructions={currentInstructions}
             modelConfig={activeModel}
+            points={{ daily: dailyPoints, purchased: purchasedPoints }}
+            onConsumePoints={handleConsumePoints}
           />
         </div>
 
@@ -545,6 +549,8 @@ const App: React.FC = () => {
             points={{ daily: dailyPoints, purchased: purchasedPoints }}
             onConsumePoints={handleConsumePoints}
             useThirdPartyGateway={useThirdPartyGateway}
+            isDeveloperMode={isDeveloperMode}
+            onReset={() => {}}
           />
         </div>
       </div>

@@ -2,21 +2,34 @@ import { GoogleGenAI, Type, Modality, ThinkingLevel } from "@google/genai";
 import { CustomModel, CreativeDomain } from "../types.ts";
 import gatewayConfig from "../config/gateway_config.json";
 
-// 开发环境下将 ph8.co 请求路由到本地代理（解决 CORS 问题）
+// 开发环境下将第三方网关请求路由到本地代理（解决 CORS 问题）
 // 生产环境下确保 URL 包含 /v1 前缀
+// 支持多网关配置，从 gatewayConfig.gateways 动态获取代理路径
 const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
-  // 本地开发环境：使用代理
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    // 匹配 https://ph8.co 或 https://ph8.co/v1
+  const gateways = (gatewayConfig as any).gateways || {};
+  
+  // 遍历所有配置的网关，匹配 URL 并替换为代理路径
+  for (const [key, config] of Object.entries(gateways)) {
+    const gatewayConfig = config as any;
+    if (gatewayConfig.url && gatewayConfig.proxy_path) {
+      // 匹配网关 URL 并替换为代理路径
+      if (url.startsWith(gatewayConfig.url)) {
+        if (useOpenaiPath) {
+          return `${gatewayConfig.proxy_path}/openai/v1`;
+        }
+        return url.replace(gatewayConfig.url, gatewayConfig.proxy_path);
+      }
+    }
+  }
+  
+  // 兼容旧配置：如果没有匹配到，使用默认的 ph8 代理
+  if (url.includes('ph8.co')) {
+    if (useOpenaiPath) {
+      return '/api/ph8/openai/v1';
+    }
     return url.replace('https://ph8.co', '/api/ph8');
   }
-  // 生产环境：确保 URL 包含正确的前缀
-  if (useOpenaiPath) {
-    return 'https://ph8.co/openai/v1';
-  }
-  if (url === 'https://ph8.co' || !url.includes('/v1')) {
-    return 'https://ph8.co/v1';
-  }
+  
   return url;
 };
 
@@ -443,11 +456,22 @@ const getAI = (modelConfig?: CustomModel, targetModelId?: string) => {
           if (selectedNode.remoteModelId) {
             effectiveModelId = selectedNode.remoteModelId;
           }
-          // 如果是 ph8.co 节点，从配置文件中获取 API Key
-          if (providerName === "ph8.co") {
-            const ph8Key = (gatewayConfig.api_keys as any)?.ph8;
-            if (ph8Key) {
-              apiKey = ph8Key;
+          // 从网关配置中获取 API Key（支持多网关）
+          const gateways = (gatewayConfig as any).gateways || {};
+          const gatewayKey = Object.keys(gateways).find(key => 
+            gateways[key].name === providerName || 
+            gateways[key].url === baseUrl
+          );
+          
+          if (gatewayKey && gateways[gatewayKey]?.api_key) {
+            apiKey = gateways[gatewayKey].api_key;
+          } else {
+            // 兼容旧配置：如果是 ph8.co 节点，从 api_keys 中获取
+            if (providerName === "ph8.co") {
+              const ph8Key = (gatewayConfig.api_keys as any)?.ph8;
+              if (ph8Key) {
+                apiKey = ph8Key;
+              }
             }
           }
         }
@@ -680,8 +704,8 @@ export const GeminiService = {
         const response = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify({
             model: modelId,
@@ -1210,12 +1234,25 @@ export const GeminiService = {
           console.log(`[ph8格式] 底图数量: ${imageParts.length}`);
           console.log(`[ph8格式] requestBody:`, JSON.stringify(requestBody, null, 2).substring(0, 500));
           
+          // 获取用户ID
+          let userId = 'guest';
+          try {
+            const sessionData = localStorage.getItem('architect-invite-session');
+            if (sessionData) {
+              const parsed = JSON.parse(sessionData);
+              userId = parsed.userId || parsed.email || 'guest';
+            }
+          } catch (e) {
+            console.error('获取用户ID失败:', e);
+          }
+
           // 使用带重试机制的 fetch
           fetchResponse = await fetchWithRetry(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
+              // Authorization 头由后端代理自动添加
+              'x-user-id': userId
             },
             body: JSON.stringify(requestBody),
             signal
@@ -1527,8 +1564,8 @@ export const GeminiService = {
         const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify({
             model: modelId,
@@ -1587,8 +1624,8 @@ export const GeminiService = {
         const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify({
             model: modelId,
@@ -1722,8 +1759,8 @@ export const GeminiService = {
         const response = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify({
             model: modelId,
@@ -1879,14 +1916,35 @@ export const GeminiService = {
       }
     }
 
-    // 如果没有找到 Kbit 模型，提供一个默认的 KbitVeo 模型
+    // 如果没有找到 Kbit 模型，提供默认的 KbitVeo 模型列表
     if (engines.length === 0) {
       engines = [
         {
           id: 'KbitVeo-speed',
           label: 'KbitVeo-speed',
-          desc: 'KbitVeo Speed 视频模型',
-          supportedRatios: assetCount >= 2 ? ['16:9'] : ['16:9'],
+          desc: 'KbitVeo Speed 视频模型 - 快速生成',
+          supportedRatios: ['16:9'],
+          duration: '5-15s'
+        },
+        {
+          id: 'KbitVeo-normal',
+          label: 'KbitVeo-normal',
+          desc: 'KbitVeo Normal 视频模型 - 标准质量',
+          supportedRatios: ['16:9', '9:16'],
+          duration: '5-30s'
+        },
+        {
+          id: 'KbitVeo-pro',
+          label: 'KbitVeo-pro',
+          desc: 'KbitVeo Pro 视频模型 - 高质量',
+          supportedRatios: ['16:9', '9:16', '21:9'],
+          duration: '5-45s'
+        },
+        {
+          id: 'Kbit-fast',
+          label: 'Kbit-fast',
+          desc: 'Kbit Fast 视频模型 - 极速生成',
+          supportedRatios: ['16:9'],
           duration: '5-15s'
         }
       ];
@@ -1950,8 +2008,8 @@ export const GeminiService = {
         const createResponse = await fetch(`${proxiedUrl}/videos`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify(requestBody),
           signal
@@ -2016,7 +2074,7 @@ export const GeminiService = {
             
             // 格式1: GET /videos/{id} (使用 openai 路径)
             let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {
-              headers: { 'Authorization': `Bearer ${apiKey}` }
+              // headers: Authorization 头由后端代理自动添加
             });
             
             if (statusResponse.ok) {
@@ -2024,7 +2082,7 @@ export const GeminiService = {
             } else {
               // 格式2: GET /videos/{id} (使用 v1 路径)
               statusResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
+                // headers: Authorization 头由后端代理自动添加
               });
               
               if (statusResponse.ok) {
@@ -2085,16 +2143,52 @@ export const GeminiService = {
                   console.log(`[Video Gateway] Completed but no URL found, trying to download content...`);
                   
                   // 尝试调用 download_content API
+                  // 根据 PH8 文档，使用 client.videos.download_content(video.id)
+                  // 在浏览器中，我们需要直接调用 API 获取视频内容
                   try {
-                    const downloadResponse = await fetch(`${proxiedUrl}/videos/${videoId}/content`, {
-                      headers: { 'Authorization': `Bearer ${apiKey}` }
-                    });
+                    // 等待 10 秒让视频内容准备好（根据 PH8 文档建议）
+                    console.log(`[Video Gateway] Waiting 10s for video content to be ready...`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
                     
-                    if (downloadResponse.ok) {
-                      const blob = await downloadResponse.blob();
-                      const objectUrl = URL.createObjectURL(blob);
-                      console.log(`[Video Gateway] Video downloaded as blob: ${objectUrl}`);
-                      return { url: objectUrl, videoRef: videoId };
+                    // 尝试多种路径格式
+                    const contentUrls = [
+                      `${proxiedUrl}/videos/${videoId}/content`,
+                      `${proxiedUrl}/openai/v1/videos/${videoId}/content`,
+                      `${proxiedUrl}/videos/${videoId}/download_content`,
+                      `https://ph8.co/openai/v1/videos/${videoId}/content`
+                    ];
+                    
+                    for (const contentUrl of contentUrls) {
+                      console.log(`[Video Gateway] Trying content URL: ${contentUrl}`);
+                      
+                      const downloadResponse = await fetch(contentUrl, {
+                        // headers: Authorization 头由后端代理自动添加
+                      });
+                      
+                      if (downloadResponse.ok) {
+                        const arrayBuffer = await downloadResponse.arrayBuffer();
+                        // 从响应头获取 MIME 类型，默认为 video/mp4
+                        const contentType = downloadResponse.headers.get('content-type') || 'video/mp4';
+                        console.log(`[Video Gateway] Content-Type: ${contentType}, Size: ${arrayBuffer.byteLength} bytes`);
+                        
+                        // 检查返回数据的类型（通过查看前几个字节）
+                        const firstBytes = new Uint8Array(arrayBuffer.slice(0, 20));
+                        const hexString = Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                        console.log(`[Video Gateway] First 20 bytes (hex): ${hexString}`);
+                        
+                        // 检测文件签名
+                        const textDecoder = new TextDecoder('utf-8');
+                        const firstChars = textDecoder.decode(arrayBuffer.slice(0, 100));
+                        console.log(`[Video Gateway] First 100 chars: ${firstChars.substring(0, 100)}`);
+                        
+                        // 创建指定类型的 Blob
+                        const blob = new Blob([arrayBuffer], { type: contentType });
+                        const objectUrl = URL.createObjectURL(blob);
+                        console.log(`[Video Gateway] Video downloaded as blob: ${objectUrl}, type: ${blob.type}`);
+                        return { url: objectUrl, videoRef: videoId };
+                      } else {
+                        console.log(`[Video Gateway] Content API returned ${downloadResponse.status} for ${contentUrl}`);
+                      }
                     }
                   } catch (downloadErr) {
                     console.log(`[Video Gateway] Download content failed:`, downloadErr);
@@ -2113,7 +2207,7 @@ export const GeminiService = {
         
         // 超时后尝试获取最终结果
         const finalResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {
-          headers: { 'Authorization': `Bearer ${apiKey}` }
+          // headers: Authorization 头由后端代理自动添加
         }).catch(() => null);
         
         if (finalResponse && finalResponse.ok) {

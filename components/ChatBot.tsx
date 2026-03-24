@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GeminiService, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
 import { ChatMessage, CustomModel, ChatSession, ExtendedChatMessage } from '../types.ts';
 import { ContentIdService } from '../services/contentIdService.ts';
+import { Ph8UsageService } from '../services/ph8UsageService.ts';
 
 interface ChatBotProps {
   instructions?: typeof DEFAULT_SYSTEM_PRESETS;
@@ -10,6 +11,8 @@ interface ChatBotProps {
   fontSize?: number;
   modelConfig: CustomModel;
   onBusyStateChange?: (busy: boolean) => void;
+  points?: { daily: number; purchased: number };
+  onConsumePoints?: (amount: number) => boolean;
 }
 
 const SESSIONS_STORAGE_KEY = 'architect-chat-sessions-v135';
@@ -17,7 +20,9 @@ const SESSIONS_STORAGE_KEY = 'architect-chat-sessions-v135';
 // 替代 UUID 生成器
 const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
-const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15, modelConfig, onBusyStateChange }) => {
+const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15, modelConfig, onBusyStateChange, points, onConsumePoints }) => {
+  // Token 到积分的换算比例：1 积分 = 150 token
+  const TOKENS_PER_POINT = 150;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 默认收起
@@ -176,6 +181,18 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
 
   const removeFile = (index: number) => { setSelectedFiles(prev => prev.filter((_, i) => i !== index)); };
 
+  // 计算对话成本
+  const calculateChatCost = (inputText: string, fileCount: number) => {
+    // 估算输入token：1个中文字符约2token，英文单词约1.3token
+    const inputTokens = inputText.length * 2;
+    // 估算输出token：平均回复约500-2000 token
+    const outputTokens = 1000;
+    // 文件处理token：每个文件约500 token
+    const fileTokens = fileCount * 500;
+    const totalTokens = inputTokens + outputTokens + fileTokens;
+    return Math.ceil(totalTokens / TOKENS_PER_POINT);
+  };
+
   const handleSend = async () => {
     if (isLoading) {
       abortControllerRef.current?.abort();
@@ -185,6 +202,13 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
     }
 
     if ((!input.trim() && selectedFiles.length === 0)) return;
+
+    // 扣除积分
+    const cost = calculateChatCost(input, selectedFiles.length);
+    if (onConsumePoints && !onConsumePoints(cost)) {
+      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
+      return;
+    }
     
     let activeSessionId = currentSessionId;
     let nextSessions = [...sessions];
@@ -230,6 +254,25 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
 
       const updatedSessions = nextSessions.map(s => s.id === activeSessionId ? { ...s, title: updatedTitle, messages: updatedMessages, timestamp: Date.now() } : s);
       updateSessionsAndStore(updatedSessions);
+      
+      // 记录实际Token消耗到后端
+      const actualTokens = (userPrompt.length * 2) + (result.text.length * 2) + (currentFiles.length * 500);
+      let userId = 'guest';
+      try {
+        const sessionData = localStorage.getItem('architect-invite-session');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          userId = parsed.userId || parsed.email || 'guest';
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      await Ph8UsageService.recordUsage(
+        userId,
+        { total: actualTokens },
+        modelConfig.modelId,
+        'chat'
+      );
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Chat cancelled by user.");

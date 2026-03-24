@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-const { ContentIdService } = require('../../services/contentIdService');
+const { ContentIdService } = require('../services/contentIdService');
 
 const UPLOAD_DIR = '/www/wwwroot/www.kbitai.com.cn/uploads';
 const WATERMARK_LOGO = '/www/wwwroot/www.kbitai.com.cn/LOGOkbitwater.png';

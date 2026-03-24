@@ -152,9 +152,45 @@ async function checkTokenLimit(userId) {
   };
 }
 
+async function getUserInfo(userId) {
+  try {
+    // 尝试从 users 表查询用户信息
+    const [rows] = await db.query(
+      'SELECT nickname, email FROM users WHERE user_id = ? OR email = ?',
+      [userId, userId]
+    );
+    
+    if (rows.length > 0) {
+      return { 
+        nickname: rows[0].nickname || (rows[0].email ? rows[0].email.split('@')[0] : '未知用户'), 
+        email: rows[0].email || userId 
+      };
+    }
+    
+    // 如果用户不存在，尝试从 user_ph8_balance 表获取
+    const [balanceRows] = await db.query(
+      'SELECT * FROM user_ph8_balance WHERE user_id = ?',
+      [userId]
+    );
+    
+    if (balanceRows.length > 0) {
+      return { 
+        nickname: '未知用户', 
+        email: userId 
+      };
+    }
+    
+    // 都不存在，返回默认值
+    return { nickname: '未知用户', email: userId };
+  } catch (err) {
+    console.error('[UsageLimiter] 获取用户信息失败:', err);
+    return { nickname: '未知用户', email: userId };
+  }
+}
+
 async function recordTokenUsage(userId, tokens, model, requestType, requestId = null) {
   const today = new Date().toISOString().split('T')[0];
-  
+
   await db.query(
     `INSERT INTO token_usage (user_id, request_id, model, prompt_tokens, completion_tokens, total_tokens, request_type, ip_address)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

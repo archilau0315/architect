@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS beta_applications (
   INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='内测申请表';
 
+-- 密码重置令牌表
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(128) NOT NULL COMMENT '用户邮箱',
+  token VARCHAR(64) UNIQUE NOT NULL COMMENT '重置令牌',
+  expires_at TIMESTAMP NOT NULL COMMENT '过期时间',
+  used_at TIMESTAMP NULL COMMENT '使用时间',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_email (email),
+  INDEX idx_token (token),
+  INDEX idx_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密码重置令牌表';
+
 -- 积分日志表
 CREATE TABLE IF NOT EXISTS point_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -191,6 +204,23 @@ INSERT INTO tier_limits (tier, daily_token_limit, monthly_token_limit, requests_
 ('pro', 300000, 9000000, 30, 10),
 ('plus', 1000000, 30000000, 60, 20)
 ON DUPLICATE KEY UPDATE updated_at = NOW();
+
+-- 计划表
+CREATE TABLE IF NOT EXISTS plans (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  plan_id VARCHAR(64) UNIQUE NOT NULL COMMENT '计划唯一标识',
+  user_id VARCHAR(64) NOT NULL COMMENT '用户ID',
+  title VARCHAR(255) NOT NULL COMMENT '计划标题',
+  description TEXT COMMENT '计划描述',
+  start_date DATE COMMENT '开始日期',
+  end_date DATE COMMENT '结束日期',
+  status ENUM('pending', 'in_progress', 'completed', 'cancelled') DEFAULT 'pending' COMMENT '状态',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='计划表';
 
 -- 内测申请表
 CREATE TABLE IF NOT EXISTS beta_applications (

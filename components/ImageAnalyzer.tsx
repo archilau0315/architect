@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GeminiService, EnhancedPrompt, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
 import { CustomModel } from '../types.ts';
+import { Ph8UsageService } from '../services/ph8UsageService.ts';
 
 interface ImageAnalyzerProps {
   onImportToArchitect: (prompt: EnhancedPrompt) => void;
@@ -9,11 +10,15 @@ interface ImageAnalyzerProps {
   onReset?: () => void;
   modelConfig: CustomModel;
   onBusyStateChange?: (busy: boolean) => void;
+  points?: { daily: number; purchased: number };
+  onConsumePoints?: (amount: number) => boolean;
 }
 
 const ANALYZER_STORAGE_KEY = 'ARCHITECT_ANALYZER_WORKBENCH_V1';
 
-const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, instructions, onReset, modelConfig, onBusyStateChange }) => {
+const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, instructions, onReset, modelConfig, onBusyStateChange, points, onConsumePoints }) => {
+  // Token 到积分的换算比例：1 积分 = 150 token
+  const TOKENS_PER_POINT = 150;
   const [image, setImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [reversePrompt, setReversePrompt] = useState<EnhancedPrompt | null>(null);
@@ -73,6 +78,13 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     }
   };
 
+  // 计算图片分析成本
+  const calculateAnalyzeCost = () => {
+    // 图片分析约消耗 3000-5000 token
+    const tokens = 4000;
+    return Math.ceil(tokens / TOKENS_PER_POINT); // 约 27 积分
+  };
+
   const handleAnalyze = async () => {
     if (isAnalyzing) {
       analyzeAbortRef.current?.abort();
@@ -82,6 +94,14 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     }
 
     if (!image) return;
+
+    // 扣除积分
+    const cost = calculateAnalyzeCost();
+    if (onConsumePoints && !onConsumePoints(cost)) {
+      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
+      return;
+    }
+
     setIsAnalyzing(true);
     onBusyStateChange?.(true);
 
@@ -91,16 +111,42 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     try {
       const result = await GeminiService.analyzeImage(image, prompt, instructions, modelConfig, controller.signal);
       setAnalysis(result);
+
+      // 记录实际Token消耗到后端
+      const actualTokens = 4000; // 图片分析实际消耗约4000 token
+      let userId = 'guest';
+      try {
+        const sessionData = localStorage.getItem('architect-invite-session');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          userId = parsed.userId || parsed.email || 'guest';
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      await Ph8UsageService.recordUsage(
+        userId,
+        { total: actualTokens },
+        modelConfig.modelId,
+        'image_analysis'
+      );
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Analysis cancelled by user.");
       } else {
         setAnalysis(`异常错误: ${err.message}`);
       }
-    } finally { 
-      setIsAnalyzing(false); 
+    } finally {
+      setIsAnalyzing(false);
       onBusyStateChange?.(false);
     }
+  };
+
+  // 计算提取渲染指令成本
+  const calculateExtractCost = () => {
+    // 提取渲染指令约消耗 5000-8000 token（需要生成中英文双版本）
+    const tokens = 6500;
+    return Math.ceil(tokens / TOKENS_PER_POINT); // 约 44 积分
   };
 
   const handleExtractPrompt = async () => {
@@ -112,6 +158,14 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     }
 
     if (!image) return;
+
+    // 扣除积分
+    const cost = calculateExtractCost();
+    if (onConsumePoints && !onConsumePoints(cost)) {
+      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
+      return;
+    }
+
     setIsExtracting(true);
     onBusyStateChange?.(true);
 
@@ -121,14 +175,33 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     try {
       const result = await GeminiService.generateReversePrompt(image, instructions, modelConfig, controller.signal);
       setReversePrompt(result);
-    } catch (err: any) { 
+
+      // 记录实际Token消耗到后端
+      const actualTokens = 6500; // 提取指令实际消耗约6500 token
+      let userId = 'guest';
+      try {
+        const sessionData = localStorage.getItem('architect-invite-session');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          userId = parsed.userId || parsed.email || 'guest';
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      await Ph8UsageService.recordUsage(
+        userId,
+        { total: actualTokens },
+        modelConfig.modelId,
+        'reverse_prompt'
+      );
+    } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Extraction cancelled by user.");
       } else {
-        console.error(err); 
+        console.error(err);
       }
-    } finally { 
-      setIsExtracting(false); 
+    } finally {
+      setIsExtracting(false);
       onBusyStateChange?.(false);
     }
   };
@@ -167,7 +240,18 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
         <div className="space-y-8">
           <div onClick={() => fileInputRef.current?.click()} className="aspect-video w-full rounded-[3rem] border-2 border-dashed border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/30 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative shadow-2xl transition-all hover:border-theme/50 group">
             {image ? (
-              <img src={image} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <>
+                <img src={image} alt="Preview" className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-105" />
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setImage(null); setAnalysis(null); setReversePrompt(null); }}
+                  className="absolute top-3 right-3 w-8 h-8 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-all z-10 opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95"
+                  title="清空图片"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </>
             ) : (
               <div className="text-center p-12 opacity-30 group-hover:opacity-60 transition-opacity">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 00-2 2z" strokeWidth={1.5} /></svg>

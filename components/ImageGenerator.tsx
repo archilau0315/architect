@@ -4,6 +4,7 @@ import { GeminiService, ImageGenerationConfig, DEFAULT_SYSTEM_PRESETS } from '..
 import { CustomModel, Point, Stroke, HistoryItem, CreativeDomain, UserTier } from '../types.ts';
 
 import { WatermarkUtils } from '../services/watermarkService.ts';
+import { Ph8UsageService } from '../services/ph8UsageService.ts';
 
 interface ImageGeneratorProps {
   currentPrompt: string;
@@ -447,6 +448,25 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         setWatermarkedImages(prev => [...newWatermarked, ...prev]);
         
         console.log(`[放大模式] 已添加 ${newImages.length} 张图片到成图区`);
+        
+        // 记录token使用情况
+        let userId = 'guest';
+        try {
+          const sessionData = localStorage.getItem('architect-invite-session');
+          if (sessionData) {
+            const parsed = JSON.parse(sessionData);
+            userId = parsed.userId || parsed.email || 'guest';
+          }
+        } catch (e) {
+          console.error('获取用户ID失败:', e);
+        }
+        const tokenCost = targetSize === '4K' ? Math.ceil(3000 / TOKENS_PER_POINT) : Math.ceil(2000 / TOKENS_PER_POINT); // 放大的积分成本
+        Ph8UsageService.recordUsage(
+          userId,
+          { total: tokenCost },
+          targetTier || 'FAST',
+          'image_upscale'
+        ).catch(err => console.error('记录token使用失败:', err));
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') alert(`${targetSize} 放大失败: ${err.message}`);
@@ -458,24 +478,30 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
   const triggerUpscale = (img: string) => handleUpscale(undefined, img);
 
+  // Token 到积分的换算比例：1 积分 = 150 token
+  const TOKENS_PER_POINT = 150;
+
   const calculateCost = () => {
     const size = config.imageSize;
     const tier = config.modelTier;
+    let tokens = 2000; // 默认
 
     if (tier === "FAST") {
-      if (size === "1K") return 10;
-      if (size === "2K") return 15;
-      if (size === "4K") return 25;
+      if (size === "1K") tokens = 2000;
+      if (size === "2K") tokens = 2500;
+      if (size === "4K") tokens = 3500;
     } else if (tier === "QUALITY") {
-      if (size === "1K") return 25;
-      if (size === "2K") return 50;
-      if (size === "4K") return 75;
+      if (size === "1K") tokens = 2500;
+      if (size === "2K") tokens = 3500;
+      if (size === "4K") tokens = 5000;
     } else if (tier === "HIGH") {
-      if (size === "1K") return 70;
-      if (size === "2K") return 120;
-      if (size === "4K") return 200;
+      if (size === "1K") tokens = 3500;
+      if (size === "2K") tokens = 5000;
+      if (size === "4K") tokens = 7500;
     }
-    return 10;
+
+    // 转换为积分（向上取整）
+    return Math.ceil(tokens / TOKENS_PER_POINT);
   };
 
   const handleGenerate = async () => {
@@ -518,6 +544,25 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       setWatermarkedImages(newWatermarked);
       if (isCompositeMode) { setIsCompositeMode(false); setBaseRefs([]); setBaseRefsOriginalSizes([]); setLockedIndices([]); setMaskRefB(null); }
       onImageGenerated?.({ id: Date.now().toString(), url: newImages[0], prompt: currentPrompt, config: {...config, aspectRatio: finalRatio}, timestamp: Date.now() });
+      
+      // 记录token使用情况
+      let userId = 'guest';
+      try {
+        const sessionData = localStorage.getItem('architect-invite-session');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          userId = parsed.userId || parsed.email || 'guest';
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      const tokenCost = calculateCost();
+      Ph8UsageService.recordUsage(
+        userId,
+        { total: tokenCost },
+        config.modelTier || 'FAST',
+        'image'
+      ).catch(err => console.error('记录token使用失败:', err));
     } catch (err: any) {
       if (err.name !== 'AbortError') alert(`渲染失败: ${err.message}`);
     } finally { if (abortControllerRef.current === controller) { setIsGenerating(false); onBusyStateChange?.(false); } }

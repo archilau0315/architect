@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { GeminiService, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { VideoWatermarkUtils } from '../services/videoWatermarkService.ts';
+import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { UserTier } from '../types.ts';
 
 interface VideoGeneratorProps {
@@ -104,13 +105,13 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
 
   useEffect(() => {
     try {
-      const data = { prompt, assets, aspectRatio, selectedEngine };
+      const data = { prompt, assets, aspectRatio, selectedEngine, videoUrl, lastVideoRef };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
       // 捕获 QuotaExceededError 溢出错误，防止崩溃
       console.warn("LocalStorage Quota Exceeded. State maintained in RAM only.");
     }
-  }, [prompt, assets, aspectRatio, selectedEngine]);
+  }, [prompt, assets, aspectRatio, selectedEngine, videoUrl, lastVideoRef]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -137,6 +138,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     setLastVideoRef(null);
   };
 
+  // Token 到积分的换算比例：1 积分 = 150 token
+  const TOKENS_PER_POINT = 150;
+
+  // 计算视频生成成本（按秒数估算）
+  const calculateVideoCost = () => {
+    // 视频生成成本较高，5秒视频约 20000-30000 token
+    // 按 25000 token 计算 = 167 积分
+    return Math.ceil(25000 / TOKENS_PER_POINT); // 约 167 积分
+  };
+
   const handleGenerate = async () => {
     if (isGenerating) {
       abortControllerRef.current?.abort();
@@ -153,6 +164,13 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           return;
         }
       }
+    }
+
+    // 扣除积分
+    const cost = calculateVideoCost();
+    if (!onConsumePoints(cost)) {
+      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
+      return;
     }
 
     setIsGenerating(true);
@@ -181,6 +199,25 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
       setProgress(100);
+      
+      // 记录实际Token消耗到后端
+      const actualTokens = 25000; // 视频生成实际消耗约25000 token
+      let userId = 'guest';
+      try {
+        const sessionData = localStorage.getItem('architect-invite-session');
+        if (sessionData) {
+          const parsed = JSON.parse(sessionData);
+          userId = parsed.userId || parsed.email || 'guest';
+        }
+      } catch (e) {
+        console.error('获取用户ID失败:', e);
+      }
+      await Ph8UsageService.recordUsage(
+        userId,
+        { total: actualTokens },
+        selectedEngine,
+        'video'
+      );
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         alert(`视频生成失败: ${err.message}`);
@@ -280,7 +317,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     >
       <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-100 dark:border-white/5 bg-white/60 dark:bg-slate-900/60">
         <span className="text-[9px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest italic">{index !== undefined ? `分镜 ${index + 1}` : '待上传'}</span>
-        {current && (
+        {current && onRemove && (
           <button 
             onClick={(e) => { e.stopPropagation(); onRemove(); }} 
             className="w-6 h-6 flex items-center justify-center bg-rose-500/10 rounded-lg text-rose-500 hover:bg-rose-500 hover:text-white transition-all z-10"
@@ -289,7 +326,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           </button>
         )}
       </div>
-      <div className="flex-1 relative flex items-center justify-center cursor-pointer group" onClick={onUpload}>
+      <div className={`flex-1 relative flex items-center justify-center group ${onUpload ? 'cursor-pointer' : ''}`} onClick={onUpload || undefined}>
         {current ? (
           <img src={current} className="w-full h-full object-cover rounded-xl transition-transform duration-700 group-hover:scale-110" />
         ) : (
@@ -348,7 +385,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                   className="w-full appearance-none bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-6 py-4 text-sm font-black tracking-widest text-slate-700 dark:text-slate-200 outline-none focus:ring-4 focus:ring-theme/10 transition-all cursor-pointer"
                 >
                   {capabilities.engines.map((eng) => {
-                    const isBetaLocked = userTier === 'beta' && !eng.id.toLowerCase().includes('speed');
+                    const isBetaLocked = false; // Beta 用户可以使用所有视频模型
                     return (
                       <option 
                         key={eng.id} 
@@ -479,7 +516,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                         : 'bg-theme text-white hover:bg-theme-light'
                     } ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    无水印下载 {effectiveTier !== 'dev' && `(${getDownloadLimits(effectiveTier).label})`}
+                    无水印下载 {effectiveTier !== 'dev' ? `(${getDownloadLimits(effectiveTier).label})` : ''}
                   </button>
                   
                   {isWatermarkProcessing && (

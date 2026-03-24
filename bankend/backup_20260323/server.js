@@ -7,18 +7,25 @@ const inviteRoutes = require('./routes/invite');
 const watermarkRoutes = require('./routes/watermark');
 const usageRoutes = require('./routes/usage');
 const betaRoutes = require('./routes/beta');
+const ph8Routes = require('./routes/ph8');
+const planRoutes = require('./routes/plan');
+const ph8BalanceRoutes = require('./routes/ph8Balance');
 
 const app = express();
 app.use(cors({
   origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use('/api/invite', inviteRoutes);
 app.use('/api/watermark', watermarkRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/beta', betaRoutes);
+app.use('/api/ph8', ph8Routes);
+app.use('/api/plan', planRoutes);
+app.use('/api/ph8', ph8BalanceRoutes);
 
 // ==================== 用户认证 API ====================
 

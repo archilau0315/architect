@@ -300,32 +300,35 @@ const Layout: React.FC<LayoutProps> = ({
 
           {/* Record / ICP Info Section */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800/40 mt-2 px-1">
-            <div className="flex justify-between items-start opacity-40 grayscale hover:opacity-70 transition-opacity">
+            {/* Copyright - First Line */}
+            <div className="text-center mb-2 opacity-50 hover:opacity-80 transition-opacity">
+              <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">
+                © 天津匡形无界智能科技有限公司
+              </p>
+            </div>
+            {/* ICP & Public Security - Second Line */}
+            <div className="flex justify-between items-center">
               {/* ICP - Left */}
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-[6.5px] font-black uppercase tracking-tighter">ICP备案</span>
-                <span className="text-[6px] font-bold tracking-tighter whitespace-nowrap">津ICP备2026002055号</span>
+              <div className="flex flex-col items-start leading-tight opacity-40 hover:opacity-70 transition-opacity">
+                <span className="text-[6px] font-bold tracking-tighter whitespace-nowrap">津ICP备2026002055号-1</span>
               </div>
-              {/* Public Security - Center */}
-              <div className="flex flex-col items-center leading-tight">
-                <div className="flex items-center gap-0.5">
-                  <div className="w-2 h-2 bg-slate-400 rounded-[1px] shrink-0" title="警徽占位" />
-                  <span className="text-[6.5px] font-black uppercase tracking-tighter">公安备案</span>
-                </div>
-                <span className="text-[6px] font-bold tracking-tighter whitespace-nowrap">津公网安备XXXX号</span>
-              </div>
-              {/* MIIT - Right */}
+              {/* Public Security - Right */}
               <div className="flex flex-col items-end leading-tight">
-                <span className="text-[6.5px] font-black uppercase tracking-tighter">工信部备案</span>
-                <span className="text-[6px] font-bold tracking-tighter whitespace-nowrap">待审批</span>
+                <a 
+                  href="https://beian.mps.gov.cn/#/query/webSearch?code=12010402002460" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                >
+                  <img 
+                    src="/备案图标.png" 
+                    alt="公安备案" 
+                    className="w-3 h-3 object-contain"
+                  />
+                  <span className="text-[6px] font-bold tracking-tighter whitespace-nowrap opacity-40 hover:opacity-70 transition-opacity">津公网安备12010402002460号</span>
+                </a>
               </div>
             </div>
-          </div>
-          {/* Copyright Section */}
-          <div className="mt-4 text-center opacity-30">
-            <p className="text-[7px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em]">
-              2026 匡形无界 版权所有
-            </p>
           </div>
         </div>
       </nav>
