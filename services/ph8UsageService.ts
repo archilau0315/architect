@@ -1,4 +1,7 @@
-import gatewayConfig from '../config/gateway_config.json';
+/**
+ * PH8 用量服务
+ * 注意：API Key 由后端管理，前端不再直接接触
+ */
 
 export interface Ph8UsageData {
   total_tokens: number;
@@ -42,8 +45,13 @@ const PH8_USAGE_CACHE_KEY = 'architect-ph8-usage-cache-v2';
 const BACKEND_URL = '/api';
 
 export const Ph8UsageService = {
+  /**
+   * 获取 API Key - 已废弃
+   * API Key 现在由后端管理，前端不再直接接触
+   */
   getApiKey(): string | null {
-    return (gatewayConfig.api_keys as any)?.ph8 || null;
+    console.warn('[Ph8UsageService] getApiKey 已废弃，API Key 由后端管理');
+    return null;
   },
 
   getCachedUsage(): Ph8UsageData | null {
@@ -90,17 +98,14 @@ export const Ph8UsageService = {
   },
 
   async fetchUsage(): Promise<Ph8UsageData | null> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      console.warn('[Ph8Usage] 未配置 ph8 API Key');
-      return null;
-    }
+    // API Key 由后端代理自动添加，前端不再传递
+    console.log('[Ph8Usage] 正在通过后端代理获取用量数据...');
 
     const endpoints = [
-      'https://ph8.co/v1/usage',
-      'https://ph8.co/v1/dashboard/usage',
-      'https://ph8.co/openai/v1/usage',
-      'https://ph8.co/v1/users/me'
+      '/api/ph8/usage',
+      '/api/ph8/dashboard/usage',
+      '/api/ph8-openai/usage',
+      '/api/ph8/users/me'
     ];
 
     for (const url of endpoints) {
@@ -110,8 +115,8 @@ export const Ph8UsageService = {
         const response = await fetch(url, {
           method: 'GET',
           headers: {
-            // Authorization 头由后端代理自动添加
             'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           }
         });
 

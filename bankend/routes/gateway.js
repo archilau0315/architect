@@ -2,6 +2,8 @@
  * 通用网关代理路由
  * 支持多网关配置，动态路由到不同的第三方 API 服务
  * 配置从环境变量读取，避免 API Key 泄露
+ * 
+ * 安全说明：所有 API Key 都在服务器端管理，前端完全不接触
  */
 
 const express = require('express');
@@ -17,6 +19,13 @@ const GATEWAY_CONFIG = {
     api_key: process.env.PH8_API_KEY,
     enabled: process.env.PH8_ENABLED !== 'false',
     proxy_path: '/v1'
+  },
+  gemini: {
+    name: 'Google Gemini',
+    url: 'https://generativelanguage.googleapis.com',
+    api_key: process.env.GEMINI_API_KEY,
+    enabled: !!process.env.GEMINI_API_KEY,
+    proxy_path: '/v1beta'
   }
 };
 

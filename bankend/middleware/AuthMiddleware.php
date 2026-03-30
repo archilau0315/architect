@@ -15,7 +15,26 @@ class AuthMiddleware extends Middleware
 {
     public function handle(): bool
     {
+        // 尝试从多个来源获取 Authorization Header
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        
+        // 如果 HTTP_AUTHORIZATION 为空，尝试 REDIRECT_HTTP_AUTHORIZATION
+        if (empty($authHeader)) {
+            $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        }
+        
+        // 如果还是为空，尝试从 apache_request_headers 获取
+        if (empty($authHeader) && function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+            $authHeader = $headers['Authorization'] ?? '';
+        }
+        
+        // 如果还是为空，尝试从 getallheaders 获取
+        if (empty($authHeader) && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? '';
+        }
+        
         $token = JWT::extractFromHeader($authHeader);
 
         if (!$token) {

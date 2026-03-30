@@ -36,7 +36,7 @@ class AdminController
         }
         
         $admin = $this->db->queryOne(
-            'SELECT * FROM admins WHERE id = ? AND status = 1',
+            'SELECT * FROM admins WHERE id = ?',
             [$userId]
         );
         
@@ -53,7 +53,7 @@ class AdminController
         }
 
         $admin = $this->db->queryOne(
-            'SELECT * FROM admins WHERE username = ? AND status = 1',
+            'SELECT * FROM admins WHERE username = ?',
             [$username]
         );
 
@@ -68,12 +68,21 @@ class AdminController
 
         unset($admin['password_hash']);
 
+        // 生成 JWT token
+        $token = \KbitArchitect\Core\JWT::encode([
+            'sub' => $admin['id'],
+            'type' => 'access',
+            'tier' => 'admin',
+            'jti' => bin2hex(random_bytes(16)),
+            'exp' => time() + 3600 * 24 // 24小时过期
+        ]);
+
         return [
             'success' => true,
             'message' => '登录成功',
             'data' => [
                 'admin' => $admin,
-                'token' => bin2hex(random_bytes(32))
+                'token' => $token
             ]
         ];
     }
@@ -86,7 +95,7 @@ class AdminController
 
         $userCount = $this->db->queryOne('SELECT COUNT(*) as count FROM users');
         $activeUsers = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM users WHERE last_login_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
+            'SELECT COUNT(*) as count FROM users WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
         );
         $todayRequests = $this->db->queryOne(
             'SELECT COUNT(*) as count FROM usage_logs WHERE DATE(created_at) = CURDATE()'
@@ -99,7 +108,7 @@ class AdminController
         );
 
         $tierDistribution = $this->db->query(
-            'SELECT user_tier, COUNT(*) as count FROM users GROUP BY user_tier'
+            'SELECT tier as user_tier, COUNT(*) as count FROM users GROUP BY tier'
         );
 
         $featureUsage = $this->db->query(
@@ -132,26 +141,32 @@ class AdminController
         $limit = (int) ($request['query']['limit'] ?? 20);
         $search = trim($request['query']['search'] ?? '');
         $tier = trim($request['query']['tier'] ?? '');
+        $status = trim($request['query']['status'] ?? '');
         $offset = ($page - 1) * $limit;
 
         $where = '1=1';
         $params = [];
 
         if (!empty($search)) {
-            $where .= ' AND (email LIKE ? OR nickname LIKE ? OR phone LIKE ?)';
+            $where .= ' AND (email LIKE ? OR nickname LIKE ?)';
             $searchParam = "%{$search}%";
-            $params = array_merge($params, [$searchParam, $searchParam, $searchParam]);
+            $params = array_merge($params, [$searchParam, $searchParam]);
         }
 
         if (!empty($tier)) {
-            $where .= ' AND user_tier = ?';
+            $where .= ' AND tier = ?';
             $params[] = $tier;
         }
 
+        if (!empty($status)) {
+            $where .= ' AND status = ?';
+            $params[] = $status;
+        }
+
         $users = $this->db->query(
-            "SELECT id, email, phone, nickname, user_tier, tier_expires_at, 
+            "SELECT user_id as id, email, nickname, tier as user_tier, 
                     daily_points, purchased_points, total_consumed_points, 
-                    status, last_login_at, created_at 
+                    status, created_at as last_login_at, created_at as created_at 
              FROM users WHERE {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             array_merge($params, [$limit, $offset])
         );
@@ -183,35 +198,61 @@ class AdminController
 
         $userId = (int) ($request['params']['id'] ?? 0);
 
-        $user = $this->userModel->findById($userId);
+        $user = $this->db->queryOne(
+            "SELECT user_id as id, email, nickname, tier as user_tier, 
+                    daily_points, purchased_points, total_consumed_points, 
+                    status, created_at, updated_at 
+             FROM users WHERE user_id = ?",
+            [$userId]
+        );
+        
         if (!$user) {
             return ['success' => false, 'error' => '用户不存在', 'code' => 404];
         }
 
-        unset($user['password_hash']);
-
-        $subscriptions = $this->db->query(
-            'SELECT * FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+        // 获取今日使用统计
+        $todayStats = $this->db->queryOne(
+            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
+             FROM usage_logs 
+             WHERE user_id = ? AND DATE(created_at) = CURDATE()",
             [$userId]
         );
 
-        $recentUsage = $this->db->query(
-            'SELECT * FROM usage_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 10',
+        // 获取本周使用统计
+        $weekStats = $this->db->queryOne(
+            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
+             FROM usage_logs 
+             WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             [$userId]
         );
 
-        $transactions = $this->db->query(
-            'SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10',
+        // 获取最近7天的每日使用统计
+        $dailyStats = $this->db->query(
+            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
+             FROM usage_logs 
+             WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
+             GROUP BY DATE(created_at) 
+             ORDER BY date",
             [$userId]
         );
+
+        $usageStats = [
+            'today' => [
+                'total_requests' => $todayStats['total_requests'] ?? 0,
+                'total_points_spent' => $todayStats['total_points_spent'] ?? 0
+            ],
+            'week' => [
+                'total_requests' => $weekStats['total_requests'] ?? 0,
+                'total_points_spent' => $weekStats['total_points_spent'] ?? 0
+            ],
+            'daily' => $dailyStats
+        ];
 
         return [
             'success' => true,
             'data' => [
                 'user' => $user,
-                'subscriptions' => $subscriptions,
-                'recent_usage' => $recentUsage,
-                'transactions' => $transactions
+                'usage_stats' => $usageStats
             ]
         ];
     }
@@ -223,39 +264,89 @@ class AdminController
         }
 
         $userId = (int) ($request['params']['id'] ?? 0);
-        $action = $request['body']['action'] ?? '';
 
-        $user = $this->userModel->findById($userId);
+        $user = $this->db->queryOne(
+            'SELECT user_id FROM users WHERE user_id = ?',
+            [$userId]
+        );
+        
         if (!$user) {
             return ['success' => false, 'error' => '用户不存在', 'code' => 404];
         }
 
-        switch ($action) {
-            case 'update_tier':
-                $tier = $request['body']['tier'] ?? '';
-                $expiresAt = $request['body']['expires_at'] ?? null;
-                $this->userModel->updateTier($userId, $tier, $expiresAt);
-                break;
-                
-            case 'add_points':
-                $points = (float) ($request['body']['points'] ?? 0);
-                $this->userModel->addPurchasedPoints($userId, $points, 'ADMIN-' . date('YmdHis'));
-                break;
-                
-            case 'toggle_status':
-                $newStatus = $user['status'] == 1 ? 0 : 1;
-                $this->db->update('users', ['status' => $newStatus], ['id' => $userId]);
-                break;
-                
-            default:
-                return ['success' => false, 'error' => '无效操作', 'code' => 400];
+        $data = $request['body'] ?? [];
+        $updateData = [];
+
+        // 允许更新的字段
+        $allowedFields = [
+            'tier', 'daily_points', 'purchased_points', 'status'
+        ];
+
+        foreach ($allowedFields as $field) {
+            if (isset($data[$field])) {
+                $updateData[$field] = $data[$field];
+            }
         }
+
+        if (empty($updateData)) {
+            return ['success' => false, 'error' => '没有要更新的数据', 'code' => 400];
+        }
+
+        $this->db->update('users', $updateData, ['user_id' => $userId]);
+
+        $updatedUser = $this->db->queryOne(
+            "SELECT user_id as id, email, nickname, tier as user_tier, 
+                    daily_points, purchased_points, total_consumed_points, 
+                    status, created_at, updated_at 
+             FROM users WHERE user_id = ?",
+            [$userId]
+        );
 
         return [
             'success' => true,
-            'message' => '操作成功',
-            'data' => $this->userModel->findById($userId)
+            'message' => '用户信息更新成功',
+            'data' => $updatedUser
         ];
+    }
+
+    public function deleteUser(array $request): array
+    {
+        if (!$this->checkAdmin()) {
+            return ['success' => false, 'error' => '无权限', 'code' => 403];
+        }
+
+        $userId = (int) ($request['params']['id'] ?? 0);
+
+        $user = $this->db->queryOne(
+            'SELECT user_id FROM users WHERE user_id = ?',
+            [$userId]
+        );
+        
+        if (!$user) {
+            return ['success' => false, 'error' => '用户不存在', 'code' => 404];
+        }
+
+        // 开始事务
+        $this->db->beginTransaction();
+
+        try {
+            // 删除用户相关数据
+            $this->db->query('DELETE FROM usage_logs WHERE user_id = ?', [$userId]);
+            $this->db->query('DELETE FROM subscriptions WHERE user_id = ?', [$userId]);
+            
+            // 删除用户
+            $this->db->query('DELETE FROM users WHERE user_id = ?', [$userId]);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => '用户删除成功'
+            ];
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            return ['success' => false, 'error' => '删除失败: ' . $e->getMessage(), 'code' => 500];
+        }
     }
 
     public function getModels(array $request): array
@@ -404,17 +495,17 @@ class AdminController
 
         $category = $request['query']['category'] ?? null;
         
-        $where = $category ? 'WHERE category = ?' : '';
+        $where = $category ? 'WHERE config_type = ?' : '';
         $params = $category ? [$category] : [];
 
         $configs = $this->db->query(
-            "SELECT * FROM system_config {$where} ORDER BY category, config_key",
+            "SELECT * FROM system_config {$where} ORDER BY config_type, config_key",
             $params
         );
 
         $grouped = [];
         foreach ($configs as $config) {
-            $cat = $config['category'];
+            $cat = $config['config_type'];
             if (!isset($grouped[$cat])) {
                 $grouped[$cat] = [];
             }
@@ -450,8 +541,7 @@ class AdminController
         }
 
         $this->db->update('system_config', [
-            'config_value' => is_array($value) ? json_encode($value) : (string) $value,
-            'updated_by' => $GLOBALS['auth_user']['id'] ?? null
+            'config_value' => is_array($value) ? json_encode($value) : (string) $value
         ], ['config_key' => $configKey]);
 
         return [
@@ -497,7 +587,7 @@ class AdminController
         $logs = $this->db->query(
             "SELECT l.*, u.email, u.nickname 
              FROM usage_logs l 
-             LEFT JOIN users u ON l.user_id = u.id 
+             LEFT JOIN users u ON l.user_id = u.user_id 
              WHERE {$where} 
              ORDER BY l.created_at DESC 
              LIMIT ? OFFSET ?",
@@ -583,6 +673,143 @@ class AdminController
         return [
             'success' => true,
             'message' => '路由规则已更新'
+        ];
+    }
+
+    public function getBetaRequests(array $request): array
+    {
+        if (!$this->checkAdmin()) {
+            return ['success' => false, 'error' => '无权限', 'code' => 403];
+        }
+
+        $page = (int) ($request['query']['page'] ?? 1);
+        $limit = (int) ($request['query']['limit'] ?? 20);
+        $offset = ($page - 1) * $limit;
+
+        $requests = $this->db->query(
+            'SELECT * FROM beta_applications ORDER BY applied_at DESC LIMIT ? OFFSET ?',
+            [$limit, $offset]
+        );
+
+        $total = $this->db->queryOne('SELECT COUNT(*) as count FROM beta_applications');
+
+        return [
+            'success' => true,
+            'data' => [
+                'requests' => $requests,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => $total['count'] ?? 0,
+                    'total_pages' => ceil(($total['count'] ?? 0) / $limit)
+                ]
+            ]
+        ];
+    }
+
+    public function approveBetaRequest(array $request): array
+    {
+        if (!$this->checkAdmin()) {
+            return ['success' => false, 'error' => '无权限', 'code' => 403];
+        }
+
+        $id = (int) ($request['params']['id'] ?? 0);
+
+        $requestData = $this->db->queryOne(
+            'SELECT * FROM beta_applications WHERE id = ?',
+            [$id]
+        );
+
+        if (!$requestData) {
+            return ['success' => false, 'error' => '申请不存在', 'code' => 404];
+        }
+
+        if ($requestData['status'] !== 'pending') {
+            return ['success' => false, 'error' => '申请已经处理过了', 'code' => 400];
+        }
+
+        // 开始事务
+        $this->db->beginTransaction();
+
+        try {
+            // 更新申请状态
+            $this->db->update('beta_applications', [
+                'status' => 'approved',
+                'approved_at' => date('Y-m-d H:i:s')
+            ], ['id' => $id]);
+
+            // 检查用户是否已存在
+            $existingUser = $this->db->queryOne(
+                'SELECT user_id FROM users WHERE email = ?',
+                [$requestData['email']]
+            );
+
+            if (!$existingUser) {
+                // 创建新用户
+                $user_id = uniqid('user_');
+                $this->db->insert('users', [
+                    'user_id' => $user_id,
+                    'email' => $requestData['email'],
+                    'password_hash' => password_hash('beta123', PASSWORD_DEFAULT),
+                    'tier' => 'basic',
+                    'daily_quota' => 100,
+                    'status' => 'active',
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+                $userId = $user_id;
+            } else {
+                // 更新现有用户
+                $userId = $existingUser['user_id'];
+                $this->db->update('users', [
+                    'tier' => 'basic',
+                    'daily_quota' => 100,
+                    'status' => 'active',
+                    'updated_at' => date('Y-m-d H:i:s')
+                ], ['user_id' => $userId]);
+            }
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => '内测申请已批准'
+            ];
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            return ['success' => false, 'error' => '批准失败: ' . $e->getMessage(), 'code' => 500];
+        }
+    }
+
+    public function rejectBetaRequest(array $request): array
+    {
+        if (!$this->checkAdmin()) {
+            return ['success' => false, 'error' => '无权限', 'code' => 403];
+        }
+
+        $id = (int) ($request['params']['id'] ?? 0);
+
+        $requestData = $this->db->queryOne(
+            'SELECT * FROM beta_applications WHERE id = ?',
+            [$id]
+        );
+
+        if (!$requestData) {
+            return ['success' => false, 'error' => '申请不存在', 'code' => 404];
+        }
+
+        if ($requestData['status'] !== 'pending') {
+            return ['success' => false, 'error' => '申请已经处理过了', 'code' => 400];
+        }
+
+        $this->db->update('beta_applications', [
+            'status' => 'rejected',
+            'approved_at' => date('Y-m-d H:i:s')
+        ], ['id' => $id]);
+
+        return [
+            'success' => true,
+            'message' => '内测申请已拒绝'
         ];
     }
 }

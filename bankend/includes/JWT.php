@@ -10,6 +10,7 @@ namespace KbitArchitect\Core;
 
 use RuntimeException;
 use InvalidArgumentException;
+use KbitArchitect\Core\Database;
 
 class JWT
 {

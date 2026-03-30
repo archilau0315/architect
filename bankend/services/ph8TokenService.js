@@ -28,31 +28,39 @@ const db = require('../db');
  */
 async function recordUsage(data) {
   try {
-    const usageId = uuidv4();
+    // 映射 request_type 到 feature
+    const featureMap = {
+      'image': 'image_gen',
+      'video': 'video_gen',
+      'chat': 'chat',
+      'audio': 'chat',
+      'enhance': 'prompt_enhance',
+      'analyze': 'image_analyze'
+    };
+    const feature = featureMap[data.requestType] || data.requestType || 'chat';
 
     await db.query(
-      'INSERT INTO ph8_token_usage (usage_id, user_id, user_nickname, user_email, request_id, model, prompt_tokens, completion_tokens, total_tokens, cached_tokens, request_type, endpoint, status, error_message, response_time_ms, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, error_message, latency_ms, ip_address, cache_hit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
       [
-        usageId,
         data.userId,
-        data.userNickname || null,
-        data.userEmail || null,
-        data.requestId || null,
+        data.requestId || uuidv4(),
+        feature,
         data.model,
+        'hp8-accelerator',
         data.promptTokens || 0,
         data.completionTokens || 0,
         data.totalTokens,
-        data.cachedTokens || 0,
-        data.requestType,
-        data.endpoint || null,
+        0, // points_cost - 后续计算
+        0, // actual_cost
         data.status || 'success',
         data.errorMessage || null,
-        data.responseTimeMs || null,
-        data.ipAddress || null
+        data.responseTimeMs || 0,
+        data.ipAddress || null,
+        data.cachedTokens > 0 ? 1 : 0
       ]
     );
 
-    console.log(`[PH8 Token] 记录成功: user=${data.userId}(${data.userNickname}), tokens=${data.totalTokens}`);
+    console.log(`[PH8 Token] 记录成功: user=${data.userId}, tokens=${data.totalTokens}`);
     return true;
   } catch (err) {
     console.error('[PH8 Token] 记录失败:', err);
@@ -74,50 +82,16 @@ async function deductBalance(userId, tokens, userNickname, userEmail) {
     const TOKENS_PER_POINT = 150;
     const points = Math.ceil(tokens / TOKENS_PER_POINT);
     
-    // 检查用户余额记录是否存在
-    const [existing] = await db.query(
-      'SELECT * FROM user_ph8_balance WHERE user_id = ?',
-      [userId]
+    // 更新 kbit_users 表中的累计使用量
+    await db.query(
+      `UPDATE kbit_users 
+       SET total_consumed_points = total_consumed_points + ?,
+           updated_at = NOW()
+       WHERE email = ? OR id = ?`,
+      [points, userId, userId]
     );
     
-    if (existing.length === 0) {
-      // 创建新记录，包含昵称和邮箱
-      await db.query(
-        `INSERT INTO user_ph8_balance 
-         (user_id, user_nickname, user_email, total_balance, used_today, used_this_month, total_used, last_request_at)
-         VALUES (?, ?, ?, 0, ?, ?, ?, NOW())`,
-        [userId, userNickname || null, userEmail || null, points, points, points]
-      );
-    } else {
-      // 更新现有记录（存储的是积分），同时更新昵称和邮箱（如果有提供）
-      const updateFields = [
-        'used_today = used_today + ?',
-        'used_this_month = used_this_month + ?',
-        'total_used = total_used + ?',
-        'last_request_at = NOW()'
-      ];
-      const params = [points, points, points];
-      
-      if (userNickname) {
-        updateFields.push('user_nickname = ?');
-        params.push(userNickname);
-      }
-      if (userEmail) {
-        updateFields.push('user_email = ?');
-        params.push(userEmail);
-      }
-      
-      params.push(userId);
-      
-      await db.query(
-        `UPDATE user_ph8_balance 
-         SET ${updateFields.join(', ')}
-         WHERE user_id = ?`,
-        params
-      );
-    }
-    
-    console.log(`[PH8 Token] 扣除余额: user=${userId}(${userNickname}), tokens=${tokens}, points=${points}`);
+    console.log(`[PH8 Token] 扣除余额: user=${userId}, tokens=${tokens}, points=${points}`);
     return true;
   } catch (err) {
     console.error('[PH8 Token] 扣除余额失败:', err);
@@ -133,24 +107,14 @@ async function deductBalance(userId, tokens, userNickname, userEmail) {
  */
 async function rechargeBalance(userId, amount) {
   try {
-    const [existing] = await db.query(
-      'SELECT * FROM user_ph8_balance WHERE user_id = ?',
-      [userId]
+    // 更新 kbit_users 表的 purchased_points 字段
+    await db.query(
+      `UPDATE kbit_users 
+       SET purchased_points = purchased_points + ?,
+           updated_at = NOW()
+       WHERE email = ? OR id = ?`,
+      [amount, userId, userId]
     );
-    
-    if (existing.length === 0) {
-      await db.query(
-        `INSERT INTO user_ph8_balance 
-         (user_id, total_balance, used_today, used_this_month, total_used)
-         VALUES (?, ?, 0, 0, 0)`,
-        [userId, amount]
-      );
-    } else {
-      await db.query(
-        'UPDATE user_ph8_balance SET total_balance = total_balance + ? WHERE user_id = ?',
-        [amount, userId]
-      );
-    }
     
     console.log(`[PH8 Token] 充值成功: user=${userId}, amount=${amount}`);
     return true;
@@ -161,62 +125,52 @@ async function rechargeBalance(userId, amount) {
 }
 
 /**
- * 获取用户余额（从 ph8_token_usage 表实时统计）
+ * 获取用户余额（从 kbit_usage_logs 表实时统计）
  * @param {string} userId - 用户ID
  * @returns {Promise<Object|null>} - 余额信息
  */
 async function getUserBalance(userId) {
   try {
-    // 1. 获取用户基本信息（从 users 表）
+    // 1. 获取用户基本信息（从 kbit_users 表）
     const [userRows] = await db.query(
-      'SELECT nickname, email FROM users WHERE user_id = ? OR email = ?',
+      'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ? OR id = ?',
       [userId, userId]
     );
     
     const userNickname = userRows.length > 0 ? userRows[0].nickname : null;
     const userEmail = userRows.length > 0 ? userRows[0].email : userId;
+    const purchasedPoints = userRows.length > 0 ? userRows[0].purchased_points : 0;
+    const totalConsumedPoints = userRows.length > 0 ? userRows[0].total_consumed_points : 0;
     
-    // 2. 获取总充值金额（从 user_ph8_balance 表）
-    const [balanceRows] = await db.query(
-      'SELECT total_balance, last_request_at, last_reset_daily, last_reset_monthly FROM user_ph8_balance WHERE user_id = ?',
-      [userId]
-    );
-    
-    const totalBalance = balanceRows.length > 0 ? balanceRows[0].total_balance : 0;
-    const lastRequestAt = balanceRows.length > 0 ? balanceRows[0].last_request_at : null;
-    const lastResetDaily = balanceRows.length > 0 ? balanceRows[0].last_reset_daily : null;
-    const lastResetMonthly = balanceRows.length > 0 ? balanceRows[0].last_reset_monthly : null;
-    
-    // 3. 实时统计今日使用（从 ph8_token_usage 表）
-    // 使用 MySQL 的 CURDATE() 函数避免时区问题
+    // 2. 实时统计今日使用（从 kbit_usage_logs 表）
     const [todayStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM ph8_token_usage 
+       FROM kbit_usage_logs 
        WHERE user_id = ? 
        AND DATE(created_at) = CURDATE()`,
       [userId]
     );
     
-    // 4. 实时统计本月使用（从 ph8_token_usage 表）
+    // 3. 实时统计本月使用（从 kbit_usage_logs 表）
     const [monthStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM ph8_token_usage 
+       FROM kbit_usage_logs 
        WHERE user_id = ? 
        AND YEAR(created_at) = YEAR(CURDATE()) 
        AND MONTH(created_at) = MONTH(CURDATE())`,
       [userId]
     );
     
-    // 5. 实时统计累计使用（从 ph8_token_usage 表）
+    // 4. 实时统计累计使用（从 kbit_usage_logs 表）
     const [totalStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM ph8_token_usage 
+       FROM kbit_usage_logs 
        WHERE user_id = ?`,
       [userId]
     );
@@ -234,7 +188,7 @@ async function getUserBalance(userId) {
       userNickname,
       userEmail,
       // 积分单位（基于充值）
-      totalBalance,
+      totalBalance: purchasedPoints,
       // 积分单位（基于实际使用统计）
       usedToday: usedTodayPoints,
       usedThisMonth: usedThisMonthPoints,
@@ -246,11 +200,7 @@ async function getUserBalance(userId) {
       // 请求次数
       todayRequestCount: todayStats.requestCount || 0,
       monthRequestCount: monthStats.requestCount || 0,
-      totalRequestCount: totalStats.requestCount || 0,
-      // 时间信息
-      lastRequestAt,
-      lastResetDaily,
-      lastResetMonthly
+      totalRequestCount: totalStats.requestCount || 0
     };
   } catch (err) {
     console.error('[PH8 Token] 获取余额失败:', err);
@@ -273,8 +223,8 @@ async function getUserUsageStats(userId, startDate, endDate) {
         SUM(total_tokens) as totalTokens,
         SUM(prompt_tokens) as promptTokens,
         SUM(completion_tokens) as completionTokens,
-        AVG(response_time_ms) as avgResponseTime
-       FROM ph8_token_usage 
+        AVG(latency_ms) as avgResponseTime
+       FROM kbit_usage_logs 
        WHERE user_id = ? 
        AND created_at BETWEEN ? AND ?`,
       [userId, startDate, endDate]
@@ -297,7 +247,7 @@ async function getUserUsageStats(userId, startDate, endDate) {
 async function getUserUsageHistory(userId, limit = 50, offset = 0) {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM ph8_token_usage 
+      `SELECT * FROM kbit_usage_logs 
        WHERE user_id = ? 
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`,

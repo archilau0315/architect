@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统配置 - 管理员后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#3B82F6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .bg-gradient-primary {
+                background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            }
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter">
+    <!-- 侧边栏 -->
+    <div class="flex h-screen overflow-hidden">
+        <div class="w-64 bg-gray-900 text-white flex flex-col">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+                        <i class="fa fa-shield text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold">管理员后台</h1>
+                        <p class="text-xs text-gray-400">首席图像架构师</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-dashboard w-5 text-center"></i>
+                    <span>仪表盘</span>
+                </a>
+                <a href="users.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-users w-5 text-center"></i>
+                    <span>用户管理</span>
+                </a>
+                <a href="beta.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-envelope w-5 text-center"></i>
+                    <span>内测申请</span>
+                </a>
+                <a href="models.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gray-800 text-white">
+                    <i class="fa fa-cogs w-5 text-center"></i>
+                    <span>系统配置</span>
+                </a>
+                <a href="logs.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-list-alt w-5 text-center"></i>
+                    <span>使用日志</span>
+                </a>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-800">
+                <div class="flex items-center space-x-3 px-4 py-3">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                        <i class="fa fa-user"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p id="adminName" class="text-sm font-medium">管理员</p>
+                        <p class="text-xs text-gray-400">超级管理员</p>
+                    </div>
+                    <button id="logoutButton" class="text-gray-400 hover:text-white">
+                        <i class="fa fa-sign-out"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容 -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- 顶部导航 -->
+            <header class="bg-white shadow-sm z-10">
+                <div class="flex items-center justify-between p-4">
+                    <div class="flex items-center space-x-4">
+                        <button id="sidebarToggle" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <h2 class="text-lg font-semibold text-gray-900">系统配置</h2>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-bell"></i>
+                                <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- 内容区域 -->
+            <main class="flex-1 overflow-y-auto p-6">
+                <div class="bg-white rounded-xl card-shadow p-6 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">系统配置管理</h3>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">配置分类</label>
+                        <select id="configCategory" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                            <option value="">所有分类</option>
+                            <option value="general">通用配置</option>
+                            <option value="security">安全配置</option>
+                            <option value="rate_limit">速率限制</option>
+                            <option value="budget">预算管理</option>
+                            <option value="cache">缓存配置</option>
+                        </select>
+                    </div>
+                    <div id="configList" class="space-y-4">
+                        <!-- 配置项将通过JavaScript动态添加 -->
+                        <div class="text-center py-10 text-gray-500">
+                            加载中...
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查登录状态
+            const adminToken = localStorage.getItem('admin_token');
+            if (!adminToken) {
+                window.location.href = 'index.php';
+                return;
+            }
+            
+            // 显示管理员信息
+            const adminUser = localStorage.getItem('admin_user');
+            if (adminUser) {
+                const admin = JSON.parse(adminUser);
+                document.getElementById('adminName').textContent = admin.username || '管理员';
+            }
+            
+            // 退出登录
+            document.getElementById('logoutButton').addEventListener('click', function() {
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_user');
+                window.location.href = 'index.php';
+            });
+            
+            // 加载配置
+            loadConfigs();
+            
+            // 分类切换事件
+            document.getElementById('configCategory').addEventListener('change', loadConfigs);
+        });
+        
+        function loadConfigs() {
+            const category = document.getElementById('configCategory').value;
+            
+            fetch(`/api/admin/configs?category=${category}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateConfigList(data.data.configs);
+                }
+            })
+            .catch(error => {
+                console.error('加载配置失败:', error);
+            });
+        }
+        
+        function updateConfigList(configs) {
+            const configList = document.getElementById('configList');
+            
+            if (Object.keys(configs).length > 0) {
+                configList.innerHTML = '';
+                
+                Object.entries(configs).forEach(([category, items]) => {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'mb-6';
+                    categoryDiv.innerHTML = `
+                        <h4 class="text-md font-semibold text-gray-900 mb-3">${getCategoryName(category)}</h4>
+                        <div class="space-y-3">
+                            ${items.map(item => `
+                                <div class="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-900">${item.config_key}</p>
+                                        <p class="text-xs text-gray-500">${item.config_description || '无描述'}</p>
+                                    </div>
+                                    <div class="w-48">
+                                        ${item.config_type === 'boolean' ? `
+                                            <select class="w-full px-3 py-1 border border-gray-300 rounded-lg" onchange="updateConfig('${item.config_key}', this.value)">
+                                                <option value="1" ${item.config_value === '1' ? 'selected' : ''}>启用</option>
+                                                <option value="0" ${item.config_value === '0' ? 'selected' : ''}>禁用</option>
+                                            </select>
+                                        ` : `
+                                            <input type="text" class="w-full px-3 py-1 border border-gray-300 rounded-lg" value="${item.config_value}" onchange="updateConfig('${item.config_key}', this.value)">
+                                        `}
+                                    </div>
+                                    <div class="text-sm text-gray-500">${item.config_type}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    configList.appendChild(categoryDiv);
+                });
+            } else {
+                configList.innerHTML = `
+                    <div class="text-center py-10 text-gray-500">
+                        暂无配置项
+                    </div>
+                `;
+            }
+        }
+        
+        function getCategoryName(category) {
+            const categoryMap = {
+                'general': '通用配置',
+                'security': '安全配置',
+                'rate_limit': '速率限制',
+                'budget': '预算管理',
+                'cache': '缓存配置'
+            };
+            return categoryMap[category] || category;
+        }
+        
+        function updateConfig(key, value) {
+            fetch(`/api/admin/configs/${key}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                },
+                body: JSON.stringify({ value: value })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('配置更新成功');
+                } else {
+                    alert('更新失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('更新配置失败:', error);
+                alert('更新失败');
+            });
+        }
+    </script>
+</body>
+</html>

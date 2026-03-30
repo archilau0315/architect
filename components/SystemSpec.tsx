@@ -193,16 +193,7 @@ const SystemSpec: React.FC<SystemSpecProps> = ({ versionHistory, currentPresets,
                         className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm outline-none" 
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">API Key</label>
-                      <input 
-                        type="password" 
-                        value={m.apiKey || ''} 
-                        onChange={(e) => { const n = [...models]; n[models.indexOf(m)].apiKey = e.target.value; onModelsChange(n); }} 
-                        placeholder="输入您的 API 密钥" 
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm outline-none" 
-                      />
-                    </div>
+
                   </div>
                 </div>
               ))}

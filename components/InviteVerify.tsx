@@ -105,9 +105,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         setError(data.message || '邀请码无效');
       }
     } catch (err) {
-      // 后端连接失败时，使用演示模式
-      console.log('后端连接失败，使用演示模式');
-      setShowRegister(true);
+      // 后端连接失败时，显示错误信息
+      console.error('邀请码验证失败:', err);
+      setError('网络错误，请检查后端服务是否运行');
     } finally {
       setIsVerifying(false);
     }
@@ -179,23 +179,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         setError(data.error || '注册失败');
       }
     } catch (err) {
-      // 后端连接失败时，使用演示模式
-      console.log('后端连接失败，使用演示模式');
-      const sessionData = {
-        email: registerData.email,
-        nickname: registerData.nickname || registerData.email.split('@')[0],
-        tier: 'beta',
-        points: 1000,
-        userId: 'demo-' + Date.now()
-      };
-      localStorage.setItem('architect-invite-session', JSON.stringify(sessionData));
-      localStorage.setItem('architect-user-tier-v150', 'beta');
-      localStorage.setItem('architect-user-points-v160', JSON.stringify({
-        daily: 200,
-        purchased: 1000,
-        lastReset: new Date().toDateString()
-      }));
-      onVerified(sessionData);
+      // 后端连接失败时，显示错误信息
+      console.error('注册失败:', err);
+      setError('网络错误，请检查后端服务是否运行');
     } finally {
       setIsRegistering(false);
     }

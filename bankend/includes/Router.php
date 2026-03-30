@@ -201,6 +201,20 @@ class Router
             'code' => $statusCode
         ], $statusCode);
     }
+
+    public function getRoutes(): array
+    {
+        $routes = [];
+        foreach (self::$routes as $route) {
+            $method = $route['method'];
+            $path = $route['path'];
+            if (!isset($routes[$method])) {
+                $routes[$method] = [];
+            }
+            $routes[$method][$path] = $route['handler'];
+        }
+        return $routes;
+    }
 }
 
 if (!function_exists('getallheaders')) {

@@ -92,21 +92,28 @@ router.post('/register', async (req, res) => {
       'SELECT * FROM users WHERE email = ?',
       [email]
     );
-    
+
     if (userRows.length > 0) {
       return res.status(400).json({ error: '该邮箱已注册' });
     }
-    
+
     // 创建用户
-    const userId = uuidv4();
     const bcrypt = require('bcrypt');
     const passwordHash = await bcrypt.hash(password, 10);
-    
+    const user_id = 'user_' + Date.now() + Math.floor(Math.random() * 1000);
+
     await db.query(
-      `INSERT INTO users (user_id, email, password_hash, nickname, tier, total_points, daily_quota)
-       VALUES (?, ?, ?, ?, 'beta', ?, 200)`,
-      [userId, email, passwordHash, nickname || email.split('@')[0], inviteCode.points_bonus]
+      `INSERT INTO users (user_id, email, password_hash, nickname, tier, total_points, daily_quota, daily_used, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'beta', ?, 100, 0, 'active', NOW(), NOW())`,
+      [user_id, email, passwordHash, nickname || email.split('@')[0], inviteCode.points_bonus]
     );
+
+    // 获取新创建的用户ID
+    const [newUserRows] = await db.query(
+      'SELECT user_id FROM users WHERE email = ?',
+      [email]
+    );
+    const userId = newUserRows[0].user_id;
     
     // 更新邀请码使用状态
     await db.query(

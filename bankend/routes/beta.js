@@ -19,10 +19,13 @@ router.post('/apply', async (req, res) => {
       return res.status(400).json({ error: '该邮箱已提交过申请' });
     }
 
+    // 转换日期格式为 MySQL datetime 格式
+    const formattedDate = appliedAt ? new Date(appliedAt).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+
     await db.query(
-      `INSERT INTO beta_applications (name, email, phone, company, purpose, experience, applied_at, status) 
+      `INSERT INTO beta_applications (name, email, phone, company, purpose, experience, applied_at, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, phone || '', company || '', purpose, experience || '', appliedAt, 'pending']
+      [name, email, phone || '', company || '', purpose, experience || null, formattedDate, 'pending']
     );
 
     res.json({ success: true, message: '申请提交成功' });

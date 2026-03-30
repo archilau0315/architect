@@ -57,7 +57,7 @@ export interface CustomModel {
   modelId: string;
   isOfficial: boolean;
   baseUrl?: string;
-  apiKey?: string;
+  // apiKey 已移除，API Key 由后端管理，前端不再直接接触
 }
 
 export interface VersionRecord {

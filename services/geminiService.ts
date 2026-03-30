@@ -2,9 +2,10 @@ import { GoogleGenAI, Type, Modality, ThinkingLevel } from "@google/genai";
 import { CustomModel, CreativeDomain } from "../types.ts";
 import gatewayConfig from "../config/gateway_config.json";
 
-// 开发环境下将第三方网关请求路由到本地代理（解决 CORS 问题）
-// 生产环境下确保 URL 包含 /v1 前缀
-// 支持多网关配置，从 gatewayConfig.gateways 动态获取代理路径
+/**
+ * 获取代理 URL
+ * 所有请求都通过后端代理，前端不直接接触 API Key
+ */
 const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   const gateways = (gatewayConfig as any).gateways || {};
   
@@ -132,59 +133,27 @@ const overlayMaskOnBaseImage = async (baseImageDataUrl: string, maskDataUrl: str
   });
 };
 
-// API Key管理
+// API Key 管理 - 已废弃，所有 API Key 都在后端管理
+// 前端不再直接接触任何 API Key
 interface ApiKeyInfo {
   key: string;
   isActive: boolean;
   lastUsed: number;
 }
 
-const API_KEYS = [
-  process.env.GEMINI_API_KEY || '',
-  process.env.GEMINI_API_KEY_2 || '',
-  process.env.GEMINI_API_KEY_3 || '',
-  process.env.GEMINI_API_KEY_4 || ''
-].filter(Boolean);
-
-const apiKeys: ApiKeyInfo[] = API_KEYS.map(key => ({
-  key,
-  isActive: true,
-  lastUsed: 0
-}));
-
+// 保留空数组，兼容旧代码
+const apiKeys: ApiKeyInfo[] = [];
 let currentApiKeyIndex = 0;
 
-// 获取下一个可用的API Key
+// 获取下一个可用的API Key - 已废弃，返回空字符串
 const getNextApiKey = (): string => {
-  // 寻找第一个活跃的API Key
-  for (let i = 0; i < apiKeys.length; i++) {
-    const index = (currentApiKeyIndex + i) % apiKeys.length;
-    if (apiKeys[index].isActive) {
-      currentApiKeyIndex = (index + 1) % apiKeys.length;
-      apiKeys[index].lastUsed = Date.now();
-      return apiKeys[index].key;
-    }
-  }
-  // 如果所有API Key都不可用，返回第一个（即使它可能已失效）
-  return apiKeys[0]?.key || '';
+  console.warn('[GeminiService] getNextApiKey 已废弃，API Key 由后端管理');
+  return '';
 };
 
-// 标记API Key为不可用
+// 标记API Key为不可用 - 已废弃
 const markApiKeyAsInactive = (key: string): void => {
-  const apiKeyIndex = apiKeys.findIndex(k => k.key === key);
-  if (apiKeyIndex !== -1) {
-    apiKeys[apiKeyIndex].isActive = false;
-    console.warn(`API Key ${key.substring(0, 10)}... marked as inactive`);
-    
-    // 检查是否所有 key 都不可用，如果是则重置
-    const activeCount = apiKeys.filter(k => k.isActive).length;
-    if (activeCount === 0) {
-      console.warn("所有 API Key 都已不可用，重置所有 key...");
-      apiKeys.forEach(k => {
-        k.isActive = true;
-      });
-    }
-  }
+  console.warn('[GeminiService] markApiKeyAsInactive 已废弃，API Key 由后端管理');
 };
 
 // 底图缓存管理

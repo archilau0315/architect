@@ -132,8 +132,9 @@ class Database
             implode(' AND ', $whereParts)
         );
         
-        $this->execute($sql, array_merge(array_values($data), array_values($where)));
-        return $this->connect()->exec('SELECT ROW_COUNT()');
+        $stmt = $this->connect()->prepare($sql);
+        $stmt->execute(array_merge(array_values($data), array_values($where)));
+        return $stmt->rowCount();
     }
 
     public function delete(string $table, array $where): int
@@ -150,8 +151,9 @@ class Database
             implode(' AND ', $whereParts)
         );
         
-        $this->execute($sql, array_values($where));
-        return $this->connect()->exec('SELECT ROW_COUNT()');
+        $stmt = $this->connect()->prepare($sql);
+        $stmt->execute(array_values($where));
+        return $stmt->rowCount();
     }
 
     public function beginTransaction(): bool

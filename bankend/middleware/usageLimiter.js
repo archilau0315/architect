@@ -23,29 +23,34 @@ function cleanOldRequestCounts() {
 setInterval(cleanOldRequestCounts, 60000);
 
 async function ensureUserQuota(userId, tier = 'free') {
-  const [existing] = await db.query(
-    'SELECT * FROM user_quotas WHERE user_id = ?',
+  // 从 kbit_usage_logs 实时统计今日/本月使用量
+  const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
+  
+  // 查询今日使用量
+  const [todayStats] = await db.query(
+    `SELECT COALESCE(SUM(total_tokens), 0) as totalTokens, COUNT(*) as requestCount
+     FROM kbit_usage_logs 
+     WHERE user_id = ? AND DATE(created_at) = CURDATE()`,
     [userId]
   );
   
-  if (existing.length === 0) {
-    const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
-    await db.query(
-      `INSERT INTO user_quotas (user_id, tier, daily_token_limit, monthly_token_limit) VALUES (?, ?, ?, ?)`,
-      [userId, tier, limits.dailyTokenLimit, limits.monthlyTokenLimit]
-    );
-    return {
-      userId,
-      tier,
-      dailyTokensUsed: 0,
-      monthlyTokensUsed: 0,
-      dailyTokenLimit: limits.dailyTokenLimit,
-      monthlyTokenLimit: limits.monthlyTokenLimit,
-      isLimited: false
-    };
-  }
+  // 查询本月使用量
+  const [monthStats] = await db.query(
+    `SELECT COALESCE(SUM(total_tokens), 0) as totalTokens, COUNT(*) as requestCount
+     FROM kbit_usage_logs 
+     WHERE user_id = ? AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())`,
+    [userId]
+  );
   
-  return existing[0];
+  return {
+    userId,
+    tier,
+    dailyTokensUsed: todayStats[0]?.totalTokens || 0,
+    monthlyTokensUsed: monthStats[0]?.totalTokens || 0,
+    dailyTokenLimit: limits.dailyTokenLimit,
+    monthlyTokenLimit: limits.monthlyTokenLimit,
+    isLimited: false
+  };
 }
 
 async function checkRateLimit(userId, tier = 'free') {
@@ -82,62 +87,45 @@ async function checkRateLimit(userId, tier = 'free') {
 async function checkTokenLimit(userId) {
   const quota = await ensureUserQuota(userId);
   
-  const today = new Date().toISOString().split('T')[0];
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  // 实时从 kbit_usage_logs 统计今日/本月使用量
+  const [todayStats] = await db.query(
+    `SELECT COALESCE(SUM(total_tokens), 0) as totalTokens
+     FROM kbit_usage_logs 
+     WHERE user_id = ? AND DATE(created_at) = CURDATE()`,
+    [userId]
+  );
   
-  let dailyTokensUsed = quota.daily_tokens_used;
-  let monthlyTokensUsed = quota.monthly_tokens_used;
+  const [monthStats] = await db.query(
+    `SELECT COALESCE(SUM(total_tokens), 0) as totalTokens
+     FROM kbit_usage_logs 
+     WHERE user_id = ? AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())`,
+    [userId]
+  );
   
-  if (quota.last_reset_daily && quota.last_reset_daily.toISOString().split('T')[0] !== today) {
-    dailyTokensUsed = 0;
-    await db.query(
-      'UPDATE user_quotas SET daily_tokens_used = 0, last_reset_daily = NOW() WHERE user_id = ?',
-      [userId]
-    );
-  }
+  const dailyTokensUsed = todayStats[0]?.totalTokens || 0;
+  const monthlyTokensUsed = monthStats[0]?.totalTokens || 0;
   
-  if (quota.last_reset_monthly && quota.last_reset_monthly.toISOString().slice(0, 7) !== thisMonth) {
-    monthlyTokensUsed = 0;
-    await db.query(
-      'UPDATE user_quotas SET monthly_tokens_used = 0, last_reset_monthly = NOW() WHERE user_id = ?',
-      [userId]
-    );
-  }
-  
-  if (quota.is_limited && quota.limited_until && new Date() < new Date(quota.limited_until)) {
-    return {
-      allowed: false,
-      reason: 'limited',
-      message: '您的账户已被限流',
-      limitedUntil: quota.limited_until,
-      dailyTokensUsed,
-      monthlyTokensUsed,
-      dailyTokenLimit: quota.daily_token_limit,
-      monthlyTokenLimit: quota.monthly_token_limit
-    };
-  }
-  
-  if (dailyTokensUsed >= quota.daily_token_limit) {
+  if (dailyTokensUsed >= quota.dailyTokenLimit) {
     return {
       allowed: false,
       reason: 'daily_limit',
-      message: `今日Token额度已用完（${quota.daily_token_limit}），请明天再试`,
+      message: `今日Token额度已用完（${quota.dailyTokenLimit}），请明天再试`,
       dailyTokensUsed,
       monthlyTokensUsed,
-      dailyTokenLimit: quota.daily_token_limit,
-      monthlyTokenLimit: quota.monthly_token_limit
+      dailyTokenLimit: quota.dailyTokenLimit,
+      monthlyTokenLimit: quota.monthlyTokenLimit
     };
   }
   
-  if (monthlyTokensUsed >= quota.monthly_token_limit) {
+  if (monthlyTokensUsed >= quota.monthlyTokenLimit) {
     return {
       allowed: false,
       reason: 'monthly_limit',
-      message: `本月Token额度已用完（${quota.monthly_token_limit}），请升级套餐或下月再试`,
+      message: `本月Token额度已用完（${quota.monthlyTokenLimit}），请升级套餐或下月再试`,
       dailyTokensUsed,
       monthlyTokensUsed,
-      dailyTokenLimit: quota.daily_token_limit,
-      monthlyTokenLimit: quota.monthly_token_limit
+      dailyTokenLimit: quota.dailyTokenLimit,
+      monthlyTokenLimit: quota.monthlyTokenLimit
     };
   }
   
@@ -145,38 +133,25 @@ async function checkTokenLimit(userId) {
     allowed: true,
     dailyTokensUsed,
     monthlyTokensUsed,
-    dailyTokenLimit: quota.daily_token_limit,
-    monthlyTokenLimit: quota.monthly_token_limit,
-    remainingDaily: quota.daily_token_limit - dailyTokensUsed,
-    remainingMonthly: quota.monthly_token_limit - monthlyTokensUsed
+    dailyTokenLimit: quota.dailyTokenLimit,
+    monthlyTokenLimit: quota.monthlyTokenLimit,
+    remainingDaily: quota.dailyTokenLimit - dailyTokensUsed,
+    remainingMonthly: quota.monthlyTokenLimit - monthlyTokensUsed
   };
 }
 
 async function getUserInfo(userId) {
   try {
-    // 尝试从 users 表查询用户信息
+    // 尝试从 kbit_users 表查询用户信息
     const [rows] = await db.query(
-      'SELECT nickname, email FROM users WHERE user_id = ? OR email = ?',
+      'SELECT nickname, email FROM kbit_users WHERE id = ? OR email = ?',
       [userId, userId]
     );
     
     if (rows.length > 0) {
       return { 
-        nickname: rows[0].nickname || (rows[0].email ? rows[0].email.split('@')[0] : '未知用户'), 
-        email: rows[0].email || userId 
-      };
-    }
-    
-    // 如果用户不存在，尝试从 user_ph8_balance 表获取
-    const [balanceRows] = await db.query(
-      'SELECT * FROM user_ph8_balance WHERE user_id = ?',
-      [userId]
-    );
-    
-    if (balanceRows.length > 0) {
-      return { 
-        nickname: '未知用户', 
-        email: userId 
+        nickname: rows[0].nickname,
+        email: rows[0].email
       };
     }
     
@@ -189,40 +164,29 @@ async function getUserInfo(userId) {
 }
 
 async function recordTokenUsage(userId, tokens, model, requestType, requestId = null) {
-  const today = new Date().toISOString().split('T')[0];
+  // 映射 request_type 到 feature
+  const featureMap = {
+    'image': 'image_gen',
+    'video': 'video_gen',
+    'chat': 'chat',
+    'audio': 'chat'
+  };
+  const feature = featureMap[requestType] || requestType || 'chat';
 
+  // 写入 kbit_usage_logs 表
   await db.query(
-    `INSERT INTO token_usage (user_id, request_id, model, prompt_tokens, completion_tokens, total_tokens, request_type, ip_address)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [userId, requestId, model, tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, requestType, '']
-  );
-  
-  await db.query(
-    `UPDATE user_quotas 
-     SET daily_tokens_used = daily_tokens_used + ?,
-         monthly_tokens_used = monthly_tokens_used + ?,
-         total_tokens_used = total_tokens_used + ?,
-         request_count_today = request_count_today + 1,
-         request_count_month = request_count_month + 1,
-         last_request_at = NOW()
-     WHERE user_id = ?`,
-    [tokens.total || 0, tokens.total || 0, tokens.total || 0, userId]
+    `INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, cache_hit, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    [userId, requestId || `req_${Date.now()}`, feature, model, 'hp8-accelerator', tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, 0, 0, 'success', '', 0]
   );
 }
 
 async function recordRateLimitEvent(userId, limitType, tokensAttempted, limitValue, currentValue) {
-  await db.query(
-    `INSERT INTO rate_limit_logs (user_id, limit_type, tokens_attempted, limit_value, current_value)
-     VALUES (?, ?, ?, ?, ?)`,
-    [userId, limitType, tokensAttempted, limitValue, currentValue]
-  );
+  // 限流事件记录到 kbit_usage_logs 表，状态为 failed
+  console.log(`[RateLimit] 用户 ${userId} 触发限流: ${limitType}, 尝试使用 ${tokensAttempted} tokens, 限制 ${limitValue}`);
   
-  if (limitType === 'daily_token' || limitType === 'monthly_token') {
-    await db.query(
-      `UPDATE user_quotas SET is_limited = 1, limited_until = DATE_ADD(NOW(), INTERVAL 1 HOUR) WHERE user_id = ?`,
-      [userId]
-    );
-  }
+  // 可选：写入系统日志表或发送告警
+  // 暂时不写入数据库，避免依赖旧表
 }
 
 function incrementConcurrent(userId) {
@@ -238,16 +202,12 @@ function decrementConcurrent(userId) {
 }
 
 async function getUserUsageStats(userId) {
-  const [quota] = await db.query(
-    'SELECT * FROM user_quotas WHERE user_id = ?',
-    [userId]
-  );
-  
+  // 从 kbit_usage_logs 实时统计使用量
   const [todayUsage] = await db.query(
     `SELECT 
       SUM(total_tokens) as total_tokens,
       COUNT(*) as request_count
-    FROM token_usage 
+    FROM kbit_usage_logs 
     WHERE user_id = ? AND DATE(created_at) = CURDATE()`,
     [userId]
   );
@@ -256,24 +216,24 @@ async function getUserUsageStats(userId) {
     `SELECT 
       SUM(total_tokens) as total_tokens,
       COUNT(*) as request_count
-    FROM token_usage 
+    FROM kbit_usage_logs 
     WHERE user_id = ? AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')`,
     [userId]
   );
   
   const [typeBreakdown] = await db.query(
     `SELECT 
-      request_type,
+      feature as request_type,
       SUM(total_tokens) as tokens,
       COUNT(*) as count
-    FROM token_usage 
+    FROM kbit_usage_logs 
     WHERE user_id = ? AND DATE(created_at) = CURDATE()
-    GROUP BY request_type`,
+    GROUP BY feature`,
     [userId]
   );
   
   return {
-    quota: quota[0] || null,
+    quota: null,
     today: todayUsage[0] || { total_tokens: 0, request_count: 0 },
     month: monthUsage[0] || { total_tokens: 0, request_count: 0 },
     typeBreakdown: typeBreakdown || []

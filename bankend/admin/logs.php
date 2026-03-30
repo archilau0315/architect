@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>使用日志 - 管理员后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#3B82F6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .bg-gradient-primary {
+                background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            }
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter">
+    <!-- 侧边栏 -->
+    <div class="flex h-screen overflow-hidden">
+        <div class="w-64 bg-gray-900 text-white flex flex-col">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+                        <i class="fa fa-shield text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold">管理员后台</h1>
+                        <p class="text-xs text-gray-400">首席图像架构师</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-dashboard w-5 text-center"></i>
+                    <span>仪表盘</span>
+                </a>
+                <a href="users.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-users w-5 text-center"></i>
+                    <span>用户管理</span>
+                </a>
+                <a href="beta.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-envelope w-5 text-center"></i>
+                    <span>内测申请</span>
+                </a>
+                <a href="models.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-cogs w-5 text-center"></i>
+                    <span>系统配置</span>
+                </a>
+                <a href="logs.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gray-800 text-white">
+                    <i class="fa fa-list-alt w-5 text-center"></i>
+                    <span>使用日志</span>
+                </a>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-800">
+                <div class="flex items-center space-x-3 px-4 py-3">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                        <i class="fa fa-user"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p id="adminName" class="text-sm font-medium">管理员</p>
+                        <p class="text-xs text-gray-400">超级管理员</p>
+                    </div>
+                    <button id="logoutButton" class="text-gray-400 hover:text-white">
+                        <i class="fa fa-sign-out"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容 -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- 顶部导航 -->
+            <header class="bg-white shadow-sm z-10">
+                <div class="flex items-center justify-between p-4">
+                    <div class="flex items-center space-x-4">
+                        <button id="sidebarToggle" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <h2 class="text-lg font-semibold text-gray-900">使用日志</h2>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-bell"></i>
+                                <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- 内容区域 -->
+            <main class="flex-1 overflow-y-auto p-6">
+                <!-- 搜索和筛选 -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">用户ID</label>
+                            <input type="text" id="userIdFilter" placeholder="用户ID" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">功能</label>
+                            <select id="featureFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                <option value="">所有功能</option>
+                                <option value="chat">聊天</option>
+                                <option value="image">图像生成</option>
+                                <option value="video">视频生成</option>
+                                <option value="text">文本生成</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                            <select id="statusFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                <option value="">所有状态</option>
+                                <option value="success">成功</option>
+                                <option value="failed">失败</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                            <input type="date" id="dateFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="loadLogs()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                            <i class="fa fa-search mr-2"></i> 搜索
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 日志列表 -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">使用日志</h3>
+                        <div class="text-sm text-gray-500" id="logCount">
+                            共 0 条日志
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">功能</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">模型</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">消耗</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时间</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="logList">
+                                <tr>
+                                    <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                                        加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <div class="text-sm text-gray-500">
+                            显示 <span id="showingCount">0</span> 条日志
+                        </div>
+                        <div class="flex space-x-2" id="pagination">
+                            <!-- 分页按钮将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查登录状态
+            const adminToken = localStorage.getItem('admin_token');
+            if (!adminToken) {
+                window.location.href = 'index.php';
+                return;
+            }
+            
+            // 显示管理员信息
+            const adminUser = localStorage.getItem('admin_user');
+            if (adminUser) {
+                const admin = JSON.parse(adminUser);
+                document.getElementById('adminName').textContent = admin.username || '管理员';
+            }
+            
+            // 退出登录
+            document.getElementById('logoutButton').addEventListener('click', function() {
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_user');
+                window.location.href = 'index.php';
+            });
+            
+            // 加载日志
+            loadLogs();
+        });
+        
+        let currentPage = 1;
+        
+        function loadLogs() {
+            const userId = document.getElementById('userIdFilter').value;
+            const feature = document.getElementById('featureFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const date = document.getElementById('dateFilter').value;
+            
+            fetch(`/api/admin/logs?page=${currentPage}&user_id=${userId}&feature=${feature}&status=${status}&date=${date}&limit=20`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateLogList(data.data.logs);
+                    updatePagination(data.data.pagination);
+                    document.getElementById('logCount').textContent = `共 ${data.data.pagination.total} 条日志`;
+                    document.getElementById('showingCount').textContent = data.data.logs.length;
+                }
+            })
+            .catch(error => {
+                console.error('加载日志失败:', error);
+            });
+        }
+        
+        function updateLogList(logs) {
+            const logList = document.getElementById('logList');
+            
+            if (logs.length > 0) {
+                logList.innerHTML = '';
+                
+                logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${log.email || log.user_id}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.feature}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model_id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${log.status === 'success' ? '成功' : '失败'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${log.points_cost || 0} 积分
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${log.ip_address}
+                        </td>
+                    `;
+                    logList.appendChild(row);
+                });
+            } else {
+                logList.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                            暂无日志
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        function updatePagination(pagination) {
+            const paginationContainer = document.getElementById('pagination');
+            paginationContainer.innerHTML = '';
+            
+            // 上一页按钮
+            if (pagination.page > 1) {
+                const prevButton = document.createElement('button');
+                prevButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50';
+                prevButton.textContent = '上一页';
+                prevButton.addEventListener('click', () => {
+                    currentPage = pagination.page - 1;
+                    loadLogs();
+                });
+                paginationContainer.appendChild(prevButton);
+            }
+            
+            // 页码按钮
+            for (let i = 1; i <= pagination.total_pages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `px-3 py-1 border rounded-md ${i === pagination.page ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`;
+                pageButton.textContent = i;
+                pageButton.addEventListener('click', () => {
+                    currentPage = i;
+                    loadLogs();
+                });
+                paginationContainer.appendChild(pageButton);
+            }
+            
+            // 下一页按钮
+            if (pagination.page < pagination.total_pages) {
+                const nextButton = document.createElement('button');
+                nextButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50';
+                nextButton.textContent = '下一页';
+                nextButton.addEventListener('click', () => {
+                    currentPage = pagination.page + 1;
+                    loadLogs();
+                });
+                paginationContainer.appendChild(nextButton);
+            }
+        }
+    </script>
+</body>
+</html>

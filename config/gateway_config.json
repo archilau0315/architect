@@ -1,275 +1,69 @@
 {
-  "version": "3.8.6",
-  "global_settings": {
-    "default_strategy": "priority_first",
-    "circuit_breaker_enabled": true,
-    "failover_timeout_ms": 10000
-  },
-  "price_unit": "CNY/M tokens",
   "gateways": {
     "ph8": {
       "name": "ph8.co",
       "url": "https://ph8.co",
-      "api_key": "sk-2f6ff8aba4d541d591d17e8eae60e75c",
-      "enabled": true,
-      "proxy_path": "/api/ph8"
+      "proxy_path": "/api/ph8",
+      "api_key": ""
     }
-  },
-  "api_keys": {
-    "google_official": "",
-    "ph8": "sk-2f6ff8aba4d541d591d17e8eae60e75c"
   },
   "models": {
     "gemini-3-pro-preview": [
       {
-        "id": "official-google-pro",
         "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com",
-        "inputPrice": 7.0,
-        "outputPrice": 21.0,
-        "priority": 100,
-        "active": true,
-        "description": "官方直连节点"
-      },
-      {
-        "id": "hp8-pro-01",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3.1-pro-preview",
-        "inputPrice": 17.0,
-        "outputPrice": 102.3,
-        "priority": 200,
-        "active": true,
-        "description": "HP8 核心加速节点"
+        "url": "https://generativelanguage.googleapis.com/v1",
+        "remoteModelId": "gemini-3-pro-preview",
+        "priority": 10,
+        "active": true
       }
     ],
     "gemini-3-flash-preview": [
       {
-        "id": "official-google-flash",
         "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com",
-        "inputPrice": 0.075,
-        "outputPrice": 0.3,
-        "priority": 100,
-        "active": true,
-        "description": "官方节点"
-      },
-      {
-        "id": "hp8-flash-01",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "url": "https://generativelanguage.googleapis.com/v1",
         "remoteModelId": "gemini-3-flash-preview",
-        "inputPrice": 3.5,
-        "outputPrice": 21.0,
-        "priority": 200,
-        "active": true,
-        "description": "HP8 极速加速节点"
-      }
-    ],
-    "gemini-2.5-flash-image": [
-      {
-        "id": "official-image-engine",
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com",
-        "inputPrice": 5.0,
-        "outputPrice": 10.0,
-        "priority": 100,
-        "active": true,
-        "description": "官方图像渲染"
-      },
-      {
-        "id": "hp8-image-01",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3.1-flash-image-preview",
-        "inputPrice": 2.5,
-        "outputPrice": 21.2,
-        "priority": 200,
-        "active": true,
-        "description": "Gemini 3.1 Flash Image 图像加速"
+        "priority": 10,
+        "active": true
       }
     ],
     "gemini-3.1-flash-image-preview": [
       {
-        "id": "hp8-3.1-flash-image",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "Google Cloud",
+        "url": "https://generativelanguage.googleapis.com/v1",
         "remoteModelId": "gemini-3.1-flash-image-preview",
-        "inputPrice": 2.5,
-        "outputPrice": 21.2,
-        "priority": 200,
-        "active": true,
-        "description": "Gemini 3.1 Flash Image 图像生成"
+        "priority": 10,
+        "active": true
       }
     ],
-    "Nano-Banana": [
+    "gemini-3-pro-image-preview": [
       {
-        "id": "hp8-nano-banana",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "Nano-Banana",
-        "inputPrice": 2.5,
-        "outputPrice": 21.2,
-        "priority": 100,
-        "active": true,
-        "description": "Nano-Banana 图像生成"
-      }
-    ],
-    "veo-3.1-generate-preview": [
-      {
-        "id": "official-veo-video",
         "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com",
-        "inputPrice": 50.0,
-        "outputPrice": 150.0,
-        "priority": 100,
-        "active": true
-      },
-      {
-        "id": "hp8-veo-01",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "veo-3.1-generate-preview",
-        "inputPrice": 0.0,
-        "outputPrice": 0.0,
-        "priority": 200,
+        "url": "https://generativelanguage.googleapis.com/v1",
+        "remoteModelId": "gemini-3-pro-image-preview",
+        "priority": 10,
         "active": true
       }
     ],
-    "veo-3.1-fast-generate-preview": [
+    "gemini-2.5-flash-image": [
       {
-        "id": "official-veo-fast",
         "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com",
-        "inputPrice": 30.0,
-        "outputPrice": 90.0,
-        "priority": 100,
-        "active": true
-      },
-      {
-        "id": "hp8-veo-fast-01",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "veo-3.1-fast-generate-preview",
-        "inputPrice": 0.0,
-        "outputPrice": 0.0,
-        "priority": 200,
+        "url": "https://generativelanguage.googleapis.com/v1",
+        "remoteModelId": "gemini-2.5-flash-image",
+        "priority": 10,
         "active": true
       }
     ],
-    "gemini-2.5-pro": [
+    "gemini-1.5-flash": [
       {
-        "id": "hp8-2.5-pro",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-2.5-pro",
-        "inputPrice": 10.5,
-        "outputPrice": 85.3,
-        "priority": 200,
+        "provider": "Google Cloud",
+        "url": "https://generativelanguage.googleapis.com/v1",
+        "remoteModelId": "gemini-1.5-flash",
+        "priority": 10,
         "active": true
-      }
-    ],
-    "gemini-2.5-flash": [
-      {
-        "id": "hp8-2.5-flash",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-2.5-flash",
-        "inputPrice": 2.5,
-        "outputPrice": 21.2,
-        "priority": 200,
-        "active": true
-      }
-    ],
-    "deepseek-v3.2": [
-      {
-        "id": "hp8-deepseek-v3",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "deepseek-v3.2",
-        "inputPrice": 2.2,
-        "outputPrice": 3.3,
-        "priority": 200,
-        "active": true
-      }
-    ],
-    "KbitVeo-speed": [
-      {
-        "id": "hp8-kbitveo-speed",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-0-pro-250528",
-        "inputPrice": 0.1,
-        "outputPrice": 5.0,
-        "priority": 200,
-        "active": true,
-        "description": "KbitVeo Speed 视频模型"
-      }
-    ],
-    "KbitVeo-normal": [
-      {
-        "id": "hp8-kbitveo-normal",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-0-lite-i2v-250428",
-        "inputPrice": 0.1,
-        "outputPrice": 10.0,
-        "priority": 200,
-        "active": true,
-        "description": "KbitVeo Normal 视频模型"
-      }
-    ],
-    "KbitVeo-pro": [
-      {
-        "id": "hp8-kbitveo-pro",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-5-pro-251215",
-        "inputPrice": 0.1,
-        "outputPrice": 15.0,
-        "priority": 200,
-        "active": true,
-        "description": "KbitVeo Pro 视频模型"
-      }
-    ],
-    "Kbit-fast": [
-      {
-        "id": "hp8-kbit-fast",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "veo-3.1-fast-generate-preview",
-        "inputPrice": 0.1,
-        "outputPrice": 1.2,
-        "priority": 200,
-        "active": true,
-        "description": "Kbit Fast 视频模型"
-      }
-    ],
-    "qwen3-vl-flash": [
-      {
-        "id": "hp8-qwen3-vl-flash",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "qwen3-vl-flash",
-        "inputPrice": 0.5,
-        "outputPrice": 2.0,
-        "priority": 200,
-        "active": true,
-        "description": "Qwen3 VL Flash 多模态模型"
-      }
-    ],
-    "gemini-3.1-flash-lite-preview": [
-      {
-        "id": "hp8-3.1-flash-lite",
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3.1-flash-lite-preview",
-        "inputPrice": 1.0,
-        "outputPrice": 4.0,
-        "priority": 200,
-        "active": true,
-        "description": "Gemini 3.1 Flash Lite 深度思考模型"
       }
     ]
+  },
+  "api_keys": {
+    "ph8": ""
   }
 }

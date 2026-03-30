@@ -114,7 +114,7 @@ class CostController
         }
         
         $requestId = $this->generateRequestId();
-        $this->setCache($cacheKey, [
+        $this->setFileCache($cacheKey, [
             'request_id' => $requestId,
             'expires_at' => time() + $debounceSeconds
         ], $debounceSeconds);
@@ -276,7 +276,7 @@ class CostController
         return $this->cachePath . '/' . substr($hash, 0, 2) . '/' . $hash . '.json';
     }
 
-    private function setCache(string $key, mixed $value, int $ttl): bool
+    private function setFileCache(string $key, mixed $value, int $ttl): bool
     {
         $cacheFile = $this->getCacheFilePath($key);
         $dir = dirname($cacheFile);

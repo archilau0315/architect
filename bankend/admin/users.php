@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - 管理员后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#3B82F6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .bg-gradient-primary {
+                background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            }
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter">
+    <!-- 侧边栏 -->
+    <div class="flex h-screen overflow-hidden">
+        <div class="w-64 bg-gray-900 text-white flex flex-col">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+                        <i class="fa fa-shield text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold">管理员后台</h1>
+                        <p class="text-xs text-gray-400">首席图像架构师</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-dashboard w-5 text-center"></i>
+                    <span>仪表盘</span>
+                </a>
+                <a href="users.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gray-800 text-white">
+                    <i class="fa fa-users w-5 text-center"></i>
+                    <span>用户管理</span>
+                </a>
+                <a href="beta.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-envelope w-5 text-center"></i>
+                    <span>内测申请</span>
+                </a>
+                <a href="models.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-cogs w-5 text-center"></i>
+                    <span>系统配置</span>
+                </a>
+                <a href="logs.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                    <i class="fa fa-list-alt w-5 text-center"></i>
+                    <span>使用日志</span>
+                </a>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-800">
+                <div class="flex items-center space-x-3 px-4 py-3">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                        <i class="fa fa-user"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p id="adminName" class="text-sm font-medium">管理员</p>
+                        <p class="text-xs text-gray-400">超级管理员</p>
+                    </div>
+                    <button id="logoutButton" class="text-gray-400 hover:text-white">
+                        <i class="fa fa-sign-out"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容 -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- 顶部导航 -->
+            <header class="bg-white shadow-sm z-10">
+                <div class="flex items-center justify-between p-4">
+                    <div class="flex items-center space-x-4">
+                        <button id="sidebarToggle" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <h2 class="text-lg font-semibold text-gray-900">用户管理</h2>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-bell"></i>
+                                <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <button class="text-gray-500 hover:text-gray-700">
+                                <i class="fa fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- 内容区域 -->
+            <main class="flex-1 overflow-y-auto p-6">
+                <!-- 搜索和筛选 -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                        <div class="flex-1">
+                            <div class="relative">
+                                <input type="text" id="searchInput" placeholder="搜索用户..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                <i class="fa fa-search absolute right-3 top-3 text-gray-400"></i>
+                            </div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <select id="tierFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                <option value="">所有等级</option>
+                                <option value="free">免费</option>
+                                <option value="beta">内测</option>
+                                <option value="basic">基础</option>
+                                <option value="pro">专业</option>
+                                <option value="plus">高级</option>
+                            </select>
+                            <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                <option value="">所有状态</option>
+                                <option value="1">活跃</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 用户列表 -->
+                <div class="bg-white rounded-xl card-shadow p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">用户列表</h3>
+                        <div class="text-sm text-gray-500" id="userCount">
+                            共 0 个用户
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ID
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        邮箱
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        昵称
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        等级
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        积分
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        状态
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        最后登录
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        操作
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="userList">
+                                <tr>
+                                    <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                                        加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 flex items-center justify-between">
+                        <div class="text-sm text-gray-500">
+                            显示 <span id="showingCount">0</span> 个用户
+                        </div>
+                        <div class="flex space-x-2" id="pagination">
+                            <!-- 分页按钮将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 用户详情模态框 -->
+                <div id="userModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                    <div class="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900" id="modalTitle">用户详情</h3>
+                            <button id="closeModal" class="text-gray-400 hover:text-gray-600">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="space-y-6">
+                            <!-- 用户基本信息 -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                                    <p id="modalEmail" class="text-gray-900"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">昵称</label>
+                                    <p id="modalNickname" class="text-gray-900"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">手机</label>
+                                    <p id="modalPhone" class="text-gray-900"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">等级</label>
+                                    <select id="modalTier" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                        <option value="free">免费</option>
+                                        <option value="beta">内测</option>
+                                        <option value="basic">基础</option>
+                                        <option value="pro">专业</option>
+                                        <option value="plus">高级</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                                    <select id="modalStatus" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                        <option value="1">活跃</option>
+                                        <option value="0">禁用</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">等级到期</label>
+                                    <input type="datetime-local" id="modalTierExpires" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                </div>
+                            </div>
+                            
+                            <!-- 积分信息 -->
+                            <div>
+                                <h4 class="text-md font-semibold text-gray-900 mb-3">积分信息</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">每日积分</label>
+                                        <input type="number" id="modalDailyPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">购买积分</label>
+                                        <input type="number" id="modalPurchasedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">总消耗</label>
+                                        <p id="modalTotalConsumed" class="text-gray-900"></p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 流量监控 -->
+                            <div>
+                                <h4 class="text-md font-semibold text-gray-900 mb-3">流量监控</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">今日请求</label>
+                                        <p id="modalTodayRequests" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">今日积分消耗</label>
+                                        <p id="modalTodayPoints" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">本周请求</label>
+                                        <p id="modalWeekRequests" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">本周积分消耗</label>
+                                        <p id="modalWeekPoints" class="text-gray-900"></p>
+                                    </div>
+                                </div>
+                                <div class="h-64">
+                                    <canvas id="userUsageChart"></canvas>
+                                </div>
+                            </div>
+                            
+                            <!-- 操作按钮 -->
+                            <div class="flex justify-end space-x-3">
+                                <button id="cancelModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                                    取消
+                                </button>
+                                <button id="saveUser" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                                    保存修改
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查登录状态
+            const adminToken = localStorage.getItem('admin_token');
+            if (!adminToken) {
+                window.location.href = 'index.php';
+                return;
+            }
+            
+            // 显示管理员信息
+            const adminUser = localStorage.getItem('admin_user');
+            if (adminUser) {
+                const admin = JSON.parse(adminUser);
+                document.getElementById('adminName').textContent = admin.username || '管理员';
+            }
+            
+            // 退出登录
+            document.getElementById('logoutButton').addEventListener('click', function() {
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_user');
+                window.location.href = 'index.php';
+            });
+            
+            // 加载用户列表
+            loadUsers();
+            
+            // 搜索和筛选事件
+            document.getElementById('searchInput').addEventListener('input', debounce(loadUsers, 300));
+            document.getElementById('tierFilter').addEventListener('change', loadUsers);
+            document.getElementById('statusFilter').addEventListener('change', loadUsers);
+            
+            // 模态框事件
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+            document.getElementById('cancelModal').addEventListener('click', closeModal);
+            document.getElementById('saveUser').addEventListener('click', saveUserChanges);
+            
+            // 点击模态框外部关闭
+            document.getElementById('userModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+        });
+        
+        let currentPage = 1;
+        let currentUserId = null;
+        
+        function loadUsers() {
+            const search = document.getElementById('searchInput').value;
+            const tier = document.getElementById('tierFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            
+            fetch(`/api/admin/users?page=${currentPage}&search=${encodeURIComponent(search)}&tier=${encodeURIComponent(tier)}&status=${encodeURIComponent(status)}&limit=10`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateUserList(data.data.users);
+                    updatePagination(data.data.pagination);
+                    document.getElementById('userCount').textContent = `共 ${data.data.pagination.total} 个用户`;
+                    document.getElementById('showingCount').textContent = data.data.users.length;
+                }
+            })
+            .catch(error => {
+                console.error('加载用户列表失败:', error);
+                document.getElementById('userList').innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                            加载失败
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        
+        function updateUserList(users) {
+            const userList = document.getElementById('userList');
+            
+            if (users.length > 0) {
+                userList.innerHTML = '';
+                
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    
+                    const tierMap = {
+                        'free': '免费',
+                        'beta': '内测',
+                        'basic': '基础',
+                        'pro': '专业',
+                        'plus': '高级'
+                    };
+                    
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${user.id}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${user.email}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${user.nickname}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTierColor(user.user_tier)}">
+                                ${tierMap[user.user_tier] || user.user_tier}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points)).toFixed(2)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${user.status === 1 ? '活跃' : '禁用'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '从未'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button onclick="viewUser(${user.id})" class="text-primary hover:text-secondary mr-3">
+                                <i class="fa fa-eye"></i> 查看
+                            </button>
+                            <button onclick="editUser(${user.id})" class="text-info hover:text-blue-700 mr-3">
+                                <i class="fa fa-edit"></i> 编辑
+                            </button>
+                            <button onclick="deleteUser(${user.id})" class="text-danger hover:text-red-700">
+                                <i class="fa fa-trash"></i> 删除
+                            </button>
+                        </td>
+                    `;
+                    
+                    userList.appendChild(row);
+                });
+            } else {
+                userList.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                            暂无用户
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        function updatePagination(pagination) {
+            const paginationContainer = document.getElementById('pagination');
+            paginationContainer.innerHTML = '';
+            
+            // 上一页按钮
+            if (pagination.page > 1) {
+                const prevButton = document.createElement('button');
+                prevButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50';
+                prevButton.textContent = '上一页';
+                prevButton.addEventListener('click', () => {
+                    currentPage = pagination.page - 1;
+                    loadUsers();
+                });
+                paginationContainer.appendChild(prevButton);
+            }
+            
+            // 页码按钮
+            for (let i = 1; i <= pagination.total_pages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `px-3 py-1 border rounded-md ${i === pagination.page ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`;
+                pageButton.textContent = i;
+                pageButton.addEventListener('click', () => {
+                    currentPage = i;
+                    loadUsers();
+                });
+                paginationContainer.appendChild(pageButton);
+            }
+            
+            // 下一页按钮
+            if (pagination.page < pagination.total_pages) {
+                const nextButton = document.createElement('button');
+                nextButton.className = 'px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50';
+                nextButton.textContent = '下一页';
+                nextButton.addEventListener('click', () => {
+                    currentPage = pagination.page + 1;
+                    loadUsers();
+                });
+                paginationContainer.appendChild(nextButton);
+            }
+        }
+        
+        function viewUser(userId) {
+            loadUserDetails(userId, false);
+        }
+        
+        function editUser(userId) {
+            loadUserDetails(userId, true);
+        }
+        
+        function loadUserDetails(userId, editable) {
+            currentUserId = userId;
+            
+            fetch(`/api/admin/users/${userId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const user = data.data.user;
+                    const usageStats = data.data.usage_stats;
+                    
+                    // 填充用户信息
+                    document.getElementById('modalEmail').textContent = user.email;
+                    document.getElementById('modalNickname').textContent = user.nickname;
+                    document.getElementById('modalPhone').textContent = user.phone || '未设置';
+                    document.getElementById('modalTier').value = user.user_tier;
+                    document.getElementById('modalStatus').value = user.status;
+                    document.getElementById('modalTierExpires').value = user.tier_expires_at ? user.tier_expires_at.replace(' ', 'T') : '';
+                    document.getElementById('modalDailyPoints').value = user.daily_points;
+                    document.getElementById('modalPurchasedPoints').value = user.purchased_points;
+                    document.getElementById('modalTotalConsumed').textContent = user.total_consumed_points;
+                    
+                    // 填充流量统计
+                    document.getElementById('modalTodayRequests').textContent = usageStats.today.total_requests || 0;
+                    document.getElementById('modalTodayPoints').textContent = usageStats.today.total_points_spent || 0;
+                    document.getElementById('modalWeekRequests').textContent = usageStats.week.total_requests || 0;
+                    document.getElementById('modalWeekPoints').textContent = usageStats.week.total_points_spent || 0;
+                    
+                    // 生成使用图表
+                    updateUserUsageChart(usageStats.daily);
+                    
+                    // 显示模态框
+                    document.getElementById('userModal').classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('加载用户详情失败:', error);
+            });
+        }
+        
+        function updateUserUsageChart(dailyStats) {
+            const ctx = document.getElementById('userUsageChart').getContext('2d');
+            
+            const labels = dailyStats.map(item => item.date);
+            const requests = dailyStats.map(item => item.total_requests);
+            const points = dailyStats.map(item => item.total_points_spent);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '请求次数',
+                            data: requests,
+                            borderColor: '#4F46E5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: '积分消耗',
+                            data: points,
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        function saveUserChanges() {
+            const userData = {
+                user_tier: document.getElementById('modalTier').value,
+                status: document.getElementById('modalStatus').value,
+                tier_expires_at: document.getElementById('modalTierExpires').value,
+                daily_points: document.getElementById('modalDailyPoints').value,
+                purchased_points: document.getElementById('modalPurchasedPoints').value
+            };
+            
+            fetch(`/api/admin/users/${currentUserId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                },
+                body: JSON.stringify(userData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('用户信息更新成功');
+                    closeModal();
+                    loadUsers();
+                } else {
+                    alert('更新失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('更新用户信息失败:', error);
+                alert('更新失败');
+            });
+        }
+        
+        function deleteUser(userId) {
+            if (confirm('确定要删除这个用户吗？')) {
+                fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('用户删除成功');
+                        loadUsers();
+                    } else {
+                        alert('删除失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('删除用户失败:', error);
+                    alert('删除失败');
+                });
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('userModal').classList.add('hidden');
+            currentUserId = null;
+        }
+        
+        function getTierColor(tier) {
+            const colorMap = {
+                'free': 'bg-blue-100 text-blue-800',
+                'beta': 'bg-purple-100 text-purple-800',
+                'basic': 'bg-green-100 text-green-800',
+                'pro': 'bg-yellow-100 text-yellow-800',
+                'plus': 'bg-red-100 text-red-800'
+            };
+            return colorMap[tier] || 'bg-gray-100 text-gray-800';
+        }
+        
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+</body>
+</html>

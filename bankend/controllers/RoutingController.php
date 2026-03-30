@@ -235,7 +235,7 @@ class RoutingController
     public function logUsage(array $request): array
     {
         $userId = $GLOBALS['auth_user']['id'] ?? null;
-        
+
         if (!$userId) {
             return ['success' => false, 'error' => '未授权', 'code' => 401];
         }
@@ -244,6 +244,22 @@ class RoutingController
         $data['user_id'] = $userId;
         $data['ip_address'] = $request['ip'];
         $data['user_agent'] = $request['user_agent'] ?? null;
+
+        // 如果没有传入 points_cost，尝试从 transactions 表中查找预扣记录
+        if (!isset($data['points_cost']) || $data['points_cost'] == 0) {
+            $requestId = $data['request_id'] ?? '';
+            if ($requestId) {
+                $transaction = $this->db->queryOne(
+                    'SELECT ABS(amount) as points_cost FROM transactions 
+                     WHERE user_id = ? AND reference_id = ? AND type = "spend" 
+                     ORDER BY created_at DESC LIMIT 1',
+                    [$userId, $requestId]
+                );
+                if ($transaction) {
+                    $data['points_cost'] = $transaction['points_cost'];
+                }
+            }
+        }
 
         $logId = $this->costController->logUsage($data);
 

@@ -202,6 +202,11 @@ Router::put('/api/admin/users/{id}', function($req) {
     return $controller->updateUser($req);
 }, $authMiddleware);
 
+Router::delete('/api/admin/users/{id}', function($req) {
+    $controller = new \KbitArchitect\Controllers\AdminController();
+    return $controller->deleteUser($req);
+}, $authMiddleware);
+
 Router::get('/api/admin/models', function($req) {
     $controller = new \KbitArchitect\Controllers\AdminController();
     return $controller->getModels($req);
@@ -255,6 +260,22 @@ Router::get('/api/admin/routing-rules', function($req) {
 Router::put('/api/admin/routing-rules/{id}', function($req) {
     $controller = new \KbitArchitect\Controllers\AdminController();
     return $controller->updateRoutingRule($req);
+}, $authMiddleware);
+
+// 内测申请相关路由
+Router::get('/api/admin/beta-requests', function($req) {
+    $controller = new \KbitArchitect\Controllers\AdminController();
+    return $controller->getBetaRequests($req);
+}, $authMiddleware);
+
+Router::post('/api/admin/beta-requests/{id}/approve', function($req) {
+    $controller = new \KbitArchitect\Controllers\AdminController();
+    return $controller->approveBetaRequest($req);
+}, $authMiddleware);
+
+Router::post('/api/admin/beta-requests/{id}/reject', function($req) {
+    $controller = new \KbitArchitect\Controllers\AdminController();
+    return $controller->rejectBetaRequest($req);
 }, $authMiddleware);
 
 Router::get('/api/health', function($req) {

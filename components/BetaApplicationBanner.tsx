@@ -38,21 +38,15 @@ const BetaApplicationBanner: React.FC<BetaApplicationBannerProps> = ({ onClose }
           onClose();
         }, 2000);
       } else {
-        // 后端返回错误，启用模拟模式
-        setSubmitStatus('success');
-        localStorage.setItem('architect-beta-application-submitted', 'true');
-        localStorage.setItem('architect-demo-invite-code', 'KBITDEMO1');
-        alert('申请成功！\n\n演示模式：您的邀请码是 KBITDEMO1\n请返回输入邀请码体验完整流程。');
-        onClose();
+        // 后端返回错误
+        const errorData = await response.json().catch(() => ({ error: '服务器错误' }));
+        setSubmitStatus('error');
+        alert('申请失败：' + (errorData.error || '请稍后重试'));
       }
     } catch (error) {
       console.error('Beta application error:', error);
-      // 模拟模式：当后端不可用时，直接通过
-      setSubmitStatus('success');
-      localStorage.setItem('architect-beta-application-submitted', 'true');
-      localStorage.setItem('architect-demo-invite-code', 'KBITDEMO1');
-      alert('申请成功！\n\n演示模式：您的邀请码是 KBITDEMO1\n请返回输入邀请码体验完整流程。');
-      onClose();
+      setSubmitStatus('error');
+      alert('申请失败：网络错误，请稍后重试');
     } finally {
       setIsSubmitting(false);
     }

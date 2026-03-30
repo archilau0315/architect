@@ -30,8 +30,9 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        // API Key 不再注入前端，改由后端管理
+        'process.env.API_KEY': JSON.stringify(''),
+        'process.env.GEMINI_API_KEY': JSON.stringify('')
       },
       optimizeDeps: {
         exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/core', '@ffmpeg/util']
