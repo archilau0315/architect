@@ -28,6 +28,10 @@ const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
     if (useOpenaiPath) {
       return '/api/ph8/openai/v1';
     }
+    // 处理 https://ph8.co/openai/v1 格式的 URL
+    if (url.includes('ph8.co/openai/v1')) {
+      return url.replace('https://ph8.co', '/api/ph8');
+    }
     return url.replace('https://ph8.co', '/api/ph8');
   }
   
@@ -2037,9 +2041,7 @@ export const GeminiService = {
             let statusData: any = null;
             
             // ph8 视频 API 使用 openai/v1 路径进行状态查询
-            const openaiProxiedUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-              ? '/api/ph8-openai'
-              : 'https://ph8.co/openai/v1';
+            const openaiProxiedUrl = '/api/ph8/openai/v1';
             
             // 格式1: GET /videos/{id} (使用 openai 路径)
             let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {
@@ -2124,7 +2126,7 @@ export const GeminiService = {
                       `${proxiedUrl}/videos/${videoId}/content`,
                       `${proxiedUrl}/openai/v1/videos/${videoId}/content`,
                       `${proxiedUrl}/videos/${videoId}/download_content`,
-                      `https://ph8.co/openai/v1/videos/${videoId}/content`
+                      `/api/ph8/openai/v1/videos/${videoId}/content`
                     ];
                     
                     for (const contentUrl of contentUrls) {

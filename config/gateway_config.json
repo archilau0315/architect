@@ -10,6 +10,13 @@
   "models": {
     "gemini-3-pro-preview": [
       {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3-pro-preview",
+        "priority": 20,
+        "active": true
+      },
+      {
         "provider": "Google Cloud",
         "url": "https://generativelanguage.googleapis.com/v1",
         "remoteModelId": "gemini-3-pro-preview",
@@ -19,6 +26,13 @@
     ],
     "gemini-3-flash-preview": [
       {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3-flash-preview",
+        "priority": 20,
+        "active": true
+      },
+      {
         "provider": "Google Cloud",
         "url": "https://generativelanguage.googleapis.com/v1",
         "remoteModelId": "gemini-3-flash-preview",
@@ -26,7 +40,41 @@
         "active": true
       }
     ],
+    "gemini-3.1-flash-lite-preview": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3.1-flash-lite-preview",
+        "priority": 20,
+        "active": true
+      }
+    ],
+    "qwen3-vl-flash": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "qwen3-vl-flash",
+        "priority": 20,
+        "active": true
+      }
+    ],
+    "deepseek-v3.2": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "deepseek-v3.2",
+        "priority": 20,
+        "active": true
+      }
+    ],
     "gemini-3.1-flash-image-preview": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3.1-flash-image-preview",
+        "priority": 20,
+        "active": true
+      },
       {
         "provider": "Google Cloud",
         "url": "https://generativelanguage.googleapis.com/v1",
@@ -36,6 +84,13 @@
       }
     ],
     "gemini-3-pro-image-preview": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3-pro-image-preview",
+        "priority": 20,
+        "active": true
+      },
       {
         "provider": "Google Cloud",
         "url": "https://generativelanguage.googleapis.com/v1",

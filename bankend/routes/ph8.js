@@ -128,7 +128,15 @@ async function getUserInfo(userId) {
 router.all('/*', async (req, res) => {
   const targetHost = 'ph8.co';
   const targetPath = req.params[0] || '';
-  const fullPath = '/v1/' + targetPath;
+  let fullPath;
+  
+  // 处理 openai/v1 路径
+  if (targetPath.startsWith('openai/v1/')) {
+    fullPath = '/' + targetPath;
+  } else {
+    fullPath = '/v1/' + targetPath;
+  }
+  
   const requestId = uuidv4();
   const startTime = Date.now();
   
