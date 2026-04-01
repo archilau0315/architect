@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//www/wwwroot/**)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

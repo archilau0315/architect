@@ -9,6 +9,7 @@
 namespace KbitArchitect\Controllers;
 
 use KbitArchitect\Core\Database;
+use KbitArchitect\Core\Mailer;
 use KbitArchitect\Models\User;
 use KbitArchitect\Models\ModelRouter;
 use KbitArchitect\Models\CostController;
@@ -729,56 +730,80 @@ class AdminController
         }
 
         // 开始事务
-        $this->db->beginTransaction();
+            $this->db->beginTransaction();
 
-        try {
-            // 更新申请状态
-            $this->db->update('beta_applications', [
-                'status' => 'approved',
-                'approved_at' => date('Y-m-d H:i:s')
-            ], ['id' => $id]);
+            try {
+                // 更新申请状态
+                $this->db->update('beta_applications', [
+                    'status' => 'approved',
+                    'approved_at' => date('Y-m-d H:i:s')
+                ], ['id' => $id]);
 
-            // 检查用户是否已存在
-            $existingUser = $this->db->queryOne(
-                'SELECT user_id FROM users WHERE email = ?',
-                [$requestData['email']]
-            );
+                // 检查用户是否已存在
+                $existingUser = $this->db->queryOne(
+                    'SELECT user_id FROM users WHERE email = ?',
+                    [$requestData['email']]
+                );
 
-            if (!$existingUser) {
-                // 创建新用户
-                $user_id = uniqid('user_');
-                $this->db->insert('users', [
-                    'user_id' => $user_id,
-                    'email' => $requestData['email'],
-                    'password_hash' => password_hash('beta123', PASSWORD_DEFAULT),
-                    'tier' => 'basic',
-                    'daily_quota' => 100,
+                if (!$existingUser) {
+                    // 创建新用户
+                    $this->db->insert('users', [
+                        'email' => $requestData['email'],
+                        'password' => password_hash('beta123', PASSWORD_DEFAULT),
+                        'tier' => 'basic',
+                        'daily_points' => 100,
+                        'status' => 1,
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+                    // 获取刚插入的用户ID
+                    $userId = $this->db->queryOne('SELECT user_id FROM users WHERE email = ?', [$requestData['email']])['user_id'];
+                } else {
+                    // 更新现有用户
+                    $userId = $existingUser['user_id'];
+                    $this->db->update('users', [
+                        'tier' => 'basic',
+                        'daily_points' => 100,
+                        'status' => 1,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ], ['user_id' => $userId]);
+                }
+
+                // 生成邀请码
+                $inviteCode = $this->generateInviteCode();
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days'));
+                
+                // 保存邀请码到数据库
+                $this->db->insert('invite_codes', [
+                    'code' => $inviteCode,
+                    'created_by' => 'admin',
+                    'points_bonus' => 1000,
+                    'max_uses' => 1,
+                    'current_uses' => 0,
                     'status' => 'active',
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'updated_at' => date('Y-m-d H:i:s')
+                    'expires_at' => $expiresAt,
+                    'created_at' => date('Y-m-d H:i:s')
                 ]);
-                $userId = $user_id;
-            } else {
-                // 更新现有用户
-                $userId = $existingUser['user_id'];
-                $this->db->update('users', [
-                    'tier' => 'basic',
-                    'daily_quota' => 100,
-                    'status' => 'active',
-                    'updated_at' => date('Y-m-d H:i:s')
-                ], ['user_id' => $userId]);
+
+                $this->db->commit();
+
+                // 发送邮件通知
+                try {
+                    $mailer = new Mailer();
+                    $mailer->sendBetaApproval($requestData['email'], 'beta123', $inviteCode);
+                } catch (\Exception $e) {
+                    // 邮件发送失败不影响批准流程
+                    error_log('邮件发送失败: ' . $e->getMessage());
+                }
+
+                return [
+                    'success' => true,
+                    'message' => '内测申请已批准，邮件已发送'
+                ];
+            } catch (\Exception $e) {
+                $this->db->rollBack();
+                return ['success' => false, 'error' => '批准失败: ' . $e->getMessage(), 'code' => 500];
             }
-
-            $this->db->commit();
-
-            return [
-                'success' => true,
-                'message' => '内测申请已批准'
-            ];
-        } catch (Exception $e) {
-            $this->db->rollBack();
-            return ['success' => false, 'error' => '批准失败: ' . $e->getMessage(), 'code' => 500];
-        }
     }
 
     public function rejectBetaRequest(array $request): array
@@ -811,5 +836,18 @@ class AdminController
             'success' => true,
             'message' => '内测申请已拒绝'
         ];
+    }
+
+    /**
+     * 生成邀请码
+     */
+    private function generateInviteCode(): string
+    {
+        $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $code = 'KB';
+        for ($i = 0; $i < 8; $i++) {
+            $code .= $chars[rand(0, strlen($chars) - 1)];
+        }
+        return $code;
     }
 }

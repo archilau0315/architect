@@ -363,6 +363,52 @@ app.post('/api/logs/download', async (req, res) => {
 
 // ==================== 管理后台 API ====================
 
+// 管理员登录
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: '请输入用户名和密码' });
+  }
+  
+  try {
+    const [admins] = await db.query(
+      'SELECT * FROM admins WHERE username = ?',
+      [username]
+    );
+    
+    if (admins.length === 0) {
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    
+    const admin = admins[0];
+    const bcrypt = require('bcrypt');
+    const isValid = await bcrypt.compare(password, admin.password_hash);
+    
+    if (!isValid) {
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    
+    // 更新登录时间和IP
+    await db.query(
+      'UPDATE admins SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?',
+      [req.ip || req.connection.remoteAddress, admin.id]
+    );
+    
+    res.json({
+      success: true,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        role: admin.role
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 app.get('/api/admin/users', async (req, res) => {
   try {
     const [rows] = await db.query(

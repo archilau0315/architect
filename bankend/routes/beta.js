@@ -11,16 +11,20 @@ router.post('/apply', async (req, res) => {
 
   try {
     const [existing] = await db.query(
-      'SELECT id FROM beta_applications WHERE email = ?',
+      'SELECT id, status FROM beta_applications WHERE email = ?',
       [email]
     );
 
-    if (existing.length > 0) {
-      return res.status(400).json({ error: '该邮箱已提交过申请' });
+    // 只检查状态为 pending 的申请
+    // 如果之前的申请已经被处理（批准或拒绝），允许重新申请
+    const hasPendingApplication = existing.some(app => app.status === 'pending');
+    if (hasPendingApplication) {
+      return res.status(400).json({ error: '该邮箱已有待处理的申请' });
     }
 
-    // 转换日期格式为 MySQL datetime 格式
-    const formattedDate = appliedAt ? new Date(appliedAt).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+    // 使用服务器当前时间（东八区）
+    const now = new Date();
+    const formattedDate = new Date(now.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
     await db.query(
       `INSERT INTO beta_applications (name, email, phone, company, purpose, experience, applied_at, status)

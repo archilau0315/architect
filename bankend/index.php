@@ -60,6 +60,7 @@ foreach ($storageDirs as $dir) {
 require_once __DIR__ . '/includes/Database.php';
 require_once __DIR__ . '/includes/JWT.php';
 require_once __DIR__ . '/includes/Router.php';
+require_once __DIR__ . '/includes/Mailer.php';
 require_once __DIR__ . '/middleware/Middleware.php';
 require_once __DIR__ . '/middleware/AuthMiddleware.php';
 require_once __DIR__ . '/middleware/RateLimitMiddleware.php';
