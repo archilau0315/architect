@@ -179,6 +179,12 @@
                                         积分
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        消耗积分
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        等级到期
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         状态
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -191,7 +197,7 @@
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200" id="userList">
                                 <tr>
-                                    <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                                    <td colspan="10" class="px-6 py-10 text-center text-gray-500">
                                         加载中...
                                     </td>
                                 </tr>
@@ -383,13 +389,22 @@
                     updatePagination(data.data.pagination);
                     document.getElementById('userCount').textContent = `共 ${data.data.pagination.total} 个用户`;
                     document.getElementById('showingCount').textContent = data.data.users.length;
+                } else {
+                    console.error('加载用户列表失败:', data.error);
+                    document.getElementById('userList').innerHTML = `
+                        <tr>
+                            <td colspan="10" class="px-6 py-10 text-center text-gray-500">
+                                加载失败: ${data.error || '未知错误'}
+                            </td>
+                        </tr>
+                    `;
                 }
             })
             .catch(error => {
                 console.error('加载用户列表失败:', error);
                 document.getElementById('userList').innerHTML = `
                     <tr>
-                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                        <td colspan="10" class="px-6 py-10 text-center text-gray-500">
                             加载失败
                         </td>
                     </tr>
@@ -422,7 +437,7 @@
                             ${user.email}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${user.nickname}
+                            ${user.nickname || '未设置'}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getTierColor(user.user_tier)}">
@@ -430,7 +445,13 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points)).toFixed(2)}
+                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points))}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${user.total_consumed_points || 0}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${user.tier_expires_at ? new Date(user.tier_expires_at).toLocaleString() : '无'}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -458,7 +479,7 @@
             } else {
                 userList.innerHTML = `
                     <tr>
-                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                        <td colspan="10" class="px-6 py-10 text-center text-gray-500">
                             暂无用户
                         </td>
                     </tr>
@@ -604,10 +625,16 @@
         }
         
         function saveUserChanges() {
+            let tierExpires = document.getElementById('modalTierExpires').value;
+            if (tierExpires) {
+                // 转换日期格式：YYYY-MM-DDTHH:MM -> YYYY-MM-DD HH:MM:SS
+                tierExpires = tierExpires.replace('T', ' ') + ':00';
+            }
+            
             const userData = {
                 user_tier: document.getElementById('modalTier').value,
                 status: document.getElementById('modalStatus').value,
-                tier_expires_at: document.getElementById('modalTierExpires').value,
+                tier_expires_at: tierExpires,
                 daily_points: document.getElementById('modalDailyPoints').value,
                 purchased_points: document.getElementById('modalPurchasedPoints').value
             };

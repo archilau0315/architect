@@ -23,10 +23,10 @@ class User
     public function findById(int $id): ?array
     {
         return $this->db->queryOne(
-            'SELECT id, email, phone, nickname, avatar_url, user_tier, tier_expires_at, 
-                    daily_points, purchased_points, total_consumed_points, status, 
-                    email_verified, phone_verified, last_login_at, created_at 
-             FROM users WHERE id = ?',
+            'SELECT id, email, nickname, avatar_url, user_tier, tier_expires_at,
+                    daily_points, purchased_points, total_consumed_points, status,
+                    email_verified, last_login_at, created_at
+             FROM kbit_users WHERE id = ?',
             [$id]
         );
     }
@@ -34,17 +34,14 @@ class User
     public function findByEmail(string $email): ?array
     {
         return $this->db->queryOne(
-            'SELECT * FROM users WHERE email = ?',
+            'SELECT * FROM kbit_users WHERE email = ?',
             [$email]
         );
     }
 
     public function findByPhone(string $phone): ?array
     {
-        return $this->db->queryOne(
-            'SELECT * FROM users WHERE phone = ?',
-            [$phone]
-        );
+        return null;
     }
 
     public function create(array $data): int
@@ -56,20 +53,18 @@ class User
             $config['security']['password_options']
         );
 
-        $userId = $this->db->insert('users', [
+        $userId = $this->db->insert('kbit_users', [
             'email' => $data['email'],
-            'phone' => $data['phone'] ?? null,
             'password_hash' => $passwordHash,
             'nickname' => $data['nickname'] ?? $this->generateNickname($data['email']),
             'user_tier' => 'free',
-            'daily_points' => 100,
+            'daily_points' => 1000,
             'purchased_points' => 0,
             'status' => 1,
-            'email_verified' => 0,
-            'phone_verified' => 0
+            'email_verified' => 0
         ]);
 
-        $this->recordTransaction($userId, 'earn', 100, 'daily_reset', '新用户注册赠送');
+        // $this->recordTransaction($userId, 'earn', 1000, 'daily_reset', '新用户注册赠送');
 
         return $userId;
     }
@@ -83,7 +78,7 @@ class User
             return false;
         }
 
-        return $this->db->update('users', $updateData, ['id' => $id]) > 0;
+        return $this->db->update('kbit_users', $updateData, ['id' => $id]) > 0;
     }
 
     public function updatePassword(int $id, string $newPassword): bool
@@ -95,12 +90,12 @@ class User
             $config['security']['password_options']
         );
 
-        return $this->db->update('users', ['password_hash' => $passwordHash], ['id' => $id]) > 0;
+        return $this->db->update('kbit_users', ['password_hash' => $passwordHash], ['id' => $id]) > 0;
     }
 
     public function verifyPassword(int $id, string $password): bool
     {
-        $user = $this->db->queryOne('SELECT password_hash FROM users WHERE id = ?', [$id]);
+        $user = $this->db->queryOne('SELECT password_hash FROM kbit_users WHERE id = ?', [$id]);
         
         if (!$user) {
             return false;
@@ -111,17 +106,17 @@ class User
 
     public function verifyEmail(int $id): bool
     {
-        return $this->db->update('users', ['email_verified' => 1], ['id' => $id]) > 0;
+        return $this->db->update('kbit_users', ['email_verified' => 1], ['id' => $id]) > 0;
     }
 
     public function verifyPhone(int $id): bool
     {
-        return $this->db->update('users', ['phone_verified' => 1], ['id' => $id]) > 0;
+        return $this->db->update('kbit_users', ['phone_verified' => 1], ['id' => $id]) > 0;
     }
 
     public function updateLastLogin(int $id, string $ip): void
     {
-        $this->db->update('users', [
+        $this->db->update('kbit_users', [
             'last_login_at' => date('Y-m-d H:i:s'),
             'last_login_ip' => $ip
         ], ['id' => $id]);
@@ -129,7 +124,7 @@ class User
 
     public function updateTier(int $id, string $tier, ?string $expiresAt = null): bool
     {
-        return $this->db->update('users', [
+        return $this->db->update('kbit_users', [
             'user_tier' => $tier,
             'tier_expires_at' => $expiresAt
         ], ['id' => $id]) > 0;
@@ -174,7 +169,7 @@ class User
             $newDaily = $user['daily_points'] - $dailyDeduct;
             $newPurchased = $user['purchased_points'] - $purchasedDeduct;
 
-            $this->db->update('users', [
+            $this->db->update('kbit_users', [
                 'daily_points' => $newDaily,
                 'purchased_points' => $newPurchased,
                 'total_consumed_points' => $user['total_consumed_points'] + $amount
@@ -200,7 +195,7 @@ class User
         $this->db->beginTransaction();
 
         try {
-            $this->db->update('users', [
+            $this->db->update('kbit_users', [
                 'purchased_points' => $user['purchased_points'] + $amount,
                 'total_consumed_points' => max(0, $user['total_consumed_points'] - $amount)
             ], ['id' => $id]);
@@ -225,7 +220,7 @@ class User
         $this->db->beginTransaction();
 
         try {
-            $this->db->update('users', [
+            $this->db->update('kbit_users', [
                 'purchased_points' => $user['purchased_points'] + $amount
             ], ['id' => $id]);
 

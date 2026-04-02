@@ -89,7 +89,7 @@ router.post('/register', async (req, res) => {
     
     // 检查邮箱是否已注册
     const [userRows] = await db.query(
-      'SELECT * FROM users WHERE email = ?',
+      'SELECT * FROM `kbit-users` WHERE email = ?',
       [email]
     );
 
@@ -103,14 +103,13 @@ router.post('/register', async (req, res) => {
     const user_id = 'user_' + Date.now() + Math.floor(Math.random() * 1000);
 
     await db.query(
-      `INSERT INTO users (user_id, email, password_hash, nickname, tier, total_points, daily_quota, daily_used, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'beta', ?, 100, 0, 'active', NOW(), NOW())`,
+      "INSERT INTO `kbit-users` (user_id, email, password_hash, nickname, tier, total_points, daily_quota, daily_used, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'beta', ?, 100, 0, 'active', NOW(), NOW())",
       [user_id, email, passwordHash, nickname || email.split('@')[0], inviteCode.points_bonus]
     );
 
     // 获取新创建的用户ID
     const [newUserRows] = await db.query(
-      'SELECT user_id FROM users WHERE email = ?',
+      'SELECT user_id FROM `kbit-users` WHERE email = ?',
       [email]
     );
     const userId = newUserRows[0].user_id;

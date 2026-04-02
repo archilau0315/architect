@@ -1,0 +1,164 @@
+[33mcommit 6c7b9a5d9c5bd623c288dd177e7ee25e9ec4d8ac[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: archilau0315-design <137033795+archilau0315@users.noreply.github.com>
+Date:   Wed Apr 1 08:51:13 2026 +0800
+
+    修复邮箱邀请码验证260401版
+
+[1mdiff --git a/.claude/settings.json b/.claude/settings.json[m
+[1mnew file mode 100644[m
+[1mindex 0000000..e675884[m
+[1m--- /dev/null[m
+[1m+++ b/.claude/settings.json[m
+[36m@@ -0,0 +1,8 @@[m
+[32m+[m[32m{[m
+[32m+[m[32m  "permissions": {[m
+[32m+[m[32m    "allow": [[m
+[32m+[m[32m      "Read(//www/wwwroot/**)",[m
+[32m+[m[32m      "Bash(xargs grep:*)"[m
+[32m+[m[32m    ][m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[1mdiff --git a/API_404_FIX.md b/API_404_FIX.md[m
+[1mnew file mode 100644[m
+[1mindex 0000000..00edc5b[m
+[1m--- /dev/null[m
+[1m+++ b/API_404_FIX.md[m
+[36m@@ -0,0 +1,41 @@[m
+[32m+[m[32m# API路由404错误修复指南[m
+[32m+[m
+[32m+[m[32m## 问题描述[m
+[32m+[m[32m管理员登录时报错：[m
+[32m+[m[32m- `Failed to load resource: the server responded with a status of 404 (Not Found)`[m
+[32m+[m[32m- `api/admin/login:1 Failed to load resource`[m
+[32m+[m[32m- `SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`[m
+[32m+[m
+[32m+[m[32m## 原因分析[m
+[32m+[m[32m前端请求 `/api/admin/login`，但nginx配置中没有将 `/api/` 路径路由到PHP后端，导致返回404 HTML页面。[m
+[32m+[m
+[32m+[m[32m## 解决方案[m
+[32m+[m
+[32m+[m[32m### 方法1：修改nginx配置（推荐）[m
+[32m+[m
+[32m+[m[32m在宝塔面板中：[m
+[32m+[m[32m1. 进入"网站" → 找到 `kbitai.com.cn` → 点击"设置"[m
+[32m+[m[32m2. 选择"配置文件"标签[m
+[32m+[m[32m3. 在 `location /architect` 之前添加以下配置：[m
+[32m+[m
+[32m+[m[32m```nginx[m
+[32m+[m[32m# API路由 - 转发到PHP后端[m
+[32m+[m[32mlocation /api/ {[m
+[32m+[m[32m    root /www/wwwroot/kbitai.com.cn/architect;[m
+[32m+[m[32m    rewrite ^/api/(.*)$ /bankend/index.php last;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m# PHP处理[m
+[32m+[m[32mlocation ~ ^/bankend/.*\.php$ {[m
+[32m+[m[32m    root /www/wwwroot/kbitai.com.cn/architect;[m
+[32m+[m[32m    fastcgi_pass unix:/tmp/php-cgi-82.sock;[m
+[32m+[m[32m    fastcgi_index index.php;[m
+[32m+[m[32m    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;[m
+[32m+[m[32m    include fastcgi_params;[m
+[32m+[m[32m    fastcgi_connect_timeout 300;[m
+[32m+[m[32m    fastcgi_send_timeout 300;[m
+[32m+[m[32m    fastcgi_read_timeout 300;[m
+[32m+[m[32m}[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m4. 保存后重载nginx配置[m
+[1mdiff --git a/api.kbitai.com.cn.conf.fixed b/api.kbitai.com.cn.conf.fixed[m
+[1mnew file mode 100644[m
+[1mindex 0000000..b5344e4[m
+[1m--- /dev/null[m
+[1m+++ b/api.kbitai.com.cn.conf.fixed[m
+[36m@@ -0,0 +1,109 @@[m
+[32m+[m[32mserver {[m
+[32m+[m[32m    listen 80;[m
+[32m+[m[32m    listen 443 ssl;[m
+[32m+[m[32m    server_name api.kbitai.com.cn;[m
+[32m+[m[32m    index index.php index.html index.htm default.php default.htm default.html;[m
+[32m+[m[32m    root /www/wwwroot/api.kbitai.com.cn;[m
+[32m+[m
+[32m+[m[32m    #CERT-APPLY-CHECK--START[m
+[32m+[m[32m    include /www/server/panel/vhost/nginx/well-known/api.kbitai.com.cn.conf;[m
+[32m+[m[32m    #CERT-APPLY-CHECK--END[m
+[32m+[m[32m    include /www/server/panel/vhost/nginx/extension/api.kbitai.com.cn/*.conf;[m
+[32m+[m
+[32m+[m[32m    #SSL-START SSL相关配置，请勿删除或修改下一行带注释的404规则[m
+[32m+[m[32m    #error_page 404/404.html;[m
+[32m+[m[32m    #HTTP_TO_HTTPS_START[m
+[32m+[m[32m    set $isRedcert 1;[m
+[32m+[m[32m    if ($server_port != 443) {[m
+[32m+[m[32m        set $isRedcert 2;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if ( $uri ~ /\.well-known/ ) {[m
+[32m+[m[32m        set $isRedcert 1;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    if ($isRedcert != 1) {[m
+[32m+[m[32m        rewrite ^(/.*)$ https://$host$1 permanent;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    #HTTP_TO_HTTPS_END[m
+[32m+[m[32m    ssl_certificate    /www/server/panel/vhost/cert/api.kbitai.com.cn/fullchain.pem;[m
+[32m+[m[32m    ssl_certificate_key    /www/server/panel/vhost/cert/api.kbitai.com.cn/privkey.pem;[m
+[32m+[m[32m    ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;[m
+[32m+[m[32m    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;[m
+[32m+[m[32m    ssl_prefer_server_ciphers on;[m
+[32m+[m[32m    ssl_session_tickets on;[m
+[32m+[m[32m    ssl_session_cache shared:SSL:10m;[m
+[32m+[m[32m    ssl_session_timeout 10m;[m
+[32m+[m[32m    add_header Strict-Transport-Security "max-age=31536000";[m
+[32m+[m[32m    add_header Alt-Svc 'quic=":443"; h3=":443"; h3-29=":443"; h3-27=":443";h3-25=":443"; h3-T050=":443"; h3-Q050=":443";h3-Q049=":443";h3-Q048=":443"; h3-Q046=":443"; h3-Q043=":443"';[m
+[32m+[m[32m    error_page 497 https://$host$request_uri;[m
+[32m+[m
+[32m+[m[32m    #SSL-END[m
+[32m+[m
+[32m+[m[32m    #ERROR-PAGE-START  错误页配置，可以注释、删除或修改[m
+[32m+[m[32m    error_page 404 /404.html;[m
+[32m+[m[32m    #error_page 502 /502.html;[m
+[32m+[m[32m    #ERROR-PAGE-END[m
+[32m+[m
+[32m+[m[32m    # 管理后台前端[m
+[32m+[m[32m    location /admin/ {[m
+[32m+[m[32m        index index.php index.html;[m
+[32m+[m[32m        try_files $uri $uri/ /admin/index.php$is_args$args;[m
+[32m+[m
+[32m+[m[32m        location ~ \.php$ {[m
+[32m+[m[32m            fastcgi_pass 127.0.0.1:9000;[m
+[32m+[m[32m            fastcgi_index index.php;[m
+[32m+[m[32m            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;[m
+[32m+[m[32m            include fastcgi_params;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    # 管理员API - 走PHP后端[m
+[32m+[m[32m    location /api/admin/ {[m
+[32m+[m[32m        rewrite ^/api/admin/(.*)$ /index.php last;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    # PHP处理[m
+[32m+[m[32m    location ~ \.php$ {[m
+[32m+[m[32m        fastcgi_pass 127.0.0.1:9000;[m
+[32m+[m[32m        fastcgi_index index.php;[m
+[32m+[m[32m        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;[m
+[32m+[m[32m        include fastcgi_params;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    # 其他API - 走Node.js后端[m
+[32m+[m[32m    location / {[m
+[32m+[m[32m        proxy_pass http://127.0.0.1:3001;[m
+[32m+[m[32m        proxy_http_version 1.1;[m
+[32m+[m[32m        proxy_set_header Upgrade $http_upgrade;[m
+[32m+[m[32m        proxy_set_header Connection "upgrade";[m
+[32m+[m[32m        proxy_set_header Host $host;[m
+[32m+[m[32m        proxy_set_header X-Real-IP $remote_addr;[m
+[32m+[m[32m        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;[m
+[32m+[m[32m        proxy_set_header X-Forwarded-Proto $scheme;[m
+[32m+[m[32m        proxy_cache_bypass $http_upgrade;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    #REWRITE-START[m
+[32m+[m[32m    include /www/server/panel/vhost/rewrite/api.kbitai.com.cn.conf;[m
+[32m+[m[32m    #REWRITE-END[m
+[32m+[m
+[32m+[m[32m    # 禁止访问的敏感文件[m
+[32m+[m[32m    location ~* (\.user.ini|\.htaccess|\.htpasswd|\.env.*|\.project|\.bashrc|\.bash_profile|\.bash_logout|\.DS_Store|\.gitignore|\.gitattributes|LICENSE|README\.md|CLAUDE\.md|CHANGELOG\.md|CHANGELOG|CONTRIBUTING\.md|TODO\.md|FAQ\.md|composer\.json|composer\.lock|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|\.\w+~|\.swp|\.swo|\.bak(up)?|\.old|\.tmp|\.temp|\.log|\.sql(\.gz)?|docker-compose\.yml|docker\.env|Dockerfile|\.csproj|\.sln|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|phpunit\.xml|phpunit\.xml|pom\.xml|build\.gradl|pyproject\.toml|requirements\.txt|application(-\w+)?\.(ya?ml|properties))$ {[m
+[32m+[m[32m        return 

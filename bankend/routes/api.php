@@ -17,6 +17,11 @@ Router::post('/api/auth/register', function($req) {
     return $controller->register($req);
 });
 
+Router::post('/api/invite/register', function($req) {
+    $controller = new \KbitArchitect\Controllers\AuthController();
+    return $controller->registerWithInvite($req);
+});
+
 Router::post('/api/auth/login', function($req) {
     $controller = new \KbitArchitect\Controllers\AuthController();
     return $controller->login($req);
@@ -45,6 +50,16 @@ Router::post('/api/auth/verify-code', function($req) {
 Router::post('/api/auth/reset-password', function($req) {
     $controller = new \KbitArchitect\Controllers\AuthController();
     return $controller->resetPassword($req);
+});
+
+Router::post('/api/verify-invite-code', function($req) {
+    $controller = new \KbitArchitect\Controllers\AuthController();
+    return $controller->verifyInviteCode($req);
+});
+
+Router::post('/api/auth/register-with-invite', function($req) {
+    $controller = new \KbitArchitect\Controllers\AuthController();
+    return $controller->registerWithInvite($req);
 });
 
 Router::get('/api/auth/me', function($req) {

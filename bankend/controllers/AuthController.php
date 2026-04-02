@@ -341,7 +341,7 @@ class AuthController
         }
 
         $record = $this->db->queryOne(
-            'SELECT * FROM verification_codes 
+            'SELECT * FROM verification_codes
              WHERE target = ? AND code = ? AND type = "password_reset" AND is_used = 0 AND expires_at > NOW()
              ORDER BY created_at DESC LIMIT 1',
             [$email, $code]
@@ -363,5 +363,125 @@ class AuthController
             'success' => true,
             'message' => '密码重置成功'
         ];
+    }
+
+    public function verifyInviteCode(array $request): array
+    {
+        try {
+            error_log('=== 开始验证邀请码 ===');
+
+            $inviteCode = trim($request['body']['invite_code'] ?? '');
+
+            error_log("邀请码: $inviteCode");
+
+            if (empty($inviteCode)) {
+                return ['success' => false, 'error' => '邀请码不能为空', 'code' => 400];
+            }
+
+            error_log('开始查询邀请码');
+            $invite = $this->db->queryOne(
+                'SELECT * FROM invite_codes WHERE code = ? AND status = "active" AND (expires_at IS NULL OR expires_at > NOW())',
+                [$inviteCode]
+            );
+
+            if (!$invite) {
+                return ['success' => false, 'error' => '邀请码无效或已过期', 'code' => 400];
+            }
+
+            if ($invite['max_uses'] > 0 && $invite['current_uses'] >= $invite['max_uses']) {
+                return ['success' => false, 'error' => '邀请码已达到使用上限', 'code' => 400];
+            }
+
+            error_log('邀请码验证成功');
+            return [
+                'success' => true,
+                'message' => '邀请码验证成功',
+                'data' => [
+                    'points_bonus' => $invite['points_bonus'] ?? 0
+                ]
+            ];
+        } catch (\Exception $e) {
+            error_log('邀请码验证错误: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log('堆栈: ' . $e->getTraceAsString());
+            return ['success' => false, 'error' => '验证失败: ' . $e->getMessage(), 'code' => 500];
+        }
+    }
+
+    public function registerWithInvite(array $request): array
+    {
+        try {
+            error_log('=== 开始邀请码注册 ===');
+
+            $email = trim($request['body']['email'] ?? '');
+            $password = $request['body']['password'] ?? '';
+            $inviteCode = trim($request['body']['invite_code'] ?? '');
+
+            error_log("邮箱: $email, 邀请码: $inviteCode");
+
+            if (empty($email) || empty($password) || empty($inviteCode)) {
+                return ['success' => false, 'error' => '邮箱、密码和邀请码不能为空', 'code' => 400];
+            }
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return ['success' => false, 'error' => '邮箱格式不正确', 'code' => 400];
+            }
+
+            if (strlen($password) < 6) {
+                return ['success' => false, 'error' => '密码长度至少6位', 'code' => 400];
+            }
+
+            error_log('开始检查邮箱是否存在');
+            $existingUser = $this->userModel->findByEmail($email);
+            if ($existingUser) {
+                return ['success' => false, 'error' => '该邮箱已被注册', 'code' => 400];
+            }
+
+            error_log('开始查询邀请码');
+            $invite = $this->db->queryOne(
+                'SELECT * FROM invite_codes WHERE code = ? AND status = "active" AND (expires_at IS NULL OR expires_at > NOW())',
+                [$inviteCode]
+            );
+
+            if (!$invite) {
+                return ['success' => false, 'error' => '邀请码无效或已过期', 'code' => 400];
+            }
+
+            if ($invite['max_uses'] > 0 && $invite['current_uses'] >= $invite['max_uses']) {
+                return ['success' => false, 'error' => '邀请码已达到使用上限', 'code' => 400];
+            }
+
+            error_log('开始创建用户');
+            $userId = $this->userModel->create([
+                'email' => $email,
+                'password' => $password,
+                'nickname' => null
+            ]);
+            error_log("用户创建成功，ID: $userId");
+
+            error_log('更新邀请码使用次数');
+            $this->db->update('invite_codes', [
+                'current_uses' => $invite['current_uses'] + 1
+            ], ['id' => $invite['id']]);
+
+            error_log('生成JWT令牌');
+            $tokens = JWT::generateTokenPair($userId, 'free');
+
+            error_log('更新最后登录时间');
+            $this->userModel->updateLastLogin($userId, $request['ip']);
+
+            error_log('注册成功');
+            return [
+                'success' => true,
+                'message' => '注册成功',
+                'data' => [
+                    'user' => $this->userModel->findById($userId),
+                    'tokens' => $tokens
+                ]
+            ];
+        } catch (\Exception $e) {
+            error_log('邀请码注册错误: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log('堆栈: ' . $e->getTraceAsString());
+            return ['success' => false, 'error' => '注册失败: ' . $e->getMessage(), 'code' => 500];
+        }
     }
 }

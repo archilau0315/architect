@@ -94,9 +94,9 @@ class AdminController
             return ['success' => false, 'error' => '无权限', 'code' => 403];
         }
 
-        $userCount = $this->db->queryOne('SELECT COUNT(*) as count FROM users');
+        $userCount = $this->db->queryOne('SELECT COUNT(*) as count FROM `kbit-users`');
         $activeUsers = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM users WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
+            'SELECT COUNT(*) as count FROM `kbit-users` WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
         );
         $todayRequests = $this->db->queryOne(
             'SELECT COUNT(*) as count FROM usage_logs WHERE DATE(created_at) = CURDATE()'
@@ -109,7 +109,7 @@ class AdminController
         );
 
         $tierDistribution = $this->db->query(
-            'SELECT tier as user_tier, COUNT(*) as count FROM users GROUP BY tier'
+            'SELECT tier as user_tier, COUNT(*) as count FROM `kbit-users` GROUP BY tier'
         );
 
         $featureUsage = $this->db->query(
@@ -155,7 +155,7 @@ class AdminController
         }
 
         if (!empty($tier)) {
-            $where .= ' AND tier = ?';
+            $where .= ' AND user_tier = ?';
             $params[] = $tier;
         }
 
@@ -165,15 +165,15 @@ class AdminController
         }
 
         $users = $this->db->query(
-            "SELECT user_id as id, email, nickname, tier as user_tier, 
+            "SELECT id as id, email, nickname, user_tier as user_tier, 
                     daily_points, purchased_points, total_consumed_points, 
-                    status, created_at as last_login_at, created_at as created_at 
-             FROM users WHERE {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    status, tier_expires_at, created_at as last_login_at, created_at as created_at 
+             FROM kbit_users WHERE {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             array_merge($params, [$limit, $offset])
         );
 
         $total = $this->db->queryOne(
-            "SELECT COUNT(*) as count FROM users WHERE {$where}",
+            "SELECT COUNT(*) as count FROM kbit_users WHERE {$where}",
             $params
         );
 
@@ -200,10 +200,10 @@ class AdminController
         $userId = (int) ($request['params']['id'] ?? 0);
 
         $user = $this->db->queryOne(
-            "SELECT user_id as id, email, nickname, tier as user_tier, 
+            "SELECT id as id, email, nickname, user_tier as user_tier, 
                     daily_points, purchased_points, total_consumed_points, 
-                    status, created_at, updated_at 
-             FROM users WHERE user_id = ?",
+                    status, tier_expires_at, created_at, updated_at 
+             FROM kbit_users WHERE id = ?",
             [$userId]
         );
         
@@ -267,7 +267,7 @@ class AdminController
         $userId = (int) ($request['params']['id'] ?? 0);
 
         $user = $this->db->queryOne(
-            'SELECT user_id FROM users WHERE user_id = ?',
+            'SELECT id FROM kbit_users WHERE id = ?',
             [$userId]
         );
         
@@ -280,12 +280,16 @@ class AdminController
 
         // 允许更新的字段
         $allowedFields = [
-            'tier', 'daily_points', 'purchased_points', 'status'
+            'tier', 'user_tier', 'daily_points', 'purchased_points', 'status', 'tier_expires_at'
         ];
 
         foreach ($allowedFields as $field) {
             if (isset($data[$field])) {
-                $updateData[$field] = $data[$field];
+                if ($field === 'user_tier') {
+                    $updateData['user_tier'] = $data[$field];
+                } else {
+                    $updateData[$field] = $data[$field];
+                }
             }
         }
 
@@ -293,13 +297,13 @@ class AdminController
             return ['success' => false, 'error' => '没有要更新的数据', 'code' => 400];
         }
 
-        $this->db->update('users', $updateData, ['user_id' => $userId]);
+        $this->db->update('kbit_users', $updateData, ['id' => $userId]);
 
         $updatedUser = $this->db->queryOne(
-            "SELECT user_id as id, email, nickname, tier as user_tier, 
+            "SELECT id as id, email, nickname, user_tier as user_tier, 
                     daily_points, purchased_points, total_consumed_points, 
-                    status, created_at, updated_at 
-             FROM users WHERE user_id = ?",
+                    status, tier_expires_at, created_at, updated_at 
+             FROM kbit_users WHERE id = ?",
             [$userId]
         );
 
@@ -319,7 +323,7 @@ class AdminController
         $userId = (int) ($request['params']['id'] ?? 0);
 
         $user = $this->db->queryOne(
-            'SELECT user_id FROM users WHERE user_id = ?',
+            'SELECT id FROM kbit_users WHERE id = ?',
             [$userId]
         );
         
@@ -336,7 +340,7 @@ class AdminController
             $this->db->query('DELETE FROM subscriptions WHERE user_id = ?', [$userId]);
             
             // 删除用户
-            $this->db->query('DELETE FROM users WHERE user_id = ?', [$userId]);
+            $this->db->query('DELETE FROM kbit_users WHERE id = ?', [$userId]);
 
             $this->db->commit();
 
@@ -586,11 +590,11 @@ class AdminController
         }
 
         $logs = $this->db->query(
-            "SELECT l.*, u.email, u.nickname 
-             FROM usage_logs l 
-             LEFT JOIN users u ON l.user_id = u.user_id 
-             WHERE {$where} 
-             ORDER BY l.created_at DESC 
+            "SELECT l.*, u.email, u.nickname
+             FROM usage_logs l
+             LEFT JOIN kbit_users u ON l.user_id = u.id
+             WHERE {$where}
+             ORDER BY l.created_at DESC
              LIMIT ? OFFSET ?",
             array_merge($params, [$limit, $offset])
         );
@@ -741,32 +745,33 @@ class AdminController
 
                 // 检查用户是否已存在
                 $existingUser = $this->db->queryOne(
-                    'SELECT user_id FROM users WHERE email = ?',
+                    'SELECT id FROM kbit_users WHERE email = ?',
                     [$requestData['email']]
                 );
 
                 if (!$existingUser) {
                     // 创建新用户
-                    $this->db->insert('users', [
+                    $this->db->insert('kbit_users', [
                         'email' => $requestData['email'],
                         'password' => password_hash('beta123', PASSWORD_DEFAULT),
-                        'tier' => 'basic',
-                        'daily_points' => 100,
+                        'nickname' => '用户_' . substr(md5(time()), 0, 6),
+                        'user_tier' => 'basic',
+                        'daily_points' => 1000,
                         'status' => 1,
                         'created_at' => date('Y-m-d H:i:s'),
                         'updated_at' => date('Y-m-d H:i:s')
                     ]);
                     // 获取刚插入的用户ID
-                    $userId = $this->db->queryOne('SELECT user_id FROM users WHERE email = ?', [$requestData['email']])['user_id'];
+                    $userId = $this->db->queryOne('SELECT id FROM kbit_users WHERE email = ?', [$requestData['email']])['id'];
                 } else {
                     // 更新现有用户
-                    $userId = $existingUser['user_id'];
-                    $this->db->update('users', [
-                        'tier' => 'basic',
-                        'daily_points' => 100,
+                    $userId = $existingUser['id'];
+                    $this->db->update('kbit_users', [
+                        'user_tier' => 'basic',
+                        'daily_points' => 1000,
                         'status' => 1,
                         'updated_at' => date('Y-m-d H:i:s')
-                    ], ['user_id' => $userId]);
+                    ], ['id' => $userId]);
                 }
 
                 // 生成邀请码
@@ -788,17 +793,30 @@ class AdminController
                 $this->db->commit();
 
                 // 发送邮件通知
+                $emailSent = false;
+                $emailError = '';
                 try {
                     $mailer = new Mailer();
-                    $mailer->sendBetaApproval($requestData['email'], 'beta123', $inviteCode);
+                    $emailSent = $mailer->sendBetaApproval($requestData['email'], 'beta123', $inviteCode);
+                    if (!$emailSent) {
+                        $emailError = '邮件发送失败，请检查SMTP配置';
+                    }
                 } catch (\Exception $e) {
-                    // 邮件发送失败不影响批准流程
-                    error_log('邮件发送失败: ' . $e->getMessage());
+                    $emailError = '邮件发送异常: ' . $e->getMessage();
+                    error_log($emailError);
                 }
+
+                $message = $emailSent
+                    ? '内测申请已批准，邮件已发送'
+                    : '内测申请已批准，但邮件发送失败（' . $emailError . '）';
 
                 return [
                     'success' => true,
-                    'message' => '内测申请已批准，邮件已发送'
+                    'message' => $message,
+                    'data' => [
+                        'email_sent' => $emailSent,
+                        'invite_code' => $inviteCode
+                    ]
                 ];
             } catch (\Exception $e) {
                 $this->db->rollBack();

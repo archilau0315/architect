@@ -50,7 +50,7 @@ app.post('/api/auth/login', async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT * FROM users WHERE email = ? AND status = ?',
+      'SELECT * FROM `kbit-users` WHERE email = ? AND status = ?',
       [email, 'active']
     );
     
@@ -93,7 +93,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     // 检查用户是否存在
     const [users] = await db.query(
-      'SELECT * FROM users WHERE email = ? AND status = ?',
+      'SELECT * FROM `kbit-users` WHERE email = ? AND status = ?',
       [email, 'active']
     );
     
@@ -213,7 +213,7 @@ app.get('/api/user/info', async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT * FROM users WHERE user_id = ?',
+      'SELECT * FROM `kbit-users` WHERE user_id = ?',
       [userId]
     );
     
@@ -259,7 +259,7 @@ app.post('/api/user/consume', async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT * FROM users WHERE user_id = ?',
+      'SELECT * FROM `kbit-users` WHERE user_id = ?',
       [userId]
     );
     
@@ -412,7 +412,7 @@ app.post('/api/admin/login', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT id, user_id, email, nickname, tier, total_points, daily_quota, daily_used, status, created_at FROM users ORDER BY created_at DESC'
+      'SELECT id, user_id, email, nickname, tier, total_points, daily_quota, daily_used, status, created_at FROM `kbit-users` ORDER BY created_at DESC'
     );
     res.json(rows);
   } catch (err) {
