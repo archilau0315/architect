@@ -69,11 +69,12 @@ async function recordUsage(data) {
  * @param {string} userEmail - 用户邮箱（可选）
  * @returns {Promise<boolean>} - 是否更新成功
  */
-async function deductBalance(userId, tokens, userNickname, userEmail) {
+async function deductBalance(userId, cost, userNickname, userEmail) {
   try {
-    // Token 到积分的换算比例：1 积分 = 150 token
-    const TOKENS_PER_POINT = 150;
-    const points = Math.ceil(tokens / TOKENS_PER_POINT);
+    // PH8 返回的 cost 实际上是费用，单位：万分之一元（0.0001元）
+    // 例如：140 表示 140 个万分之一元 = 0.0140 元
+    // 利润10倍：用户积分 = PH8返回的cost ÷ 10，向上取整
+    const points = Math.ceil(cost / 10);
     
     // 更新 kbit_users 表中的累计使用量
     await db.query(
@@ -84,7 +85,7 @@ async function deductBalance(userId, tokens, userNickname, userEmail) {
       [points, userId, userId]
     );
     
-    console.log(`[PH8 Token] 扣除余额: user=${userId}, tokens=${tokens}, points=${points}`);
+    console.log(`[PH8 Token] 扣除余额: user=${userId}, cost=${cost}(${cost * 0.0001}元), points=${points}`);
     return true;
   } catch (err) {
     console.error('[PH8 Token] 扣除余额失败:', err);
@@ -169,7 +170,7 @@ async function getUserBalance(userId) {
     );
     
     // Token 到积分的换算比例
-    const TOKENS_PER_POINT = 150;
+    const TOKENS_PER_POINT = 100;
     
     // 将 token 转换为积分
     const usedTodayPoints = Math.ceil((todayStats.totalTokens || 0) / TOKENS_PER_POINT);

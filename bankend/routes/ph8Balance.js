@@ -18,7 +18,7 @@ router.get('/balance', async (req, res) => {
     }
     
     // Token 到积分的换算比例
-    const TOKENS_PER_POINT = 150;
+    const TOKENS_PER_POINT = 100;
     
     // 计算剩余余额（积分）
     const remainingPoints = Math.max(0, balance.totalBalance - balance.usedToday);

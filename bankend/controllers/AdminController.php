@@ -558,58 +558,86 @@ class AdminController
             return ['success' => false, 'error' => '无权限', 'code' => 403];
         }
 
-        $page = (int) ($request['query']['page'] ?? 1);
-        $limit = (int) ($request['query']['limit'] ?? 50);
-        $userId = $request['query']['user_id'] ?? null;
-        $feature = $request['query']['feature'] ?? null;
-        $status = $request['query']['status'] ?? null;
-        $date = $request['query']['date'] ?? null;
-        $offset = ($page - 1) * $limit;
+        try {
+            $page = (int) ($request['query']['page'] ?? 1);
+            $limit = (int) ($request['query']['limit'] ?? 50);
+            $userId = $request['query']['user_id'] ?? null;
+            $feature = $request['query']['feature'] ?? null;
+            $status = $request['query']['status'] ?? null;
+            $date = $request['query']['date'] ?? null;
+            $offset = ($page - 1) * $limit;
 
-        $where = '1=1';
-        $params = [];
+            $where = '1=1';
+            $params = [];
 
-        if ($userId) {
-            $where .= ' AND user_id = ?';
-            $params[] = $userId;
-        }
-        if ($feature) {
-            $where .= ' AND request_type = ?';
-            $params[] = $feature;
-        }
+            if ($userId) {
+                $where .= ' AND l.user_id = ?';
+                $params[] = $userId;
+            }
+            if ($feature) {
+                $where .= ' AND l.request_type = ?';
+                $params[] = $feature;
+            }
 
-        if ($date) {
-            $where .= ' AND DATE(created_at) = ?';
-            $params[] = $date;
-        }
+            if ($date) {
+                $where .= ' AND DATE(l.created_at) = ?';
+                $params[] = $date;
+            }
 
-        $logs = $this->db->query(
-            "SELECT l.*, u.email, u.nickname
-             FROM token_usage l
-             LEFT JOIN kbit_users u ON l.user_id = u.email
-             WHERE {$where}
-             ORDER BY l.created_at DESC
-             LIMIT ? OFFSET ?",
-            array_merge($params, [$limit, $offset])
-        );
+            // 先检查表是否存在
+            $tableCheck = $this->db->queryOne(
+                "SHOW TABLES LIKE 'token_usage'"
+            );
+            if (!$tableCheck) {
+                return [
+                    'success' => true,
+                    'data' => [
+                        'logs' => [],
+                        'pagination' => [
+                            'page' => $page,
+                            'limit' => $limit,
+                            'total' => 0,
+                            'total_pages' => 0
+                        ]
+                    ]
+                ];
+            }
 
-        $total = $this->db->queryOne(
-            "SELECT COUNT(*) as count FROM token_usage WHERE {$where}",
-            $params
-        );
+            $logs = $this->db->query(
+                "SELECT l.*, u.email, u.nickname
+                 FROM token_usage l
+                 LEFT JOIN kbit_users u ON l.user_id = CAST(u.id AS CHAR) COLLATE utf8mb4_unicode_ci OR l.user_id = u.email COLLATE utf8mb4_unicode_ci
+                 WHERE {$where}
+                 ORDER BY l.created_at DESC
+                 LIMIT ? OFFSET ?",
+                array_merge($params, [$limit, $offset])
+            );
 
-        return [
-            'success' => true,
-            'data' => [
-                'logs' => $logs,
-                'pagination' => [
-                    'page' => $page,
-                    'limit' => $limit,
-                    'total' => $total['count'] ?? 0,
-                    'total_pages' => ceil(($total['count'] ?? 0) / $limit)
+            $total = $this->db->queryOne(
+                "SELECT COUNT(*) as count FROM token_usage l WHERE {$where}",
+                $params
+            );
+
+            return [
+                'success' => true,
+                'data' => [
+                    'logs' => $logs,
+                    'pagination' => [
+                        'page' => $page,
+                        'limit' => $limit,
+                        'total' => $total['count'] ?? 0,
+                        'total_pages' => ceil(($total['count'] ?? 0) / $limit)
+                    ]
                 ]
-            ]
-        ];
+            ];
+        } catch (\Exception $e) {
+            error_log('getUsageLogs error: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => '查询失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
     }
 
     public function getCostReport(array $request): array

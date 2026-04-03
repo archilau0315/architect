@@ -261,5 +261,59 @@ export const Ph8UsageService = {
       return `${(tokens / 1000).toFixed(1)}K`;
     }
     return tokens.toString();
+  },
+
+  /**
+   * 获取用户最近一次请求的真实 Token 消耗
+   * 从数据库中获取 PH8 API 返回的真实 usage 数据
+   */
+  async getLatestUsage(userId: string): Promise<{
+    success: boolean;
+    data?: {
+      request_id: string;
+      model: string;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      request_type: string;
+      created_at: string;
+    };
+    message?: string;
+  }> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/usage/latest/${userId}`);
+      const data = await response.json();
+      return data;
+    } catch (e: any) {
+      console.error('[Ph8Usage] 获取最新用量失败:', e.message);
+      return { success: false, message: '获取失败' };
+    }
+  },
+
+  /**
+   * 根据 requestId 获取特定请求的真实 Token 消耗
+   */
+  async getUsageByRequestId(requestId: string): Promise<{
+    success: boolean;
+    data?: {
+      request_id: string;
+      user_id: string;
+      model: string;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      request_type: string;
+      created_at: string;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/usage/detail/${requestId}`);
+      const data = await response.json();
+      return data;
+    } catch (e: any) {
+      console.error('[Ph8Usage] 获取用量详情失败:', e.message);
+      return { success: false, error: '获取失败' };
+    }
   }
 };

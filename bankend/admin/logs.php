@@ -264,9 +264,14 @@
             
             if (logs.length > 0) {
                 logList.innerHTML = '';
-                
+
                 logs.forEach(log => {
                     const row = document.createElement('tr');
+                    // PH8 返回的 total_tokens 实际上是费用，单位：万分之一元（0.0001元）
+                    // 例如：140 表示 140 个万分之一元 = 0.0140 元
+                    const cost = log.total_tokens || 0; // 万分之一元
+                    const costInYuan = (cost * 0.0001).toFixed(4); // 转换为元，精确到4位小数
+                    const points = cost; // 1 积分 = 0.0001 元，所以积分 = cost
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.id}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -275,7 +280,7 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.request_type}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${log.total_tokens || 0} 积分
+                            ${points} 积分 <span class="text-xs text-gray-400">(${costInYuan} 元)</span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${new Date(log.created_at).toLocaleString()}

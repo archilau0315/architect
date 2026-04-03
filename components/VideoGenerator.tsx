@@ -138,8 +138,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     setLastVideoRef(null);
   };
 
-  // Token 到积分的换算比例：1 积分 = 150 token
-  const TOKENS_PER_POINT = 150;
+  // Token 到积分的换算比例：1 积分 = 100 token
+  const TOKENS_PER_POINT = 100;
 
   // 计算视频生成成本（按秒数估算）
   const calculateVideoCost = () => {
@@ -200,8 +200,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       setLastVideoRef(result.videoRef);
       setProgress(100);
       
-      // 记录实际Token消耗到后端
-      const actualTokens = 25000; // 视频生成实际消耗约25000 token
+      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -212,12 +211,26 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       } catch (e) {
         console.error('获取用户ID失败:', e);
       }
-      await Ph8UsageService.recordUsage(
-        userId,
-        { total: actualTokens },
-        selectedEngine,
-        'video'
-      );
+      
+      // 延迟获取真实的 Token 消耗数据（等待后端记录完成）
+      setTimeout(async () => {
+        try {
+          const result = await Ph8UsageService.getLatestUsage(userId);
+          if (result.success && result.data) {
+            console.log('[Video真实Token消耗]', {
+              requestId: result.data.request_id,
+              promptTokens: result.data.prompt_tokens,
+              completionTokens: result.data.completion_tokens,
+              totalTokens: result.data.total_tokens,
+              model: result.data.model
+            });
+          } else {
+            console.log('[Video] 未获取到真实Token消耗数据');
+          }
+        } catch (err) {
+          console.error('[Video] 获取真实Token消耗失败:', err);
+        }
+      }, 500); // 延迟500ms确保后端已记录
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         alert(`视频生成失败: ${err.message}`);

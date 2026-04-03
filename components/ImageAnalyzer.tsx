@@ -17,8 +17,8 @@ interface ImageAnalyzerProps {
 const ANALYZER_STORAGE_KEY = 'ARCHITECT_ANALYZER_WORKBENCH_V1';
 
 const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, instructions, onReset, modelConfig, onBusyStateChange, points, onConsumePoints }) => {
-  // Token 到积分的换算比例：1 积分 = 150 token
-  const TOKENS_PER_POINT = 150;
+  // Token 到积分的换算比例：1 积分 = 100 token
+  const TOKENS_PER_POINT = 100;
   const [image, setImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [reversePrompt, setReversePrompt] = useState<EnhancedPrompt | null>(null);
@@ -112,8 +112,7 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
       const result = await GeminiService.analyzeImage(image, prompt, instructions, modelConfig, controller.signal);
       setAnalysis(result);
 
-      // 记录实际Token消耗到后端
-      const actualTokens = 4000; // 图片分析实际消耗约4000 token
+      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -124,12 +123,26 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
       } catch (e) {
         console.error('获取用户ID失败:', e);
       }
-      await Ph8UsageService.recordUsage(
-        userId,
-        { total: actualTokens },
-        modelConfig.modelId,
-        'image_analysis'
-      );
+      
+      // 延迟获取真实的 Token 消耗数据（等待后端记录完成）
+      setTimeout(async () => {
+        try {
+          const usageResult = await Ph8UsageService.getLatestUsage(userId);
+          if (usageResult.success && usageResult.data) {
+            console.log('[Analyzer真实Token消耗]', {
+              requestId: usageResult.data.request_id,
+              promptTokens: usageResult.data.prompt_tokens,
+              completionTokens: usageResult.data.completion_tokens,
+              totalTokens: usageResult.data.total_tokens,
+              model: usageResult.data.model
+            });
+          } else {
+            console.log('[Analyzer] 未获取到真实Token消耗数据');
+          }
+        } catch (err) {
+          console.error('[Analyzer] 获取真实Token消耗失败:', err);
+        }
+      }, 500); // 延迟500ms确保后端已记录
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Analysis cancelled by user.");
@@ -176,8 +189,7 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
       const result = await GeminiService.generateReversePrompt(image, instructions, modelConfig, controller.signal);
       setReversePrompt(result);
 
-      // 记录实际Token消耗到后端
-      const actualTokens = 6500; // 提取指令实际消耗约6500 token
+      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -188,12 +200,26 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
       } catch (e) {
         console.error('获取用户ID失败:', e);
       }
-      await Ph8UsageService.recordUsage(
-        userId,
-        { total: actualTokens },
-        modelConfig.modelId,
-        'reverse_prompt'
-      );
+      
+      // 延迟获取真实的 Token 消耗数据（等待后端记录完成）
+      setTimeout(async () => {
+        try {
+          const usageResult = await Ph8UsageService.getLatestUsage(userId);
+          if (usageResult.success && usageResult.data) {
+            console.log('[ReversePrompt真实Token消耗]', {
+              requestId: usageResult.data.request_id,
+              promptTokens: usageResult.data.prompt_tokens,
+              completionTokens: usageResult.data.completion_tokens,
+              totalTokens: usageResult.data.total_tokens,
+              model: usageResult.data.model
+            });
+          } else {
+            console.log('[ReversePrompt] 未获取到真实Token消耗数据');
+          }
+        } catch (err) {
+          console.error('[ReversePrompt] 获取真实Token消耗失败:', err);
+        }
+      }, 500); // 延迟500ms确保后端已记录
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Extraction cancelled by user.");

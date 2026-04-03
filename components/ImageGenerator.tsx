@@ -460,7 +460,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         } catch (e) {
           console.error('获取用户ID失败:', e);
         }
-        const tokenCost = targetSize === '4K' ? Math.ceil(3000 / TOKENS_PER_POINT) : Math.ceil(2000 / TOKENS_PER_POINT); // 放大的积分成本
+        const upscaleCost = targetSize === '4K' ? 250 : 180; // 放大的积分成本（万分之一元）
         Ph8UsageService.recordUsage(
           userId,
           { total: tokenCost },
@@ -478,41 +478,36 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
   const triggerUpscale = (img: string) => handleUpscale(undefined, img);
 
-  // Token 到积分的换算比例：1 积分 = 150 token
-  const TOKENS_PER_POINT = 150;
+  // PH8 返回的费用单位是万分之一元（0.0001元）
+  // 1 积分 = 0.0001 元（万分之一元）
+  // 例如：140 = 0.0140 元 = 140 积分
+  const COST_PRECISION = 4; // 小数点后4位
 
   const calculateCost = () => {
     const size = config.imageSize;
     const tier = config.modelTier;
-    let tokens = 2000; // 默认
+    let cost = 140; // 默认费用（万分之一元），0.0140元
 
     if (tier === "FAST") {
-      if (size === "1K") tokens = 2000;
-      if (size === "2K") tokens = 2500;
-      if (size === "4K") tokens = 3500;
+      if (size === "1K") cost = 140; // 0.0140元
+      if (size === "2K") cost = 180; // 0.0180元
+      if (size === "4K") cost = 250; // 0.0250元
     } else if (tier === "QUALITY") {
-      if (size === "1K") tokens = 2500;
-      if (size === "2K") tokens = 3500;
-      if (size === "4K") tokens = 5000;
+      if (size === "1K") cost = 180; // 0.0180元
+      if (size === "2K") cost = 250; // 0.0250元
+      if (size === "4K") cost = 350; // 0.0350元
     } else if (tier === "HIGH") {
-      if (size === "1K") tokens = 3500;
-      if (size === "2K") tokens = 5000;
-      if (size === "4K") tokens = 7500;
+      if (size === "1K") cost = 250; // 0.0250元
+      if (size === "2K") cost = 350; // 0.0350元
+      if (size === "4K") cost = 500; // 0.0500元
     }
 
-    // 转换为积分（向上取整）
-    return Math.ceil(tokens / TOKENS_PER_POINT);
+    // 1 积分 = 0.0001 元
+    return cost;
   };
 
   const handleGenerate = async () => {
     if (isGenerating) { abortControllerRef.current?.abort(); setIsGenerating(false); onBusyStateChange?.(false); return; }
-    
-    // Points check
-    const cost = calculateCost();
-    if (!onConsumePoints(cost)) {
-      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
-      return;
-    }
 
     if (generatedImages.length > 0) setPreviousImages([...generatedImages]);
     
@@ -544,8 +539,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       setWatermarkedImages(newWatermarked);
       if (isCompositeMode) { setIsCompositeMode(false); setBaseRefs([]); setBaseRefsOriginalSizes([]); setLockedIndices([]); setMaskRefB(null); }
       onImageGenerated?.({ id: Date.now().toString(), url: newImages[0], prompt: currentPrompt, config: {...config, aspectRatio: finalRatio}, timestamp: Date.now() });
-      
-      // 记录token使用情况
+
+      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -556,13 +551,33 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       } catch (e) {
         console.error('获取用户ID失败:', e);
       }
-      const tokenCost = calculateCost();
-      Ph8UsageService.recordUsage(
-        userId,
-        { total: tokenCost },
-        config.modelTier || 'FAST',
-        'image'
-      ).catch(err => console.error('记录token使用失败:', err));
+
+      // 获取真实的费用并扣除积分
+      setTimeout(async () => {
+        try {
+          const result = await Ph8UsageService.getLatestUsage(userId);
+          if (result.success && result.data) {
+            const realCost = result.data.total_tokens || 0;
+            console.log('[PH8真实费用]', {
+              requestId: result.data.request_id,
+              cost: realCost,
+              costInYuan: (realCost * 0.0001).toFixed(4),
+              model: result.data.model
+            });
+
+            // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
+            if (realCost > 0 && onConsumePoints) {
+              const userPoints = Math.ceil(realCost / 10);
+              const deducted = onConsumePoints(userPoints);
+              if (!deducted) {
+                console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('获取PH8真实费用失败:', err);
+        }
+      }, 500);
     } catch (err: any) {
       if (err.name !== 'AbortError') alert(`渲染失败: ${err.message}`);
     } finally { if (abortControllerRef.current === controller) { setIsGenerating(false); onBusyStateChange?.(false); } }

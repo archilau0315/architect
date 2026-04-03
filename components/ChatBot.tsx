@@ -21,8 +21,6 @@ const SESSIONS_STORAGE_KEY = 'architect-chat-sessions-v135';
 const generateId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
 const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15, modelConfig, onBusyStateChange, points, onConsumePoints }) => {
-  // Token 到积分的换算比例：1 积分 = 150 token
-  const TOKENS_PER_POINT = 150;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 默认收起
@@ -182,17 +180,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
   const removeFile = (index: number) => { setSelectedFiles(prev => prev.filter((_, i) => i !== index)); };
 
   // 计算对话成本
-  const calculateChatCost = (inputText: string, fileCount: number) => {
-    // 估算输入token：1个中文字符约2token，英文单词约1.3token
-    const inputTokens = inputText.length * 2;
-    // 估算输出token：平均回复约500-2000 token
-    const outputTokens = 1000;
-    // 文件处理token：每个文件约500 token
-    const fileTokens = fileCount * 500;
-    const totalTokens = inputTokens + outputTokens + fileTokens;
-    return Math.ceil(totalTokens / TOKENS_PER_POINT);
-  };
-
   const handleSend = async () => {
     if (isLoading) {
       abortControllerRef.current?.abort();
@@ -203,13 +190,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
 
     if ((!input.trim() && selectedFiles.length === 0)) return;
 
-    // 扣除积分
-    const cost = calculateChatCost(input, selectedFiles.length);
-    if (onConsumePoints && !onConsumePoints(cost)) {
-      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
-      return;
-    }
-    
     let activeSessionId = currentSessionId;
     let nextSessions = [...sessions];
 
@@ -255,8 +235,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
       const updatedSessions = nextSessions.map(s => s.id === activeSessionId ? { ...s, title: updatedTitle, messages: updatedMessages, timestamp: Date.now() } : s);
       updateSessionsAndStore(updatedSessions);
       
-      // 记录实际Token消耗到后端
-      const actualTokens = (userPrompt.length * 2) + (result.text.length * 2) + (currentFiles.length * 500);
+      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -267,12 +246,33 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
       } catch (e) {
         console.error('获取用户ID失败:', e);
       }
-      await Ph8UsageService.recordUsage(
-        userId,
-        { total: actualTokens },
-        modelConfig.modelId,
-        'chat'
-      );
+      
+      // 获取真实的费用并扣除积分
+      setTimeout(async () => {
+        try {
+          const usageResult = await Ph8UsageService.getLatestUsage(userId);
+          if (usageResult.success && usageResult.data) {
+            const realCost = usageResult.data.total_tokens || 0;
+            console.log('[Chat PH8真实费用]', {
+              requestId: usageResult.data.request_id,
+              cost: realCost,
+              costInYuan: (realCost * 0.0001).toFixed(4),
+              model: usageResult.data.model
+            });
+
+            // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
+            if (realCost > 0 && onConsumePoints) {
+              const userPoints = Math.ceil(realCost / 10);
+              const deducted = onConsumePoints(userPoints);
+              if (!deducted) {
+                console.warn('[Chat PH8费用] 积分不足，无法扣除:', userPoints);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[Chat] 获取PH8真实费用失败:', err);
+        }
+      }, 500);
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Chat cancelled by user.");
