@@ -40,23 +40,16 @@ async function recordUsage(data) {
     const feature = featureMap[data.requestType] || data.requestType || 'chat';
 
     await db.query(
-      'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, error_message, latency_ms, ip_address, cache_hit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+      'INSERT INTO token_usage (user_id, request_id, model, prompt_tokens, completion_tokens, total_tokens, request_type, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())',
       [
         data.userId,
         data.requestId || uuidv4(),
-        feature,
         data.model,
-        'hp8-accelerator',
         data.promptTokens || 0,
         data.completionTokens || 0,
         data.totalTokens,
-        0, // points_cost - 后续计算
-        0, // actual_cost
-        data.status || 'success',
-        data.errorMessage || null,
-        data.responseTimeMs || 0,
-        data.ipAddress || null,
-        data.cachedTokens > 0 ? 1 : 0
+        feature,
+        data.ipAddress || ''
       ]
     );
 
@@ -142,35 +135,35 @@ async function getUserBalance(userId) {
     const purchasedPoints = userRows.length > 0 ? userRows[0].purchased_points : 0;
     const totalConsumedPoints = userRows.length > 0 ? userRows[0].total_consumed_points : 0;
     
-    // 2. 实时统计今日使用（从 kbit_usage_logs 表）
+    // 2. 实时统计今日使用（从 token_usage 表）
     const [todayStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM kbit_usage_logs 
+       FROM token_usage 
        WHERE user_id = ? 
        AND DATE(created_at) = CURDATE()`,
       [userId]
     );
     
-    // 3. 实时统计本月使用（从 kbit_usage_logs 表）
+    // 3. 实时统计本月使用（从 token_usage 表）
     const [monthStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM kbit_usage_logs 
+       FROM token_usage 
        WHERE user_id = ? 
        AND YEAR(created_at) = YEAR(CURDATE()) 
        AND MONTH(created_at) = MONTH(CURDATE())`,
       [userId]
     );
     
-    // 4. 实时统计累计使用（从 kbit_usage_logs 表）
+    // 4. 实时统计累计使用（从 token_usage 表）
     const [totalStats] = await db.query(
       `SELECT 
         COALESCE(SUM(total_tokens), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM kbit_usage_logs 
+       FROM token_usage 
        WHERE user_id = ?`,
       [userId]
     );
@@ -223,8 +216,8 @@ async function getUserUsageStats(userId, startDate, endDate) {
         SUM(total_tokens) as totalTokens,
         SUM(prompt_tokens) as promptTokens,
         SUM(completion_tokens) as completionTokens,
-        AVG(latency_ms) as avgResponseTime
-       FROM kbit_usage_logs 
+        0 as avgResponseTime
+       FROM token_usage 
        WHERE user_id = ? 
        AND created_at BETWEEN ? AND ?`,
       [userId, startDate, endDate]
@@ -247,7 +240,7 @@ async function getUserUsageStats(userId, startDate, endDate) {
 async function getUserUsageHistory(userId, limit = 50, offset = 0) {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM kbit_usage_logs 
+      `SELECT * FROM token_usage 
        WHERE user_id = ? 
        ORDER BY created_at DESC 
        LIMIT ? OFFSET ?`,

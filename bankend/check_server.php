@@ -9,9 +9,14 @@ ini_set('display_errors', 1);
 
 // 加载配置
 require __DIR__ . '/config/database.php';
-require __DIR__ . '/core/Database.php';
+require __DIR__ . '/includes/Database.php';
 
 use KbitArchitect\Core\Database;
+
+// 检查Database类是否存在
+if (!class_exists('KbitArchitect\Core\Database')) {
+    die("Database类不存在，请检查includes/Database.php文件");
+}
 
 echo "=== 服务器状态检查 ===\n";
 

@@ -17,7 +17,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
   // 从URL获取token（用于邮件链接）
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const urlToken = urlParams.get('token');
+    const urlToken = urlParams.get('token') || urlParams.get('reset');
     if (urlToken) {
       setToken(urlToken);
       verifyToken(urlToken);
@@ -61,12 +61,8 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess('重置链接已发送到您的邮箱');
+        setSuccess('重置请求已提交，请联系管理员获取重置链接');
         setStep('verify');
-        // 开发环境显示token
-        if (data.token) {
-          console.log('重置令牌:', data.token);
-        }
       } else {
         setError(data.error || '请求失败');
       }

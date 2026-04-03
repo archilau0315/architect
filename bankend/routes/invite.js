@@ -89,7 +89,7 @@ router.post('/register', async (req, res) => {
     
     // 检查邮箱是否已注册
     const [userRows] = await db.query(
-      'SELECT * FROM `kbit-users` WHERE email = ?',
+      'SELECT * FROM kbit_users WHERE email = ?',
       [email]
     );
 
@@ -100,19 +100,18 @@ router.post('/register', async (req, res) => {
     // 创建用户
     const bcrypt = require('bcrypt');
     const passwordHash = await bcrypt.hash(password, 10);
-    const user_id = 'user_' + Date.now() + Math.floor(Math.random() * 1000);
 
     await db.query(
-      "INSERT INTO `kbit-users` (user_id, email, password_hash, nickname, tier, total_points, daily_quota, daily_used, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'beta', ?, 100, 0, 'active', NOW(), NOW())",
-      [user_id, email, passwordHash, nickname || email.split('@')[0], inviteCode.points_bonus]
+      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 1, NOW(), NOW())',
+      [email, passwordHash, nickname || email.split('@')[0], 'free', inviteCode.points_bonus]
     );
 
     // 获取新创建的用户ID
     const [newUserRows] = await db.query(
-      'SELECT user_id FROM `kbit-users` WHERE email = ?',
+      'SELECT id FROM kbit_users WHERE email = ?',
       [email]
     );
-    const userId = newUserRows[0].user_id;
+    const userId = newUserRows[0].id;
     
     // 更新邀请码使用状态
     await db.query(
@@ -125,10 +124,9 @@ router.post('/register', async (req, res) => {
     }
     
     // 记录积分日志
-    const userNickname = nickname || email.split('@')[0];
     await db.query(
-      'INSERT INTO point_logs (user_id, user_nickname, user_email, amount, type, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, userNickname, email, inviteCode.points_bonus, 'invite', '邀请码注册赠送']
+      'INSERT INTO point_logs (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
+      [userId, inviteCode.points_bonus, 'invite', '邀请码注册赠送']
     );
     
     // 同时充值 PH8 余额（邀请码赠送的积分也作为 PH8 余额）

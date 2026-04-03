@@ -176,7 +176,6 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">功能</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">模型</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">消耗</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时间</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
@@ -236,10 +235,9 @@
         function loadLogs() {
             const userId = document.getElementById('userIdFilter').value;
             const feature = document.getElementById('featureFilter').value;
-            const status = document.getElementById('statusFilter').value;
             const date = document.getElementById('dateFilter').value;
             
-            fetch(`/api/admin/logs?page=${currentPage}&user_id=${userId}&feature=${feature}&status=${status}&date=${date}&limit=20`, {
+            fetch(`/api/admin/logs?page=${currentPage}&user_id=${userId}&feature=${feature}&date=${date}&limit=20`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -274,21 +272,16 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             ${log.email || log.user_id}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.feature}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model_id}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                ${log.status === 'success' ? '成功' : '失败'}
-                            </span>
-                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.request_type}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${log.points_cost || 0} 积分
+                            ${log.total_tokens || 0} 积分
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${new Date(log.created_at).toLocaleString()}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${log.ip_address}
+                            ${log.ip_address || '-'}
                         </td>
                     `;
                     logList.appendChild(row);
@@ -296,7 +289,7 @@
             } else {
                 logList.innerHTML = `
                     <tr>
-                        <td colspan="8" class="px-6 py-10 text-center text-gray-500">
+                        <td colspan="7" class="px-6 py-10 text-center text-gray-500">
                             暂无日志
                         </td>
                     </tr>

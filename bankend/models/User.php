@@ -271,10 +271,10 @@ class User
             "SELECT 
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_requests,
-                SUM(points_cost) as total_points_spent,
+                SUM(total_tokens) as total_points_spent,
                 SUM(prompt_tokens) as total_prompt_tokens,
                 SUM(completion_tokens) as total_completion_tokens
-             FROM usage_logs 
+             FROM token_usage 
              WHERE user_id = ? AND {$whereClause}",
             [$id]
         ) ?: [];

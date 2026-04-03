@@ -140,7 +140,7 @@ if (file_exists($envFile)) {
         echo "   ✓ 数据库连接成功\n";
         
         // 检查关键表是否存在
-        $tables = ['users', 'admins', 'usage_logs'];
+        $tables = ['users', 'admins', 'token_usage'];
         foreach ($tables as $table) {
             $stmt = $pdo->query("SHOW TABLES LIKE '{$table}'");
             $exists = $stmt->rowCount() > 0 ? '✓ 存在' : '✗ 不存在';

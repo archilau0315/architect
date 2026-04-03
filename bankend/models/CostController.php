@@ -65,7 +65,7 @@ class CostController
         $patterns = [];
         
         $recentRequests = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM usage_logs 
+            'SELECT COUNT(*) as count FROM token_usage 
              WHERE (user_id = ? OR ip_address = ?) AND created_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)',
             [$userId, $ip]
         );
@@ -75,8 +75,8 @@ class CostController
         }
         
         $identicalRequests = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM usage_logs 
-             WHERE user_id = ? AND feature = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)',
+            'SELECT COUNT(*) as count FROM token_usage 
+             WHERE user_id = ? AND request_type = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)',
             [$userId, $feature]
         );
         
@@ -85,7 +85,7 @@ class CostController
         }
         
         $ipUsers = $this->db->queryOne(
-            'SELECT COUNT(DISTINCT user_id) as count FROM usage_logs 
+            'SELECT COUNT(DISTINCT user_id) as count FROM token_usage 
              WHERE ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)',
             [$ip]
         );
@@ -180,12 +180,12 @@ class CostController
         $monthlyLimit = $this->config['budget.monthly_limit'] ?? 20000;
         
         $dailyCost = $this->db->queryOne(
-            'SELECT COALESCE(SUM(actual_cost), 0) as total FROM usage_logs WHERE DATE(created_at) = CURDATE()'
+            'SELECT COALESCE(SUM(total_tokens), 0) as total FROM token_usage WHERE DATE(created_at) = CURDATE()'
         );
         $dailyCost = (float) ($dailyCost['total'] ?? 0);
         
         $monthlyCost = $this->db->queryOne(
-            'SELECT COALESCE(SUM(actual_cost), 0) as total FROM usage_logs WHERE created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")'
+            'SELECT COALESCE(SUM(total_tokens), 0) as total FROM token_usage WHERE created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")'
         );
         $monthlyCost = (float) ($monthlyCost['total'] ?? 0);
         
@@ -295,28 +295,16 @@ class CostController
 
     public function logUsage(array $data): int
     {
-        return $this->db->insert('usage_logs', [
+        return $this->db->insert('token_usage', [
             'user_id' => $data['user_id'],
             'request_id' => $data['request_id'],
-            'feature' => $data['feature'],
-            'model_id' => $data['model_id'],
-            'channel_id' => $data['channel_id'],
-            'routing_strategy' => $data['routing_strategy'] ?? null,
+            'model' => $data['model_id'],
             'prompt_tokens' => $data['prompt_tokens'] ?? 0,
             'completion_tokens' => $data['completion_tokens'] ?? 0,
             'total_tokens' => ($data['prompt_tokens'] ?? 0) + ($data['completion_tokens'] ?? 0),
-            'points_cost' => $data['points_cost'] ?? 0,
-            'actual_cost' => $data['actual_cost'] ?? 0,
-            'image_count' => $data['image_count'] ?? 0,
-            'video_duration' => $data['video_duration'] ?? 0,
-            'resolution' => $data['resolution'] ?? null,
-            'status' => $data['status'] ?? 'success',
-            'error_message' => $data['error_message'] ?? null,
-            'latency_ms' => $data['latency_ms'] ?? 0,
+            'request_type' => $data['feature'],
             'ip_address' => $data['ip_address'],
-            'user_agent' => $data['user_agent'] ?? null,
-            'request_hash' => $data['request_hash'] ?? null,
-            'cache_hit' => $data['cache_hit'] ?? 0
+            'created_at' => date('Y-m-d H:i:s')
         ]);
     }
 
@@ -331,35 +319,35 @@ class CostController
         };
         
         $byFeature = $this->db->query(
-            "SELECT feature, 
+            "SELECT request_type as feature, 
                     COUNT(*) as request_count,
-                    SUM(points_cost) as total_points,
-                    SUM(actual_cost) as total_cost,
-                    AVG(latency_ms) as avg_latency
-             FROM usage_logs 
-             WHERE {$whereClause} AND status = 'success'
-             GROUP BY feature"
+                    SUM(total_tokens) as total_points,
+                    SUM(total_tokens) as total_cost,
+                    0 as avg_latency
+             FROM token_usage 
+             WHERE {$whereClause}
+             GROUP BY request_type"
         );
         
         $byModel = $this->db->query(
-            "SELECT model_id,
+            "SELECT model,
                     COUNT(*) as request_count,
-                    SUM(points_cost) as total_points,
-                    SUM(actual_cost) as total_cost
-             FROM usage_logs 
-             WHERE {$whereClause} AND status = 'success'
-             GROUP BY model_id"
+                    SUM(total_tokens) as total_points,
+                    SUM(total_tokens) as total_cost
+             FROM token_usage 
+             WHERE {$whereClause}
+             GROUP BY model"
         );
         
         $byChannel = $this->db->query(
-            "SELECT channel_id,
+            "SELECT 'default' as channel_id,
                     COUNT(*) as request_count,
-                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
-                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_count,
-                    AVG(latency_ms) as avg_latency
-             FROM usage_logs 
+                    COUNT(*) as success_count,
+                    0 as failed_count,
+                    0 as avg_latency
+             FROM token_usage 
              WHERE {$whereClause}
-             GROUP BY channel_id"
+             GROUP BY 'default'"
         );
         
         return [

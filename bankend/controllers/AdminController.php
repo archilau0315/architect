@@ -94,26 +94,23 @@ class AdminController
             return ['success' => false, 'error' => '无权限', 'code' => 403];
         }
 
-        $userCount = $this->db->queryOne('SELECT COUNT(*) as count FROM `kbit-users`');
+        $userCount = $this->db->queryOne('SELECT COUNT(*) as count FROM kbit_users');
         $activeUsers = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM `kbit-users` WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
+            'SELECT COUNT(*) as count FROM kbit_users WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
         );
         $todayRequests = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM usage_logs WHERE DATE(created_at) = CURDATE()'
+            'SELECT COUNT(*) as count FROM token_usage WHERE DATE(created_at) = CURDATE()'
         );
         $todayCost = $this->db->queryOne(
-            'SELECT COALESCE(SUM(actual_cost), 0) as total FROM usage_logs WHERE DATE(created_at) = CURDATE()'
-        );
-        $monthRevenue = $this->db->queryOne(
-            'SELECT COALESCE(SUM(amount), 0) as total FROM subscriptions WHERE status = "active" AND created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")'
+            'SELECT COALESCE(SUM(total_tokens), 0) as total FROM token_usage WHERE DATE(created_at) = CURDATE()'
         );
 
         $tierDistribution = $this->db->query(
-            'SELECT tier as user_tier, COUNT(*) as count FROM `kbit-users` GROUP BY tier'
+            'SELECT user_tier as user_tier, COUNT(*) as count FROM kbit_users GROUP BY user_tier'
         );
 
         $featureUsage = $this->db->query(
-            'SELECT feature, COUNT(*) as count FROM usage_logs WHERE DATE(created_at) = CURDATE() GROUP BY feature ORDER BY count DESC LIMIT 5'
+            'SELECT request_type as feature, COUNT(*) as count FROM token_usage WHERE DATE(created_at) = CURDATE() GROUP BY request_type ORDER BY count DESC LIMIT 5'
         );
 
         return [
@@ -213,24 +210,24 @@ class AdminController
 
         // 获取今日使用统计
         $todayStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
-             FROM usage_logs 
+            "SELECT COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
+             FROM token_usage 
              WHERE user_id = ? AND DATE(created_at) = CURDATE()",
             [$userId]
         );
 
         // 获取本周使用统计
         $weekStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
-             FROM usage_logs 
+            "SELECT COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
+             FROM token_usage 
              WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             [$userId]
         );
 
         // 获取最近7天的每日使用统计
         $dailyStats = $this->db->query(
-            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(points_cost) as total_points_spent 
-             FROM usage_logs 
+            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
+             FROM token_usage 
              WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
              GROUP BY DATE(created_at) 
              ORDER BY date",
@@ -336,7 +333,7 @@ class AdminController
 
         try {
             // 删除用户相关数据
-            $this->db->query('DELETE FROM usage_logs WHERE user_id = ?', [$userId]);
+            $this->db->query('DELETE FROM token_usage WHERE user_id = ?', [$userId]);
             $this->db->query('DELETE FROM subscriptions WHERE user_id = ?', [$userId]);
             
             // 删除用户
@@ -577,13 +574,10 @@ class AdminController
             $params[] = $userId;
         }
         if ($feature) {
-            $where .= ' AND feature = ?';
+            $where .= ' AND request_type = ?';
             $params[] = $feature;
         }
-        if ($status) {
-            $where .= ' AND status = ?';
-            $params[] = $status;
-        }
+
         if ($date) {
             $where .= ' AND DATE(created_at) = ?';
             $params[] = $date;
@@ -591,8 +585,8 @@ class AdminController
 
         $logs = $this->db->query(
             "SELECT l.*, u.email, u.nickname
-             FROM usage_logs l
-             LEFT JOIN kbit_users u ON l.user_id = u.id
+             FROM token_usage l
+             LEFT JOIN kbit_users u ON l.user_id = u.email
              WHERE {$where}
              ORDER BY l.created_at DESC
              LIMIT ? OFFSET ?",
@@ -600,7 +594,7 @@ class AdminController
         );
 
         $total = $this->db->queryOne(
-            "SELECT COUNT(*) as count FROM usage_logs WHERE {$where}",
+            "SELECT COUNT(*) as count FROM token_usage WHERE {$where}",
             $params
         );
 

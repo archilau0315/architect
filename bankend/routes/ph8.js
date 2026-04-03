@@ -100,7 +100,7 @@ async function getUserInfo(userId) {
   try {
     // 从 users 表查询用户信息
     const [rows] = await db.query(
-      'SELECT nickname, email FROM `kbit-users` WHERE user_id = ? OR email = ?',
+      'SELECT nickname, email FROM `kbit_users` WHERE user_id = ? OR email = ?',
       [userId, userId]
     );
 

@@ -84,13 +84,13 @@ class UserController
         $stats = $this->userModel->getUsageStats($userId, $period);
 
         $byFeature = $this->db->query(
-            "SELECT feature, 
+            "SELECT request_type as feature, 
                     COUNT(*) as count,
-                    SUM(points_cost) as points,
+                    SUM(total_tokens) as points,
                     SUM(total_tokens) as tokens
-             FROM usage_logs 
-             WHERE user_id = ? AND DATE(created_at) = CURDATE() AND status = 'success'
-             GROUP BY feature",
+             FROM token_usage 
+             WHERE user_id = ? AND DATE(created_at) = CURDATE()
+             GROUP BY request_type",
             [$userId]
         );
 

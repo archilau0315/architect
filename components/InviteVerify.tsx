@@ -14,12 +14,14 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [error, setError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
   const [showApplication, setShowApplication] = useState(false);
+  const [showLoginForm, setShowLoginForm] = useState(false);
   const [registerData, setRegisterData] = useState({
     email: '',
     password: '',
     nickname: ''
   });
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +40,13 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     const savedAvatar = localStorage.getItem(AVATAR_KEY);
     if (savedAvatar) {
       setUserAvatar(savedAvatar);
+    }
+    
+    // 检查URL中是否有重置令牌
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('reset');
+    if (resetToken) {
+      setShowPasswordReset(true);
     }
     
     const handleStorageChange = (e: StorageEvent) => {
@@ -113,6 +122,54 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
   };
 
+  const handleLogin = async () => {
+    if (!registerData.email || !registerData.password) {
+      setError('请填写邮箱和密码');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: registerData.email,
+          password: registerData.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const sessionData = {
+          email: data.user.email,
+          tier: data.user.tier,
+          points: data.user.totalPoints || 1000,
+          userId: data.user.userId
+        };
+        localStorage.setItem('architect-invite-session', JSON.stringify(sessionData));
+        localStorage.setItem('architect-user-tier-v150', data.user.tier);
+        localStorage.setItem('architect-user-points-v160', JSON.stringify({
+          daily: 200,
+          purchased: data.user.totalPoints || 1000,
+          lastReset: new Date().toDateString()
+        }));
+        onVerified(sessionData);
+      } else {
+        setError(data.error || '登录失败');
+      }
+    } catch (err) {
+      // 后端连接失败时，显示错误信息
+      console.error('登录失败:', err);
+      setError('网络错误，请检查后端服务是否运行');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   const handleRegister = async () => {
     if (!registerData.email || !registerData.password) {
       setError('请填写邮箱和密码');
@@ -176,7 +233,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         }));
         onVerified(sessionData);
       } else {
-        setError(data.error || '注册失败');
+        if (data.error === '该邮箱已注册') {
+          setError(data.error);
+        } else {
+          setError(data.error || '注册失败');
+        }
       }
     } catch (err) {
       // 后端连接失败时，显示错误信息
@@ -208,7 +269,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         </div>
 
         <div className="bg-white/5 backdrop-blur-xl rounded-[3rem] p-10 border border-white/10 shadow-2xl">
-          {!showRegister ? (
+          {!showRegister && !showLoginForm ? (
             <>
               <div className="text-center mb-8">
                 <h2 className="text-xl font-black text-white mb-2">邀请码验证</h2>
@@ -245,16 +306,93 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 </button>
               </div>
 
-              <div className="mt-8 pt-6 border-t border-white/10">
-                <p className="text-center text-slate-500 text-xs">
-                  还没有邀请码？
-                  <button 
-                    onClick={() => setShowApplication(true)}
-                    className="text-indigo-400 hover:text-indigo-300 ml-1 underline"
+              <div className="mt-8 space-y-4">
+                <div className="pt-6 border-t border-white/10">
+                  <p className="text-center text-slate-500 text-xs">
+                    还没有邀请码？
+                    <button 
+                      onClick={() => setShowApplication(true)}
+                      className="text-indigo-400 hover:text-indigo-300 ml-1 underline"
+                    >
+                      申请内测
+                    </button>
+                  </p>
+                </div>
+                <div className="pt-4 border-t border-white/10">
+                  <button
+                    onClick={() => setShowLoginForm(true)}
+                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-colors"
                   >
-                    申请内测
+                    已有账号？直接登录
                   </button>
-                </p>
+                </div>
+              </div>
+            </>
+          ) : showLoginForm ? (
+            <>
+              <div className="text-center mb-8">
+                <h2 className="text-xl font-black text-white mb-2">用户登录</h2>
+                <p className="text-slate-400 text-sm">请使用您的账号密码登录</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-2">
+                    邮箱地址
+                  </label>
+                  <input
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                    placeholder="your@email.com"
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between ml-2">
+                    <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                      登录密码
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordReset(true)}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      忘记密码？
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                    placeholder="••••••••"
+                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
+                  />
+                </div>
+
+                {error && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                    <p className="text-red-400 text-sm text-center">{error}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleLogin}
+                  disabled={isLoggingIn}
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:from-indigo-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25"
+                >
+                  {isLoggingIn ? '登录中...' : '登录账号'}
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={() => setShowLoginForm(false)}
+                  className="w-full text-slate-500 text-sm hover:text-white transition-colors"
+                >
+                  ← 返回邀请码验证
+                </button>
               </div>
             </>
           ) : (
@@ -356,12 +494,22 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 </button>
               </div>
 
-              <button
-                onClick={() => setShowRegister(false)}
-                className="w-full mt-4 text-slate-500 text-sm hover:text-white transition-colors"
-              >
-                ← 返回修改邀请码
-              </button>
+              <div className="mt-4 space-y-3">
+                {error === '该邮箱已注册' && (
+                  <button
+                    onClick={() => setShowLogin(true)}
+                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-colors"
+                  >
+                    已有账号？点击登录
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowRegister(false)}
+                  className="w-full text-slate-500 text-sm hover:text-white transition-colors"
+                >
+                  ← 返回修改邀请码
+                </button>
+              </div>
             </>
           )}
         </div>

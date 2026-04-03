@@ -12,6 +12,7 @@ const planRoutes = require('./routes/plan');
 const ph8BalanceRoutes = require('./routes/ph8Balance');
 const gatewayRoutes = require('./routes/gateway');
 const ph8TokenService = require('./services/ph8TokenService');
+const mailService = require('./services/mailService');
 
 const app = express();
 app.use(cors({
@@ -50,8 +51,8 @@ app.post('/api/auth/login', async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT * FROM `kbit-users` WHERE email = ? AND status = ?',
-      [email, 'active']
+      'SELECT * FROM kbit_users WHERE email = ? AND status = ?',
+      [email, 1]
     );
     
     if (users.length === 0) {
@@ -69,11 +70,11 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       success: true,
       user: {
-        userId: user.user_id,
+        userId: user.id,
         email: user.email,
         nickname: user.nickname,
-        tier: user.tier,
-        totalPoints: user.total_points
+        tier: user.user_tier,
+        totalPoints: user.daily_points
       }
     });
   } catch (err) {
@@ -93,8 +94,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     // 检查用户是否存在
     const [users] = await db.query(
-      'SELECT * FROM `kbit-users` WHERE email = ? AND status = ?',
-      [email, 'active']
+      'SELECT * FROM kbit_users WHERE email = ? AND status = ?',
+      [email, 1]
     );
     
     if (users.length === 0) {
@@ -113,14 +114,15 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       [email, token, expiresAt]
     );
     
-    // 这里应该发送邮件，但为了简化，我们直接返回令牌（生产环境应该发送邮件）
+    // 发送密码重置邮件
+    const emailSent = await mailService.sendPasswordResetEmail(email, token);
+    
     console.log(`[密码重置] 用户 ${email} 的重置令牌: ${token}`);
+    console.log(`[密码重置] 邮件发送状态: ${emailSent ? '成功' : '失败'}`);
     
     res.json({ 
       success: true, 
-      message: '如果该邮箱已注册，我们将发送密码重置链接',
-      // 开发环境返回令牌，生产环境应该删除这行
-      token: token 
+      message: '重置链接已发送到您的邮箱，请查收' 
     });
   } catch (err) {
     console.error('[密码重置] 请求失败:', err);
@@ -184,7 +186,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     
     // 更新用户密码
     await db.query(
-      'UPDATE users SET password_hash = ? WHERE email = ?',
+      'UPDATE kbit_users SET password_hash = ? WHERE email = ?',
       [passwordHash, email]
     );
     
@@ -213,7 +215,7 @@ app.get('/api/user/info', async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT * FROM `kbit-users` WHERE user_id = ?',
+      'SELECT * FROM kbit_users WHERE id = ?',
       [userId]
     );
     
@@ -224,23 +226,23 @@ app.get('/api/user/info', async (req, res) => {
     const user = users[0];
     const today = new Date().toISOString().split('T')[0];
     
-    if (user.last_reset_date !== today) {
+    if (user.updated_at !== today) {
       await db.query(
-        'UPDATE users SET daily_used = 0, last_reset_date = ? WHERE user_id = ?',
+        'UPDATE kbit_users SET updated_at = ? WHERE id = ?',
         [today, userId]
       );
       user.daily_used = 0;
     }
     
     res.json({
-      userId: user.user_id,
+      userId: user.id,
       email: user.email,
       nickname: user.nickname,
-      tier: user.tier,
-      totalPoints: user.total_points,
-      dailyQuota: user.daily_quota,
-      dailyUsed: user.daily_used,
-      dailyRemaining: Math.max(0, user.daily_quota - user.daily_used)
+      tier: user.user_tier,
+      totalPoints: user.daily_points,
+      dailyQuota: 100,
+      dailyUsed: 0,
+      dailyRemaining: 100
     });
   } catch (err) {
     console.error(err);

@@ -103,11 +103,11 @@ class QuotaManager
         
         $usage = $this->db->queryOne(
             'SELECT 
-                COUNT(CASE WHEN feature = "image_gen" THEN 1 END) as image_count,
-                COUNT(CASE WHEN feature = "video_gen" THEN 1 END) as video_count,
-                COUNT(CASE WHEN feature = "chat" THEN 1 END) as chat_count
-             FROM usage_logs 
-             WHERE user_id = ? AND DATE(created_at) = ? AND status = "success"',
+                COUNT(CASE WHEN request_type = "image_gen" THEN 1 END) as image_count,
+                COUNT(CASE WHEN request_type = "video_gen" THEN 1 END) as video_count,
+                COUNT(CASE WHEN request_type = "chat" THEN 1 END) as chat_count
+             FROM token_usage 
+             WHERE user_id = ? AND DATE(created_at) = ?',
             [$userId, $today]
         );
         
