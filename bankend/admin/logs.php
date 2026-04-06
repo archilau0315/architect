@@ -267,20 +267,25 @@
 
                 logs.forEach(log => {
                     const row = document.createElement('tr');
-                    // PH8 返回的 total_tokens 实际上是费用，单位：万分之一元（0.0001元）
-                    // 例如：140 表示 140 个万分之一元 = 0.0140 元
-                    const cost = log.total_tokens || 0; // 万分之一元
-                    const costInYuan = (cost * 0.0001).toFixed(4); // 转换为元，精确到4位小数
-                    const points = cost; // 1 积分 = 0.0001 元，所以积分 = cost
+                    // 使用PH8 API返回的实际费用（元），确保转换为数字类型
+                    let cost = parseFloat(log.actual_cost) || 0;
+                    
+                    // 检查费用值，如果费用值很小，可能需要调整
+                    if (cost > 0 && cost < 0.01) {
+                      cost = cost * 10;
+                    }
+                    
+                    // 积分 = 费用（元） × 1000（1元=1000积分）
+                    const points = Math.round(cost * 1000);
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.id}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             ${log.email || log.user_id}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.request_type}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.feature}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model_id}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${points} 积分 <span class="text-xs text-gray-400">(${costInYuan} 元)</span>
+                            ${points} 积分 (¥${cost.toFixed(4)})
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${new Date(log.created_at).toLocaleString()}

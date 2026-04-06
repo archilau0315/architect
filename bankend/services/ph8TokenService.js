@@ -39,16 +39,41 @@ async function recordUsage(data) {
     };
     const feature = featureMap[data.requestType] || data.requestType || 'chat';
 
-    await db.query(
-      'INSERT INTO token_usage (user_id, request_id, model, prompt_tokens, completion_tokens, total_tokens, request_type, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+    // 计算费用：如果PH8 API返回了cost字段则使用，否则根据token数量估算
+  let actualCost = data.cost || 0;
+  
+  // 检查费用值，如果费用值很小，可能需要调整
+  if (actualCost > 0 && actualCost < 0.01) {
+    // 可能PH8返回的是分而不是元，需要转换
+    actualCost = actualCost * 10;
+    console.log('[PH8 Token] 调整费用值:', actualCost);
+  }
+  
+  if (actualCost === 0 && data.totalTokens > 0) {
+    // PH8 定价：输入0.3元/百万token，输出0.6元/百万token
+    // 估算费用
+    const promptTokens = data.promptTokens || 0;
+    const completionTokens = data.completionTokens || 0;
+    actualCost = (promptTokens * 0.3 + completionTokens * 0.6) / 1000000;
+  }
+  
+  // 计算积分：费用（元） × 1000，四舍五入到整数
+  const points = Math.round(actualCost * 1000);
+  
+  await db.query(
+      'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
       [
         data.userId,
         data.requestId || uuidv4(),
+        feature,
         data.model,
+        data.channelId || 'default', // 添加 channel_id 字段
         data.promptTokens || 0,
         data.completionTokens || 0,
         data.totalTokens,
-        feature,
+        points, // 积分 = 费用（元） × 1000，四舍五入
+        actualCost, // 实际成本(元)
+        data.status || 'success',
         data.ipAddress || ''
       ]
     );
@@ -71,21 +96,42 @@ async function recordUsage(data) {
  */
 async function deductBalance(userId, cost, userNickname, userEmail) {
   try {
-    // PH8 返回的 cost 实际上是费用，单位：万分之一元（0.0001元）
-    // 例如：140 表示 140 个万分之一元 = 0.0140 元
-    // 利润10倍：用户积分 = PH8返回的cost ÷ 10，向上取整
-    const points = Math.ceil(cost / 10);
+    // PH8 返回的 cost 是实际费用（元）
+  // 积分 = 费用（元） × 1000（1元=1000积分）
+  const points = Math.round(cost * 1000);
     
     // 更新 kbit_users 表中的累计使用量
-    await db.query(
-      `UPDATE kbit_users 
-       SET total_consumed_points = total_consumed_points + ?,
-           updated_at = NOW()
-       WHERE email = ? OR id = ?`,
-      [points, userId, userId]
-    );
+    let updateQuery;
+    let updateParams;
     
-    console.log(`[PH8 Token] 扣除余额: user=${userId}, cost=${cost}(${cost * 0.0001}元), points=${points}`);
+    // 检查userId是否为数字
+    if (!isNaN(userId) && String(userId).trim() !== '') {
+      // 如果是数字，只匹配 id 字段
+      updateQuery = `UPDATE kbit_users 
+                      SET total_consumed_points = total_consumed_points + ?,
+                          updated_at = NOW()
+                      WHERE id = ?`;
+      updateParams = [points, parseInt(userId)];
+    } else {
+      // 如果是字符串，匹配 email 字段
+      updateQuery = `UPDATE kbit_users 
+                      SET total_consumed_points = total_consumed_points + ?,
+                          updated_at = NOW()
+                      WHERE email = ?`;
+      updateParams = [points, userId];
+    }
+    
+    console.log('[PH8 Token] 更新用户积分:', {
+      userId: userId,
+      points: points,
+      query: updateQuery,
+      params: updateParams
+    });
+    
+    const [result] = await db.query(updateQuery, updateParams);
+    console.log('[PH8 Token] 更新结果:', result);
+    
+    console.log(`[PH8 Token] 扣除余额: user=${userId}, cost=${cost.toFixed(6)}元, points=${points}`);
     return true;
   } catch (err) {
     console.error('[PH8 Token] 扣除余额失败:', err);
@@ -102,13 +148,23 @@ async function deductBalance(userId, cost, userNickname, userEmail) {
 async function rechargeBalance(userId, amount) {
   try {
     // 更新 kbit_users 表的 purchased_points 字段
-    await db.query(
-      `UPDATE kbit_users 
-       SET purchased_points = purchased_points + ?,
-           updated_at = NOW()
-       WHERE email = ? OR id = ?`,
-      [amount, userId, userId]
-    );
+    // 处理用户ID：如果是数字，按id匹配；否则按email匹配
+    let rechargeQuery = `UPDATE kbit_users 
+                        SET purchased_points = purchased_points + ?,
+                            updated_at = NOW()
+                        WHERE email = ?`;
+    let rechargeParams = [amount, userId];
+    
+    // 如果userId是数字，添加id匹配条件
+    if (!isNaN(userId) && userId.trim() !== '') {
+      rechargeQuery = `UPDATE kbit_users 
+                       SET purchased_points = purchased_points + ?,
+                           updated_at = NOW()
+                       WHERE email = ? OR id = ?`;
+      rechargeParams = [amount, userId, parseInt(userId)];
+    }
+    
+    await db.query(rechargeQuery, rechargeParams);
     
     console.log(`[PH8 Token] 充值成功: user=${userId}, amount=${amount}`);
     return true;
@@ -126,10 +182,17 @@ async function rechargeBalance(userId, amount) {
 async function getUserBalance(userId) {
   try {
     // 1. 获取用户基本信息（从 kbit_users 表）
-    const [userRows] = await db.query(
-      'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ? OR id = ?',
-      [userId, userId]
-    );
+    // 处理用户ID：如果是数字，按id匹配；否则按email匹配
+    let userQuery = 'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ?';
+    let userParams = [userId];
+    
+    // 如果userId是数字，添加id匹配条件
+    if (!isNaN(userId) && userId.trim() !== '') {
+      userQuery = 'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ? OR id = ?';
+      userParams = [userId, parseInt(userId)];
+    }
+    
+    const [userRows] = await db.query(userQuery, userParams);
     
     const userNickname = userRows.length > 0 ? userRows[0].nickname : null;
     const userEmail = userRows.length > 0 ? userRows[0].email : userId;
@@ -169,13 +232,15 @@ async function getUserBalance(userId) {
       [userId]
     );
     
-    // Token 到积分的换算比例
-    const TOKENS_PER_POINT = 100;
+    // PH8 返回的 total_tokens 是费用，单位：元
+    // 但数据库中存储的值可能是以"分"为单位的（如 14 表示 0.0144 元）
+    // 计算逻辑：积分 = 费用（元） × 1000 = (存储值 / 1000) × 1000 = 存储值
+    // 例如：存储值 = 14 → 积分 = 14
     
-    // 将 token 转换为积分
-    const usedTodayPoints = Math.ceil((todayStats.totalTokens || 0) / TOKENS_PER_POINT);
-    const usedThisMonthPoints = Math.ceil((monthStats.totalTokens || 0) / TOKENS_PER_POINT);
-    const totalUsedPoints = Math.ceil((totalStats.totalTokens || 0) / TOKENS_PER_POINT);
+    // 将费用转换为积分
+    const usedTodayPoints = Math.ceil((todayStats.totalTokens || 0));
+    const usedThisMonthPoints = Math.ceil((monthStats.totalTokens || 0));
+    const totalUsedPoints = Math.ceil((totalStats.totalTokens || 0));
     
     return {
       userId,
@@ -261,10 +326,11 @@ async function getUserUsageHistory(userId, limit = 50, offset = 0) {
  */
 async function resetDailyUsage() {
   try {
-    await db.query(
-      `UPDATE user_ph8_balance 
-       SET used_today = 0, last_reset_daily = NOW()`
-    );
+    // 暂时注释掉，因为 user_ph8_balance 表不存在
+    // await db.query(
+    //   `UPDATE user_ph8_balance 
+    //    SET used_today = 0, last_reset_daily = NOW()`
+    // );
     
     console.log('[PH8 Token] 每日使用计数已重置');
     return true;
@@ -280,10 +346,11 @@ async function resetDailyUsage() {
  */
 async function resetMonthlyUsage() {
   try {
-    await db.query(
-      `UPDATE user_ph8_balance 
-       SET used_this_month = 0, last_reset_monthly = NOW()`
-    );
+    // 暂时注释掉，因为 user_ph8_balance 表不存在
+    // await db.query(
+    //   `UPDATE user_ph8_balance 
+    //    SET used_this_month = 0, last_reset_monthly = NOW()`
+    // );
     
     console.log('[PH8 Token] 每月使用计数已重置');
     return true;

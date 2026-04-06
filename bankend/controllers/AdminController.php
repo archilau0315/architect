@@ -99,10 +99,10 @@ class AdminController
             'SELECT COUNT(*) as count FROM kbit_users WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)'
         );
         $todayRequests = $this->db->queryOne(
-            'SELECT COUNT(*) as count FROM token_usage WHERE DATE(created_at) = CURDATE()'
+            'SELECT COUNT(*) as count FROM kbit_usage_logs WHERE DATE(created_at) = CURDATE()'
         );
         $todayCost = $this->db->queryOne(
-            'SELECT COALESCE(SUM(total_tokens), 0) as total FROM token_usage WHERE DATE(created_at) = CURDATE()'
+            'SELECT COALESCE(SUM(actual_cost), 0) as total FROM kbit_usage_logs WHERE DATE(created_at) = CURDATE()'
         );
 
         $tierDistribution = $this->db->query(
@@ -110,7 +110,7 @@ class AdminController
         );
 
         $featureUsage = $this->db->query(
-            'SELECT request_type as feature, COUNT(*) as count FROM token_usage WHERE DATE(created_at) = CURDATE() GROUP BY request_type ORDER BY count DESC LIMIT 5'
+            'SELECT feature, COUNT(*) as count FROM kbit_usage_logs WHERE DATE(created_at) = CURDATE() GROUP BY feature ORDER BY count DESC LIMIT 5'
         );
 
         return [
@@ -210,40 +210,59 @@ class AdminController
 
         // 获取今日使用统计
         $todayStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
-             FROM token_usage 
+            "SELECT COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
+             FROM kbit_usage_logs 
              WHERE user_id = ? AND DATE(created_at) = CURDATE()",
             [$userId]
         );
 
         // 获取本周使用统计
         $weekStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
-             FROM token_usage 
+            "SELECT COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
+             FROM kbit_usage_logs 
              WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             [$userId]
         );
 
         // 获取最近7天的每日使用统计
         $dailyStats = $this->db->query(
-            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(total_tokens) as total_points_spent 
-             FROM token_usage 
+            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
+             FROM kbit_usage_logs 
              WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
              GROUP BY DATE(created_at) 
              ORDER BY date",
             [$userId]
         );
 
+        // 积分 = 费用（元） × 1000（1元=1000积分）
+        function costToPoints($cost) {
+            return ceil($cost * 1000);
+        }
+
+        // 处理每日数据
+        $processedDailyStats = [];
+        foreach ($dailyStats as $day) {
+            // 使用数据库中存储的实际费用（元）
+            $cost = $day['total_points_spent'] ?? 0;
+            // 积分 = 费用（元） × 1000（1元=1000积分）
+            $points = ceil($cost * 1000);
+            $processedDailyStats[] = [
+                'date' => $day['date'],
+                'total_requests' => $day['total_requests'] ?? 0,
+                'total_points_spent' => $points
+            ];
+        }
+
         $usageStats = [
             'today' => [
                 'total_requests' => $todayStats['total_requests'] ?? 0,
-                'total_points_spent' => $todayStats['total_points_spent'] ?? 0
+                'total_points_spent' => ceil(($todayStats['total_points_spent'] ?? 0) * 1000)
             ],
             'week' => [
                 'total_requests' => $weekStats['total_requests'] ?? 0,
-                'total_points_spent' => $weekStats['total_points_spent'] ?? 0
+                'total_points_spent' => ceil(($weekStats['total_points_spent'] ?? 0) * 1000)
             ],
-            'daily' => $dailyStats
+            'daily' => $processedDailyStats
         ];
 
         return [
@@ -333,7 +352,7 @@ class AdminController
 
         try {
             // 删除用户相关数据
-            $this->db->query('DELETE FROM token_usage WHERE user_id = ?', [$userId]);
+            $this->db->query('DELETE FROM kbit_usage_logs WHERE user_id = ?', [$userId]);
             $this->db->query('DELETE FROM subscriptions WHERE user_id = ?', [$userId]);
             
             // 删除用户
@@ -586,7 +605,7 @@ class AdminController
 
             // 先检查表是否存在
             $tableCheck = $this->db->queryOne(
-                "SHOW TABLES LIKE 'token_usage'"
+                "SHOW TABLES LIKE 'kbit_usage_logs'"
             );
             if (!$tableCheck) {
                 return [
@@ -605,7 +624,7 @@ class AdminController
 
             $logs = $this->db->query(
                 "SELECT l.*, u.email, u.nickname
-                 FROM token_usage l
+                 FROM kbit_usage_logs l
                  LEFT JOIN kbit_users u ON l.user_id = CAST(u.id AS CHAR) COLLATE utf8mb4_unicode_ci OR l.user_id = u.email COLLATE utf8mb4_unicode_ci
                  WHERE {$where}
                  ORDER BY l.created_at DESC
@@ -614,7 +633,7 @@ class AdminController
             );
 
             $total = $this->db->queryOne(
-                "SELECT COUNT(*) as count FROM token_usage l WHERE {$where}",
+                "SELECT COUNT(*) as count FROM kbit_usage_logs l WHERE {$where}",
                 $params
             );
 

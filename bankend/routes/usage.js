@@ -15,13 +15,13 @@ router.get('/latest/:userId', async (req, res) => {
     const [rows] = await db.query(
       `SELECT 
         request_id,
-        model,
+        model_id as model,
         prompt_tokens,
         completion_tokens,
         total_tokens,
-        request_type,
+        feature as request_type,
         created_at
-      FROM token_usage 
+      FROM kbit_usage_logs 
       WHERE user_id = ? 
       ORDER BY created_at DESC 
       LIMIT 1`,
@@ -57,13 +57,13 @@ router.get('/detail/:requestId', async (req, res) => {
       `SELECT 
         request_id,
         user_id,
-        model,
+        model_id as model,
         prompt_tokens,
         completion_tokens,
         total_tokens,
-        request_type,
+        feature as request_type,
         created_at
-      FROM token_usage 
+      FROM kbit_usage_logs 
       WHERE request_id = ? 
       LIMIT 1`,
       [requestId]

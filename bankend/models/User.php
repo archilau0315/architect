@@ -267,16 +267,23 @@ class User
             default => 'DATE(created_at) = CURDATE()'
         };
 
-        return $this->db->queryOne(
+        $stats = $this->db->queryOne(
             "SELECT 
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_requests,
-                SUM(total_tokens) as total_points_spent,
+                SUM(total_tokens) as total_tokens,
                 SUM(prompt_tokens) as total_prompt_tokens,
                 SUM(completion_tokens) as total_completion_tokens
              FROM token_usage 
              WHERE user_id = ? AND {$whereClause}",
             [$id]
         ) ?: [];
+
+        // PH8 返回的 total_tokens 是费用，单位：万分之一元（0.0001元）
+        // 1 积分 = 0.01 元（100 积分 = 1 元）
+        // 转换费用为积分（向上取整）
+        $stats['total_points_spent'] = isset($stats['total_tokens']) ? ceil($stats['total_tokens'] / 100) : 0;
+
+        return $stats;
     }
 }

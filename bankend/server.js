@@ -15,10 +15,11 @@ const ph8TokenService = require('./services/ph8TokenService');
 const mailService = require('./services/mailService');
 
 const app = express();
-app.use(cors({
-  origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
-  credentials: true
-}));
+// 由 nginx 统一处理 CORS
+// app.use(cors({
+//   origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
+//   credentials: true
+// }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -437,13 +438,15 @@ function scheduleDailyReset() {
   
   setTimeout(async () => {
     console.log('[定时任务] 执行每日重置...');
-    await ph8TokenService.resetDailyUsage();
+    // 暂时注释掉，因为 user_ph8_balance 表不存在
+    // await ph8TokenService.resetDailyUsage();
     
     // 检查是否需要重置每月计数（每月1号）
     const today = new Date();
     if (today.getDate() === 1) {
       console.log('[定时任务] 执行每月重置...');
-      await ph8TokenService.resetMonthlyUsage();
+      // 暂时注释掉，因为 user_ph8_balance 表不存在
+      // await ph8TokenService.resetMonthlyUsage();
     }
     
     // 递归设置下一次重置

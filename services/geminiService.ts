@@ -16,9 +16,9 @@ const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
       // 匹配网关 URL 并替换为代理路径
       if (url.startsWith(gatewayConfig.url)) {
         if (useOpenaiPath) {
-          return `${gatewayConfig.proxy_path}/openai/v1`;
+          return `https://api.kbitai.com.cn${gatewayConfig.proxy_path}/openai/v1`;
         }
-        return url.replace(gatewayConfig.url, gatewayConfig.proxy_path);
+        return url.replace(gatewayConfig.url, `https://api.kbitai.com.cn${gatewayConfig.proxy_path}`);
       }
     }
   }
@@ -26,13 +26,13 @@ const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   // 兼容旧配置：如果没有匹配到，使用默认的 ph8 代理
   if (url.includes('ph8.co')) {
     if (useOpenaiPath) {
-      return '/api/ph8/openai/v1';
+      return 'https://api.kbitai.com.cn/api/ph8/openai/v1';
     }
     // 处理 https://ph8.co/openai/v1 格式的 URL
     if (url.includes('ph8.co/openai/v1')) {
-      return url.replace('https://ph8.co', '/api/ph8');
+      return url.replace('https://ph8.co', 'https://api.kbitai.com.cn/api/ph8');
     }
-    return url.replace('https://ph8.co', '/api/ph8');
+    return url.replace('https://ph8.co', 'https://api.kbitai.com.cn/api/ph8');
   }
   
   return url;

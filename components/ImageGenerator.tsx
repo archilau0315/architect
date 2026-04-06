@@ -546,7 +546,9 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         const sessionData = localStorage.getItem('architect-invite-session');
         if (sessionData) {
           const parsed = JSON.parse(sessionData);
+          // 优先使用后端返回的数字用户ID
           userId = parsed.userId || parsed.email || 'guest';
+          console.log('[用户ID] 从会话获取:', userId);
         }
       } catch (e) {
         console.error('获取用户ID失败:', e);
@@ -957,6 +959,9 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                  <div className="flex flex-col gap-3">
                    <button onClick={(e) => handleDownload(e, false)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title={`下载 (带水印) - 已选 ${selectedImageIndices.length} 张`}>
                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                   </button>
+                   <button onClick={(e) => handleDownload(e, true)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title={`无水印下载 - 已选 ${selectedImageIndices.length} 张`}>
+                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                    </button>
                  </div>
                  <button onClick={handleUpscale} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg></button>

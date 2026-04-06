@@ -126,14 +126,30 @@ const App: React.FC = () => {
         const savedDomain = localStorage.getItem(DOMAIN_KEY) as CreativeDomain;
         if (savedDomain) setCurrentDomain(savedDomain);
 
-        const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
+        // 获取用户等级（优先从后端获取）
+        try {
+          const response = await fetch('https://api.kbitai.com.cn/api/ph8/user-info');
+          const data = await response.json();
+          if (data.success && data.data?.tier) {
+            const backendTier = data.data.tier as UserTier;
+            setUserTier(backendTier);
+            localStorage.setItem(USER_TIER_KEY, backendTier);
+            console.log('[初始化] 从后端获取用户等级:', backendTier);
+          } else {
+            const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
+            setUserTier(savedTier);
+            console.log('[初始化] 从本地存储获取用户等级:', savedTier);
+          }
+        } catch (error) {
+          console.error('[初始化] 获取用户等级失败:', error);
+          const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
+          setUserTier(savedTier);
+        }
         
         // 检查是否需要邀请码验证
         const savedInviteSession = localStorage.getItem('architect-invite-session');
         if (!savedInviteSession) {
           setNeedsInviteVerify(true);
-        } else {
-          setUserTier(savedTier);
         }
         
         // Beta Banner initialization - 对所有用户显示，先清除之前的关闭状态

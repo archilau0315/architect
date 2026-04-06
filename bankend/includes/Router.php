@@ -166,19 +166,20 @@ class Router
 
     private function handleCors(): void
     {
-        $config = require __DIR__ . '/../config/system.php';
-        $cors = $config['cors'];
-
-        header('Access-Control-Allow-Origin: ' . ($cors['allowed_origins'][0] ?? '*'));
-        header('Access-Control-Allow-Methods: ' . implode(', ', $cors['allowed_methods']));
-        header('Access-Control-Allow-Headers: ' . implode(', ', $cors['allowed_headers']));
-        
-        if ($cors['supports_credentials']) {
-            header('Access-Control-Allow-Credentials: true');
-        }
-        
-        header('Access-Control-Max-Age: ' . $cors['max_age']);
-        header('Content-Type: application/json; charset=utf-8');
+        // 由 nginx 统一处理 CORS
+        // $config = require __DIR__ . '/../config/system.php';
+        // $cors = $config['cors'];
+        //
+        // header('Access-Control-Allow-Origin: ' . ($cors['allowed_origins'][0] ?? '*'));
+        // header('Access-Control-Allow-Methods: ' . implode(', ', $cors['allowed_methods']));
+        // header('Access-Control-Allow-Headers: ' . implode(', ', $cors['allowed_headers']));
+        // 
+        // if ($cors['supports_credentials']) {
+        //     header('Access-Control-Allow-Credentials: true');
+        // }
+        // 
+        // header('Access-Control-Max-Age: ' . $cors['max_age']);
+        // header('Content-Type: application/json; charset=utf-8');
     }
 
     public function jsonResponse(array $data, int $status = 200): void
