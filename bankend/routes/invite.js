@@ -132,7 +132,7 @@ router.post('/register', async (req, res) => {
     // 同时充值 PH8 余额（邀请码赠送的积分也作为 PH8 余额）
     try {
       await ph8TokenService.rechargeBalance(userId, inviteCode.points_bonus);
-      console.log(`[Invite] 用户 ${userId}(${userNickname}) PH8 余额充值成功: ${inviteCode.points_bonus} 积分`);
+      console.log(`[Invite] 用户 ${userId}(${email}) PH8 余额充值成功: ${inviteCode.points_bonus} 积分`);
     } catch (err) {
       console.error('[Invite] PH8 余额充值失败:', err);
       // 不影响注册流程，只记录错误

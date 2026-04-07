@@ -57,8 +57,8 @@ async function recordUsage(data) {
     actualCost = (promptTokens * 0.3 + completionTokens * 0.6) / 1000000;
   }
   
-  // 计算积分：费用（元） × 1000，四舍五入到整数
-  const points = Math.round(actualCost * 1000);
+  // 计算积分：PH8费用 × 10（毛利润倍数）× 1000（1元=1000积分）= 费用 × 10000
+  const points = Math.round(actualCost * 10000);
   
   await db.query(
       'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
@@ -97,28 +97,31 @@ async function recordUsage(data) {
 async function deductBalance(userId, cost, userNickname, userEmail) {
   try {
     // PH8 返回的 cost 是实际费用（元）
-  // 积分 = 费用（元） × 1000（1元=1000积分）
-  const points = Math.round(cost * 1000);
+    // 积分 = 费用（元） × 1000（1元=1000积分）
+    const points = Math.round(cost * 1000);
+    
+    // 确保 userId 是字符串类型
+    const userIdStr = String(userId);
     
     // 更新 kbit_users 表中的累计使用量
     let updateQuery;
     let updateParams;
     
     // 检查userId是否为数字
-    if (!isNaN(userId) && String(userId).trim() !== '') {
+    if (!isNaN(userIdStr) && userIdStr.trim() !== '') {
       // 如果是数字，只匹配 id 字段
       updateQuery = `UPDATE kbit_users 
                       SET total_consumed_points = total_consumed_points + ?,
                           updated_at = NOW()
                       WHERE id = ?`;
-      updateParams = [points, parseInt(userId)];
+      updateParams = [points, parseInt(userIdStr)];
     } else {
       // 如果是字符串，匹配 email 字段
       updateQuery = `UPDATE kbit_users 
                       SET total_consumed_points = total_consumed_points + ?,
                           updated_at = NOW()
                       WHERE email = ?`;
-      updateParams = [points, userId];
+      updateParams = [points, userIdStr];
     }
     
     console.log('[PH8 Token] 更新用户积分:', {
@@ -149,19 +152,23 @@ async function rechargeBalance(userId, amount) {
   try {
     // 更新 kbit_users 表的 purchased_points 字段
     // 处理用户ID：如果是数字，按id匹配；否则按email匹配
+    
+    // 确保 userId 是字符串类型
+    const userIdStr = String(userId);
+    
     let rechargeQuery = `UPDATE kbit_users 
                         SET purchased_points = purchased_points + ?,
                             updated_at = NOW()
                         WHERE email = ?`;
-    let rechargeParams = [amount, userId];
+    let rechargeParams = [amount, userIdStr];
     
     // 如果userId是数字，添加id匹配条件
-    if (!isNaN(userId) && userId.trim() !== '') {
+    if (!isNaN(userIdStr) && userIdStr.trim() !== '') {
       rechargeQuery = `UPDATE kbit_users 
                        SET purchased_points = purchased_points + ?,
                            updated_at = NOW()
                        WHERE email = ? OR id = ?`;
-      rechargeParams = [amount, userId, parseInt(userId)];
+      rechargeParams = [amount, userIdStr, parseInt(userIdStr)];
     }
     
     await db.query(rechargeQuery, rechargeParams);
@@ -183,13 +190,17 @@ async function getUserBalance(userId) {
   try {
     // 1. 获取用户基本信息（从 kbit_users 表）
     // 处理用户ID：如果是数字，按id匹配；否则按email匹配
+    
+    // 确保 userId 是字符串类型
+    const userIdStr = String(userId);
+    
     let userQuery = 'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ?';
-    let userParams = [userId];
+    let userParams = [userIdStr];
     
     // 如果userId是数字，添加id匹配条件
-    if (!isNaN(userId) && userId.trim() !== '') {
+    if (!isNaN(userIdStr) && userIdStr.trim() !== '') {
       userQuery = 'SELECT nickname, email, purchased_points, total_consumed_points FROM kbit_users WHERE email = ? OR id = ?';
-      userParams = [userId, parseInt(userId)];
+      userParams = [userIdStr, parseInt(userIdStr)];
     }
     
     const [userRows] = await db.query(userQuery, userParams);
@@ -199,35 +210,35 @@ async function getUserBalance(userId) {
     const purchasedPoints = userRows.length > 0 ? userRows[0].purchased_points : 0;
     const totalConsumedPoints = userRows.length > 0 ? userRows[0].total_consumed_points : 0;
     
-    // 2. 实时统计今日使用（从 token_usage 表）
+    // 2. 实时统计今日使用（从 kbit_usage_logs 表）
     const [todayStats] = await db.query(
-      `SELECT 
-        COALESCE(SUM(total_tokens), 0) as totalTokens,
+      `SELECT
+        COALESCE(SUM(points_cost), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM token_usage 
-       WHERE user_id = ? 
+       FROM kbit_usage_logs
+       WHERE user_id = ?
        AND DATE(created_at) = CURDATE()`,
       [userId]
     );
-    
-    // 3. 实时统计本月使用（从 token_usage 表）
+
+    // 3. 实时统计本月使用（从 kbit_usage_logs 表）
     const [monthStats] = await db.query(
-      `SELECT 
-        COALESCE(SUM(total_tokens), 0) as totalTokens,
+      `SELECT
+        COALESCE(SUM(points_cost), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM token_usage 
-       WHERE user_id = ? 
-       AND YEAR(created_at) = YEAR(CURDATE()) 
+       FROM kbit_usage_logs
+       WHERE user_id = ?
+       AND YEAR(created_at) = YEAR(CURDATE())
        AND MONTH(created_at) = MONTH(CURDATE())`,
       [userId]
     );
-    
-    // 4. 实时统计累计使用（从 token_usage 表）
+
+    // 4. 实时统计累计使用（从 kbit_usage_logs 表）
     const [totalStats] = await db.query(
-      `SELECT 
-        COALESCE(SUM(total_tokens), 0) as totalTokens,
+      `SELECT
+        COALESCE(SUM(points_cost), 0) as totalTokens,
         COUNT(*) as requestCount
-       FROM token_usage 
+       FROM kbit_usage_logs
        WHERE user_id = ?`,
       [userId]
     );
@@ -277,14 +288,14 @@ async function getUserBalance(userId) {
 async function getUserUsageStats(userId, startDate, endDate) {
   try {
     const [rows] = await db.query(
-      `SELECT 
+      `SELECT
         COUNT(*) as requestCount,
         SUM(total_tokens) as totalTokens,
         SUM(prompt_tokens) as promptTokens,
         SUM(completion_tokens) as completionTokens,
         0 as avgResponseTime
-       FROM token_usage 
-       WHERE user_id = ? 
+       FROM kbit_usage_logs
+       WHERE user_id = ?
        AND created_at BETWEEN ? AND ?`,
       [userId, startDate, endDate]
     );
@@ -306,9 +317,9 @@ async function getUserUsageStats(userId, startDate, endDate) {
 async function getUserUsageHistory(userId, limit = 50, offset = 0) {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM token_usage 
-       WHERE user_id = ? 
-       ORDER BY created_at DESC 
+      `SELECT * FROM kbit_usage_logs
+       WHERE user_id = ?
+       ORDER BY created_at DESC
        LIMIT ? OFFSET ?`,
       [userId, limit, offset]
     );

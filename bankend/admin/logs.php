@@ -256,6 +256,9 @@
             })
             .catch(error => {
                 console.error('加载日志失败:', error);
+                document.getElementById('logList').innerHTML = `
+                    <tr><td colspan="7" class="px-6 py-10 text-center text-red-500">加载失败，请刷新重试</td></tr>
+                `;
             });
         }
         
@@ -267,23 +270,16 @@
 
                 logs.forEach(log => {
                     const row = document.createElement('tr');
-                    // 使用PH8 API返回的实际费用（元），确保转换为数字类型
+                    // 直接使用已计算好的积分和费用字段
+                    let points = parseInt(log.points_cost) || 0;
                     let cost = parseFloat(log.actual_cost) || 0;
-                    
-                    // 检查费用值，如果费用值很小，可能需要调整
-                    if (cost > 0 && cost < 0.01) {
-                      cost = cost * 10;
-                    }
-                    
-                    // 积分 = 费用（元） × 1000（1元=1000积分）
-                    const points = Math.round(cost * 1000);
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.id}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             ${log.email || log.user_id}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.feature}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model_id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.request_type}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.model}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${points} 积分 (¥${cost.toFixed(4)})
                         </td>

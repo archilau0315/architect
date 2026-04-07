@@ -162,9 +162,10 @@ class AdminController
         }
 
         $users = $this->db->query(
-            "SELECT id as id, email, nickname, user_tier as user_tier, 
-                    daily_points, purchased_points, total_consumed_points, 
-                    status, tier_expires_at, created_at as last_login_at, created_at as created_at 
+            "SELECT id as id, email, nickname, user_tier as user_tier,
+                    daily_points, purchased_points,
+                    (SELECT COALESCE(SUM(points_cost),0) FROM kbit_usage_logs WHERE user_id = kbit_users.id) as total_consumed_points,
+                    status, tier_expires_at, created_at as last_login_at, created_at as created_at
              FROM kbit_users WHERE {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             array_merge($params, [$limit, $offset])
         );
@@ -210,26 +211,26 @@ class AdminController
 
         // 获取今日使用统计
         $todayStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
-             FROM kbit_usage_logs 
+            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent
+             FROM kbit_usage_logs
              WHERE user_id = ? AND DATE(created_at) = CURDATE()",
             [$userId]
         );
 
         // 获取本周使用统计
         $weekStats = $this->db->queryOne(
-            "SELECT COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
-             FROM kbit_usage_logs 
+            "SELECT COUNT(*) as total_requests, SUM(points_cost) as total_points_spent
+             FROM kbit_usage_logs
              WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             [$userId]
         );
 
         // 获取最近7天的每日使用统计
         $dailyStats = $this->db->query(
-            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(actual_cost) as total_points_spent 
-             FROM kbit_usage_logs 
-             WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) 
-             GROUP BY DATE(created_at) 
+            "SELECT DATE(created_at) as date, COUNT(*) as total_requests, SUM(points_cost) as total_points_spent
+             FROM kbit_usage_logs
+             WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+             GROUP BY DATE(created_at)
              ORDER BY date",
             [$userId]
         );
@@ -594,7 +595,7 @@ class AdminController
                 $params[] = $userId;
             }
             if ($feature) {
-                $where .= ' AND l.request_type = ?';
+                $where .= ' AND l.feature = ?';
                 $params[] = $feature;
             }
 
@@ -612,12 +613,7 @@ class AdminController
                     'success' => true,
                     'data' => [
                         'logs' => [],
-                        'pagination' => [
-                            'page' => $page,
-                            'limit' => $limit,
-                            'total' => 0,
-                            'total_pages' => 0
-                        ]
+                        'pagination' => ['page' => $page, 'limit' => $limit, 'total' => 0, 'total_pages' => 0]
                     ]
                 ];
             }
@@ -625,7 +621,7 @@ class AdminController
             $logs = $this->db->query(
                 "SELECT l.*, u.email, u.nickname
                  FROM kbit_usage_logs l
-                 LEFT JOIN kbit_users u ON l.user_id = CAST(u.id AS CHAR) COLLATE utf8mb4_unicode_ci OR l.user_id = u.email COLLATE utf8mb4_unicode_ci
+                 LEFT JOIN kbit_users u ON l.user_id = u.id
                  WHERE {$where}
                  ORDER BY l.created_at DESC
                  LIMIT ? OFFSET ?",
