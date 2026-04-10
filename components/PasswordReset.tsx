@@ -126,7 +126,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
       <div className="relative w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden">
-            <img src="./archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
+            <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white italic tracking-wide mb-2">
             KBITAI <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Architect</span>

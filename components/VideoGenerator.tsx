@@ -166,13 +166,6 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       }
     }
 
-    // 扣除积分
-    const cost = calculateVideoCost();
-    if (!onConsumePoints(cost)) {
-      window.alert("积分余额不足。请在管控中心充值或升级订阅。");
-      return;
-    }
-
     setIsGenerating(true);
     setProgress(0);
     const controller = new AbortController();
@@ -182,16 +175,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       setProgress(p => Math.min(p + 1, 98));
     }, 2000);
 
-    const finalPrompt = (assets.length >= 2 
-      ? `[SHOT-BY-SHOT EVOLUTION]: Evolve the scene through the ${assets.length} provided reference assets. ` 
+    const finalPrompt = (assets.length >= 2
+      ? `[SHOT-BY-SHOT EVOLUTION]: Evolve the scene through the ${assets.length} provided reference assets. `
       : `[MOTION GENERATION]: Generate motion from single reference. `) + (prompt || "Architectural cinematic flythrough, hyper-realistic.");
 
     try {
       const result = await GeminiService.generateVideo(
-        finalPrompt, 
+        finalPrompt,
         assets,
-        aspectRatio, 
-        instructions, 
+        aspectRatio,
+        instructions,
         controller.signal,
         lastVideoRef,
         selectedEngine
@@ -199,7 +192,38 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
       setProgress(100);
-      
+
+      // 获取 PH8 真实费用并扣除积分
+      setTimeout(async () => {
+        try {
+          const session = localStorage.getItem('architect-invite-session');
+          if (!session) return;
+          const sessionData = JSON.parse(session);
+          const userId = sessionData.user_id || sessionData.email;
+
+          const usageResult = await Ph8UsageService.getLatestUsage(userId);
+          if (usageResult.success && usageResult.data) {
+            const realCost = usageResult.data.total_tokens || 0;
+            console.log('[PH8真实费用-Video]', {
+              requestId: usageResult.data.request_id,
+              cost: realCost,
+              costInYuan: (realCost * 0.0001).toFixed(4),
+              model: usageResult.data.model
+            });
+
+            if (realCost > 0 && onConsumePoints) {
+              const userPoints = Math.ceil(realCost / 10);
+              const deducted = onConsumePoints(userPoints);
+              if (!deducted) {
+                console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('获取PH8真实费用失败:', err);
+        }
+      }, 500);
+
       // 获取用户ID
       let userId = 'guest';
       try {
@@ -324,28 +348,25 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   };
 
   const AssetSlot = ({ current, onRemove, onUpload, index, style }: any) => (
-    <div 
+    <div
       style={style}
-      className={`w-full aspect-square rounded-[2.5rem] border ${current ? 'border-theme ring-2 ring-theme/20 shadow-xl' : 'border-slate-200 dark:border-slate-800'} bg-white/40 dark:bg-slate-900/20 glass-card flex flex-col overflow-hidden transition-all animate-in fade-in slide-in-from-left-4 shrink-0 duration-500`}
+      className={`w-full aspect-square rounded-xl border ${current ? 'border-blue-500/30' : 'border-white/[0.06]'} bg-white/[0.03] flex flex-col overflow-hidden transition-all shrink-0`}
     >
-      <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-100 dark:border-white/5 bg-white/60 dark:bg-slate-900/60">
-        <span className="text-[9px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest italic">{index !== undefined ? `分镜 ${index + 1}` : '待上传'}</span>
+      <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.05]">
+        <span className="text-[9px] font-medium text-white/30 uppercase tracking-widest">{index !== undefined ? `分镜 ${index + 1}` : '待上传'}</span>
         {current && onRemove && (
-          <button 
-            onClick={(e) => { e.stopPropagation(); onRemove(); }} 
-            className="w-6 h-6 flex items-center justify-center bg-rose-500/10 rounded-lg text-rose-500 hover:bg-rose-500 hover:text-white transition-all z-10"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="w-5 h-5 flex items-center justify-center rounded text-white/30 hover:text-white/70 hover:bg-white/8 transition-all">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         )}
       </div>
       <div className={`flex-1 relative flex items-center justify-center group ${onUpload ? 'cursor-pointer' : ''}`} onClick={onUpload || undefined}>
         {current ? (
-          <img src={current} className="w-full h-full object-cover rounded-xl transition-transform duration-700 group-hover:scale-110" />
+          <img src={current} className="w-full h-full object-cover" />
         ) : (
-          <div className="flex flex-col items-center opacity-20 group-hover:opacity-40 transition-opacity text-center p-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-            <span className="text-[8px] font-black uppercase tracking-tighter leading-tight">ADD SHOT</span>
+          <div className="flex flex-col items-center opacity-20 group-hover:opacity-50 transition-opacity">
+            <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            <span className="text-[8px] font-medium uppercase tracking-wide">添加</span>
           </div>
         )}
       </div>
@@ -353,20 +374,20 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   );
 
   return (
-    <div className="w-full h-full space-y-12 animate-in fade-in duration-700">
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-8">
-        <div className="space-y-1">
-          <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight italic">动态漫游导演 <span className="text-theme font-normal tracking-normal">Motion Director</span></h3>
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] leading-none">Sequence-Based Spatial Walkthrough Engine</p>
+    <div className="w-full h-full space-y-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
+        <div className="space-y-0.5">
+          <h3 className="text-xl font-semibold text-white/90">动态漫游导演 <span className="text-white/30 font-normal text-base">Motion Director</span></h3>
+          <p className="text-[10px] font-medium text-white/25 uppercase tracking-widest">Sequence-Based Spatial Walkthrough Engine</p>
         </div>
-        <button onClick={handleLocalReset} className="px-8 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-rose-500 transition-all active:scale-95 shadow-sm">重置导播台</button>
+        <button onClick={handleLocalReset} className="min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-white/40 hover:text-white/70 hover:bg-white/8 transition-all active:scale-95">重置导播台</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 w-full">
-        <div className="space-y-8">
-          <div className="bg-white/60 dark:bg-slate-900/40 p-10 rounded-[3rem] border border-slate-200 dark:border-slate-800 glass-card space-y-10">
-            <div className="space-y-6">
-              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-2">资产管理序列 / Asset Timeline (Max 9)</label>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        <div className="space-y-4">
+          <div className="bg-white/[0.03] p-6 rounded-2xl border border-white/[0.06] space-y-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">资产序列 / Asset Timeline (Max 9)</label>
               <div className="grid grid-cols-3 gap-4 w-full py-2 h-auto">
                 {assets.map((img, i) => (
                   <AssetSlot 
@@ -389,166 +410,101 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
 
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-2">算力引擎选择 / Engine Select</label>
+            <div className="space-y-3">
+              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">算力引擎 / Engine</label>
               <div className="relative w-full">
-                <select 
-                  value={selectedEngine} 
+                <select
+                  value={selectedEngine}
                   onChange={(e) => setSelectedEngine(e.target.value)}
-                  className="w-full appearance-none bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-6 py-4 text-sm font-black tracking-widest text-slate-700 dark:text-slate-200 outline-none focus:ring-4 focus:ring-theme/10 transition-all cursor-pointer"
+                  className="w-full appearance-none bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-medium text-white/70 outline-none focus:border-white/20 transition-all cursor-pointer"
                 >
-                  {capabilities.engines.map((eng) => {
-                    const isBetaLocked = false; // Beta 用户可以使用所有视频模型
-                    return (
-                      <option 
-                        key={eng.id} 
-                        value={eng.id} 
-                        disabled={eng.isFrozen || isBetaLocked}
-                        className={`bg-white dark:bg-slate-900 ${(eng.isFrozen || isBetaLocked) ? 'text-slate-400 dark:text-slate-600' : 'text-slate-900 dark:text-white'}`}
-                      >
-                        {eng.label}{eng.isFrozen ? ' (开发中)' : ''}{isBetaLocked ? ' (内测不可用)' : ''}
-                      </option>
-                    );
-                  })}
+                  {capabilities.engines.map((eng) => (
+                    <option key={eng.id} value={eng.id} disabled={eng.isFrozen} className="bg-[#1a1a1a] text-white/70">
+                      {eng.label}{eng.isFrozen ? ' (开发中)' : ''}
+                    </option>
+                  ))}
                 </select>
-                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <ChevronDown size={18} strokeWidth={3} />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
+                  <ChevronDown size={14} />
                 </div>
               </div>
-              <div className="flex items-center justify-between px-6 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
-                <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">预计时长</span>
-                <span className="text-[11px] font-bold text-theme dark:text-theme-light uppercase tracking-tighter">
-                  {currentEngineDetails.duration}
-                </span>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+                <span className="text-[10px] font-medium text-white/30 uppercase tracking-widest">预计时长</span>
+                <span className="text-[11px] font-medium text-blue-400">{currentEngineDetails.duration}</span>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between ml-2">
-                <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">设定运镜比例</label>
-                <span className="text-[9px] font-bold text-theme-light uppercase tracking-tighter">
-                  {assets.length >= 2 ? "多图模式约束：仅支持 16:9" : `当前引擎支持: ${currentEngineDetails.supportedRatios.join(', ')}`}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'].map((r: string) => {
-                  const isSupported = currentEngineDetails.supportedRatios.includes(r);
-                  return (
-                    <button 
-                      key={r} 
-                      disabled={!isSupported}
-                      onClick={() => setAspectRatio(r)} 
-                      className={`py-4 rounded-2xl text-[12px] font-black transition-all ${
-                        aspectRatio === r 
-                          ? 'bg-theme text-white shadow-xl' 
-                          : isSupported 
-                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200' 
-                            : 'bg-slate-50 dark:bg-slate-900 text-slate-300 opacity-20 grayscale cursor-not-allowed'
-                      }`}
-                    >
-                      {r === '21:9' ? '21:9 超宽' : r === '16:9' ? '16:9 横屏' : r === '4:3' ? '4:3 标准' : r === '1:1' ? '1:1 正方' : r === '3:4' ? '3:4 比例' : '9:16 竖屏'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-2">分镜动态演化描述 (Prompt)</label>
-              <textarea 
+            <div className="space-y-3">
+              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">分镜描述 (Prompt)</label>
+              <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 style={{ fontSize: `${fontSize}px` }}
-                placeholder="例如：相机从客厅平滑推向阳台，在此过程中光影随日落发生动态演变..."
-                className="w-full h-32 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 outline-none focus:ring-4 focus:ring-theme/10 transition-all font-medium leading-relaxed"
+                placeholder="例如：相机从客厅平滑推向阳台，光影随日落动态演变..."
+                className="w-full h-28 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 outline-none focus:border-white/20 transition-all font-medium leading-relaxed text-white/70 placeholder-white/20 resize-none"
               />
             </div>
 
-            <button onClick={handleGenerate} className={`w-full py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] transition-all active:scale-95 shadow-2xl ${isGenerating ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-theme text-white hover:bg-theme-light'}`}>
-              {isGenerating ? "正在执行解算..." : "执行分镜动态解算"}
+            <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-medium text-sm transition-all active:scale-95 ${isGenerating ? 'bg-white/[0.04] border border-white/[0.06] text-white/30 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}>
+              {isGenerating ? "解算中..." : "执行分镜动态解算"}
             </button>
           </div>
         </div>
 
-        <div className="bg-white/60 dark:bg-slate-900/40 rounded-[4rem] border border-slate-200 dark:border-slate-800 glass-card flex flex-col items-center justify-center p-12 min-h-[600px] relative overflow-hidden group">
+        <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] flex flex-col items-center justify-center p-8 min-h-[500px] relative overflow-hidden">
            {isGenerating && (
-             <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-2xl flex flex-col items-center justify-center p-12 animate-in fade-in duration-500">
-                <div className="relative w-24 h-24 mb-10">
-                   <div className="absolute inset-0 border-4 border-theme/20 rounded-full" />
-                   <div className="absolute inset-0 border-4 border-theme border-t-transparent rounded-full animate-spin" />
-                   <div className="absolute inset-0 flex items-center justify-center text-white font-black">{progress}%</div>
+             <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
+                <div className="relative w-16 h-16 mb-6">
+                   <div className="absolute inset-0 border-2 border-white/10 rounded-full" />
+                   <div className="absolute inset-0 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                   <div className="absolute inset-0 flex items-center justify-center text-white/70 text-sm font-medium">{progress}%</div>
                 </div>
-                <h4 className="text-xl font-black text-white italic tracking-widest uppercase">解算引擎运行中</h4>
-                <button onClick={() => handleGenerate()} className="mt-12 px-8 py-3 bg-white/10 hover:bg-rose-600 text-white border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all">终止任务</button>
+                <p className="text-base font-medium text-white/70">解算引擎运行中</p>
+                <button onClick={() => handleGenerate()} className="mt-8 min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 text-sm hover:bg-white/8 hover:text-white/70 transition-all">终止任务</button>
              </div>
            )}
 
             {videoUrl ? (
-             <div className="w-full h-full flex flex-col items-center gap-10 animate-in zoom-in-95 duration-500">
-                <div className={`relative shadow-3xl rounded-[2.5rem] overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[75vh]' : 'w-full'}`}>
+             <div className="w-full flex flex-col items-center gap-4 animate-in fade-in duration-300">
+                <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'}`}>
                   <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />
-                  <div className="absolute bottom-6 right-6 pointer-events-none z-10 opacity-50">
-                    <img src="./LOGOkbitwater.png" className="w-20 h-auto brightness-0 invert" alt="Watermark" />
-                  </div>
-                  <div className="absolute top-6 left-6 px-3 py-1 bg-black/20 backdrop-blur-sm rounded-full border border-white/10 text-[8px] text-white/60 font-black uppercase tracking-widest pointer-events-none z-10">
-                    Preview Mode | Watermarked
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-sm rounded-lg border border-white/10 text-[9px] text-white/40 font-medium pointer-events-none z-10">
+                    Preview · Watermarked
                   </div>
                 </div>
-                <div className="flex gap-4 items-center flex-wrap">
-                  <button 
+                <div className="flex gap-3 items-center flex-wrap">
+                  <button
                     onClick={(e) => {
-                      if (effectiveTier === 'beta' || effectiveTier === 'free') {
-                        window.alert("权限不足：视频下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
-                        return;
-                      }
+                      if (effectiveTier === 'beta' || effectiveTier === 'free') { window.alert("视频下载仅限 Pro/Plus 用户。"); return; }
                       handleDownload(e, false);
-                    }} 
+                    }}
                     disabled={isWatermarkProcessing || effectiveTier === 'beta' || effectiveTier === 'free'}
-                    className={`px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest transition-all ${
-                      (effectiveTier === 'beta' || effectiveTier === 'free')
-                        ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50'
-                        : 'bg-slate-100 dark:bg-white/10 backdrop-blur-xl border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-white/20'
-                    } ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    标准下载 (带水印)
-                  </button>
-                  
-                  <button 
+                    className={`min-h-[36px] px-4 rounded-xl text-[11px] font-medium transition-all border ${(effectiveTier === 'beta' || effectiveTier === 'free') || isWatermarkProcessing ? 'bg-white/[0.02] border-white/[0.04] text-white/20 cursor-not-allowed' : 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70'}`}
+                  >标准下载 (带水印)</button>
+
+                  <button
                     onClick={(e) => {
-                      const limits = getDownloadLimits(effectiveTier);
-                      if (limits.daily === 0) {
-                        window.alert("权限不足：无水印下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
-                        return;
-                      }
+                      if (getDownloadLimits(effectiveTier).daily === 0) { window.alert("无水印下载仅限 Pro/Plus 用户。"); return; }
                       handleDownload(e, true);
-                    }} 
+                    }}
                     disabled={isWatermarkProcessing || getDownloadLimits(effectiveTier).daily === 0}
-                    className={`px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest transition-all shadow-lg ${
-                      getDownloadLimits(effectiveTier).daily === 0 
-                        ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50' 
-                        : 'bg-theme text-white hover:bg-theme-light'
-                    } ${isWatermarkProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    无水印下载 {effectiveTier !== 'dev' ? `(${getDownloadLimits(effectiveTier).label})` : ''}
-                  </button>
-                  
+                    className={`min-h-[36px] px-4 rounded-xl text-[11px] font-medium transition-all ${getDownloadLimits(effectiveTier).daily === 0 || isWatermarkProcessing ? 'bg-white/[0.02] border border-white/[0.04] text-white/20 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}
+                  >无水印下载 {effectiveTier !== 'dev' ? `(${getDownloadLimits(effectiveTier).label})` : ''}</button>
+
                   {isWatermarkProcessing && (
                     <div className="flex items-center gap-2">
-                      <div className="w-32 h-2 bg-white/20 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-theme transition-all duration-300"
-                          style={{ width: `${watermarkProgress}%` }}
-                        />
+                      <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-400 transition-all duration-300" style={{ width: `${watermarkProgress}%` }} />
                       </div>
-                      <span className="text-white/60 text-xs">{watermarkProgress}%</span>
+                      <span className="text-white/40 text-xs">{watermarkProgress}%</span>
                     </div>
                   )}
                 </div>
              </div>
            ) : (
-             <div className="flex flex-col items-center text-center opacity-10 select-none grayscale">
-                <svg className="w-40 h-40 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 00-2 2z" /></svg>
-                <h4 className="text-4xl font-black uppercase tracking-[0.6em] italic">Waiting For Sequence</h4>
+             <div className="flex flex-col items-center text-center opacity-10 select-none">
+                <svg className="w-24 h-24 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                <p className="text-sm font-medium text-white/30">等待生成</p>
              </div>
            )}
         </div>

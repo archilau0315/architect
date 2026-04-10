@@ -1,17 +1,12 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Layout from './components/Layout.tsx';
-import PromptEnhancer from './components/PromptEnhancer.tsx';
-import ImageGenerator from './components/ImageGenerator.tsx';
-import ChatBot from './components/ChatBot.tsx'; 
-import ImageAnalyzer from './components/ImageAnalyzer.tsx';
-import VideoGenerator from './components/VideoGenerator.tsx';
+import ConversationView from './components/ConversationView.tsx';
 import SettingsPanel from './components/SettingsPanel.tsx';
-import BetaPolicyBanner from './components/BetaPolicyBanner.tsx';
 import InviteVerify from './components/InviteVerify.tsx';
-import { AppTab, VersionRecord, UserPreferences, CustomModel, HistoryItem, CreativeDomain, UserTier } from './types.ts';
-import { GeminiService, DEFAULT_SYSTEM_PRESETS, EnhancedPrompt } from './services/geminiService.ts';
-import { Ph8UsageService, Ph8UsageData } from './services/ph8UsageService.ts';
+import { VersionRecord, UserPreferences, CustomModel, CreativeDomain, UserTier, ConversationMode, AppTab } from './types.ts';
+import { GeminiService, DEFAULT_SYSTEM_PRESETS } from './services/geminiService.ts';
+import { getProxiedUrl } from './services/apiService';
 
 const DEV_MODE_KEY = 'architect-dev-mode-enabled-v121';
 const VERSION_LOG_KEY = 'architect-system-version-log-v121';
@@ -40,10 +35,9 @@ const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD || '';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('architect');
+  const [architectKey, setArchitectKey] = useState(0);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [currentDomain, setCurrentDomain] = useState<CreativeDomain>('architecture');
-  const [rawIdea, setRawIdea] = useState('');
-  const [enhancedPrompt, setEnhancedPrompt] = useState<EnhancedPrompt>({ zh: '', en: '', analysis: '' });
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [userTier, setUserTier] = useState<UserTier>('pro');
   const [needsInviteVerify, setNeedsInviteVerify] = useState(false);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
@@ -62,7 +56,20 @@ const App: React.FC = () => {
   const [currentInstructions, setCurrentInstructions] = useState(DEFAULT_SYSTEM_PRESETS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const [preferences, setPreferences] = useState<UserPreferences>({ promptFontSize: 18, chatFontSize: 15, theme: 'indigo' });
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    promptFontSize: 18,
+    chatFontSize: 15,
+    theme: 'dark',
+    language: 'zh-CN',
+    accentColor: '#3B82F6',
+    borderRadius: 'normal',
+    density: 'normal',
+    animationSpeed: 'normal',
+    showWelcomeMessage: true,
+    autoSaveHistory: true,
+    compactSidebar: false,
+    fontSize: 'medium'
+  });
   const [models, setModels] = useState<CustomModel[]>([
     { id: 'KbitAi-Pro', name: 'KbitAi-Pro-Core', modelId: 'KbitAi-Pro', isOfficial: true },
     { id: 'KbitAi-Flash', name: 'KbitAi-Flash-Speed', modelId: 'KbitAi-Flash', isOfficial: true },
@@ -73,9 +80,9 @@ const App: React.FC = () => {
   const [modelStatus, setModelStatus] = useState<'connected' | 'assigning' | 'error'>('connected');
   const [dynamicModelName, setDynamicModelName] = useState<string>('');
   
-  const [architectKey, setArchitectKey] = useState(0);
+  const [showPresetPanel, setShowPresetPanel] = useState(false);
   const [chatKey, setChatKey] = useState(0);
-  const [analyzeKey, setAnalyzeKey] = useState(0);
+  const [analyzeKey, setAnalyzeKey] = useState(0); // kept for compatibility
   const [videoKey, setVideoKey] = useState(0);
   const [isSystemVisible, setIsSystemVisible] = useState(false);
   const [useThirdPartyGateway, setUseThirdPartyGateway] = useState(true);
@@ -87,6 +94,8 @@ const App: React.FC = () => {
   const [lifetimeTokens, setLifetimeTokens] = useState(0);
 
   useEffect(() => {
+    let balanceInterval: NodeJS.Timeout | null = null;
+
     const initApp = async () => {
       try {
         const savedTokenMonitor = localStorage.getItem(TOKEN_MONITOR_VISIBLE_KEY);
@@ -115,37 +124,75 @@ const App: React.FC = () => {
           });
         });
 
-        const savedGatewayMode = localStorage.getItem(GATEWAY_MODE_KEY);
-        console.log('[初始化] localStorage 中的网关模式值:', savedGatewayMode, '类型:', typeof savedGatewayMode);
-        const isEnabled = savedGatewayMode === null ? true : savedGatewayMode === 'true';
-        console.log('[初始化] 解析后的布尔值:', isEnabled);
+        // 强制使用商业网关模式（默认且推荐）
         setUseThirdPartyGateway(true);
         GeminiService.setGatewayMode(true);
         localStorage.setItem(GATEWAY_MODE_KEY, 'true');
-        console.log('[初始化] 已设置网关模式: 商业/网关');
+        console.log('[初始化] 已设置网关模式: 商业/网关（默认）');
+
         const savedDomain = localStorage.getItem(DOMAIN_KEY) as CreativeDomain;
         if (savedDomain) setCurrentDomain(savedDomain);
 
         // 获取用户等级（优先从后端获取）
+        let savedTier: UserTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
         try {
-          const response = await fetch('https://api.kbitai.com.cn/api/ph8/user-info');
+          const userInfoUrl = getProxiedUrl('https://api.kbitai.com.cn/api/ph8/user-info');
+          const response = await fetch(userInfoUrl);
           const data = await response.json();
           if (data.success && data.data?.tier) {
-            const backendTier = data.data.tier as UserTier;
-            setUserTier(backendTier);
-            localStorage.setItem(USER_TIER_KEY, backendTier);
-            console.log('[初始化] 从后端获取用户等级:', backendTier);
+            savedTier = data.data.tier as UserTier;
+            localStorage.setItem(USER_TIER_KEY, savedTier);
+            // 同步后端积分数据
+            if (data.data.daily_points !== undefined) {
+              setDailyPoints(data.data.daily_points);
+              setPurchasedPoints(data.data.purchased_points || 0);
+              setTotalConsumedPoints(data.data.total_consumed_points || 0);
+            }
+            console.log('[初始化] 从后端获取用户等级:', savedTier);
           } else {
-            const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
-            setUserTier(savedTier);
             console.log('[初始化] 从本地存储获取用户等级:', savedTier);
           }
         } catch (error) {
           console.error('[初始化] 获取用户等级失败:', error);
-          const savedTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
-          setUserTier(savedTier);
         }
-        
+        setUserTier(savedTier);
+
+        // 从后端获取实时余额和消耗数据
+        const fetchBalance = async () => {
+          try {
+            const session = localStorage.getItem('architect-invite-session');
+            if (!session) return;
+
+            const sessionData = JSON.parse(session);
+            const userId = sessionData.user_id || sessionData.email;
+
+            const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
+            const response = await fetch(balanceUrl, {
+              headers: {
+                'Authorization': `Bearer ${sessionData.token || ''}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+              const { points } = result.data;
+              // 正确同步每日积分和购买积分
+              setDailyPoints(points.daily || 0);
+              setPurchasedPoints(points.purchased || 0);
+              setTotalConsumedPoints(points.total_consumed || 0);
+              console.log('[余额同步] 每日积分:', points.daily, '购买积分:', points.purchased, '总消耗:', points.total_consumed);
+            }
+          } catch (error) {
+            console.error('[余额同步] 获取余额失败:', error);
+          }
+        };
+
+        // 初始化时获取一次
+        await fetchBalance();
+
+        // 每30秒自动刷新余额
+        balanceInterval = setInterval(fetchBalance, 30000);
+
         // 检查是否需要邀请码验证
         const savedInviteSession = localStorage.getItem('architect-invite-session');
         if (!savedInviteSession) {
@@ -205,13 +252,65 @@ const App: React.FC = () => {
         
         const savedPrefs = localStorage.getItem(PREFS_KEY);
         if (savedPrefs) {
-          try { 
+          try {
             const prefs = JSON.parse(savedPrefs);
-            setPreferences(prefs);
+            // Merge with defaults to ensure all properties exist
+            const mergedPrefs = {
+              promptFontSize: 18,
+              chatFontSize: 15,
+              theme: 'dark',
+              accentColor: '#3B82F6',
+              borderRadius: 'normal',
+              density: 'normal',
+              animationSpeed: 'normal',
+              showWelcomeMessage: true,
+              autoSaveHistory: true,
+              compactSidebar: false,
+              fontSize: 'medium',
+              ...prefs
+            };
+            setPreferences(mergedPrefs);
+
+            // Clean up old theme classes
+            document.documentElement.classList.remove('light', 'dark');
+
             // Apply saved theme
-            if (prefs.theme && prefs.theme !== 'indigo') {
-              document.documentElement.setAttribute('data-theme', prefs.theme);
+            if (mergedPrefs.theme && mergedPrefs.theme !== 'dark') {
+              document.documentElement.setAttribute('data-theme', mergedPrefs.theme);
             }
+
+            // Add light-mode class for light theme
+            if (mergedPrefs.theme === 'light') {
+              document.documentElement.classList.add('light-mode');
+              console.log('[Theme] Applied light mode');
+            } else {
+              document.documentElement.classList.remove('light-mode');
+              console.log('[Theme] Removed light mode, current theme:', mergedPrefs.theme);
+            }
+
+            console.log('[Theme] Final classes after init:', document.documentElement.classList.toString());
+
+            // Apply all CSS variables
+            document.documentElement.style.setProperty('--accent-color', mergedPrefs.accentColor);
+
+            const radiusMap = { sharp: '0px', normal: '0.5rem', rounded: '0.75rem', pill: '9999px' };
+            document.documentElement.style.setProperty('--border-radius', radiusMap[mergedPrefs.borderRadius]);
+
+            const densityMap = { compact: '0.75', normal: '1', comfortable: '1.25' };
+            document.documentElement.style.setProperty('--density-scale', densityMap[mergedPrefs.density]);
+
+            const speedMap = { none: '0s', fast: '0.15s', normal: '0.3s', slow: '0.5s' };
+            document.documentElement.style.setProperty('--animation-duration', speedMap[mergedPrefs.animationSpeed]);
+
+            const fontSizeMap = { small: '12px', medium: '14px', large: '16px' };
+            document.documentElement.style.setProperty('--base-font-size', fontSizeMap[mergedPrefs.fontSize]);
+            document.documentElement.setAttribute('data-font-size', mergedPrefs.fontSize || 'medium');
+
+            // 设置默认语言
+            if (!mergedPrefs.language) {
+              mergedPrefs.language = 'zh-CN';
+            }
+            document.documentElement.lang = mergedPrefs.language;
           } catch(e) { console.error("Bad prefs data"); }
         }
         
@@ -230,7 +329,15 @@ const App: React.FC = () => {
         }
       } catch (err) { console.error("Initialization error", err); }
     };
+
     initApp();
+
+    // 清理定时器
+    return () => {
+      if (balanceInterval) {
+        clearInterval(balanceInterval);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -240,15 +347,71 @@ const App: React.FC = () => {
 
   // Handler for updating user preferences
   const handlePreferencesChange = (newPrefs: UserPreferences) => {
+    console.log('[handlePreferencesChange] New theme:', newPrefs.theme);
     setPreferences(newPrefs);
     localStorage.setItem(PREFS_KEY, JSON.stringify(newPrefs));
-    
+
+    // Clean up old theme classes
+    document.documentElement.classList.remove('light', 'dark');
+
     // Apply theme to document
-    if (newPrefs.theme === 'indigo') {
+    if (newPrefs.theme === 'dark') {
       document.documentElement.removeAttribute('data-theme');
     } else {
       document.documentElement.setAttribute('data-theme', newPrefs.theme);
     }
+
+    // Add light-mode class for light theme
+    if (newPrefs.theme === 'light') {
+      document.documentElement.classList.add('light-mode');
+      console.log('[handlePreferencesChange] Added light-mode class');
+    } else {
+      document.documentElement.classList.remove('light-mode');
+      console.log('[handlePreferencesChange] Removed light-mode class');
+    }
+
+    console.log('[handlePreferencesChange] Current classes:', document.documentElement.classList.toString());
+
+    // Apply accent color as CSS variable
+    document.documentElement.style.setProperty('--accent-color', newPrefs.accentColor);
+
+    // Apply border radius
+    const radiusMap = {
+      sharp: '0px',
+      normal: '0.5rem',
+      rounded: '0.75rem',
+      pill: '9999px'
+    };
+    document.documentElement.style.setProperty('--border-radius', radiusMap[newPrefs.borderRadius]);
+
+    // Apply density
+    const densityMap = {
+      compact: '0.75',
+      normal: '1',
+      comfortable: '1.25'
+    };
+    document.documentElement.style.setProperty('--density-scale', densityMap[newPrefs.density]);
+
+    // Apply animation speed
+    const speedMap = {
+      none: '0s',
+      fast: '0.15s',
+      normal: '0.3s',
+      slow: '0.5s'
+    };
+    document.documentElement.style.setProperty('--animation-duration', speedMap[newPrefs.animationSpeed]);
+
+    // Apply font size
+    const fontSizeMap = {
+      small: '12px',
+      medium: '14px',
+      large: '16px'
+    };
+    document.documentElement.style.setProperty('--base-font-size', fontSizeMap[newPrefs.fontSize]);
+    // data-font-size 驱动 CSS --font-scale，覆盖 text-[Npx] 固定写法
+    document.documentElement.setAttribute('data-font-size', newPrefs.fontSize);
+    // lang 属性驱动多语言字体族
+    document.documentElement.lang = newPrefs.language || 'zh-CN';
   };
 
   // Handler for updating custom models list
@@ -322,15 +485,10 @@ const App: React.FC = () => {
 
   const handleResetArchitect = () => {
     setArchitectKey(prev => prev + 1);
-    setRawIdea('');
-    setEnhancedPrompt({ zh: '', en: '', analysis: '' });
-    setHistory([]);
   };
 
-  const handleImportFromAnalyzer = (p: EnhancedPrompt) => {
+  const handleImportFromAnalyzer = (_p: any) => {
     setActiveTab('architect');
-    setRawIdea(p.zh);
-    setEnhancedPrompt(p);
   };
 
   const savePoints = (daily: number, purchased: number, date: string) => {
@@ -346,28 +504,34 @@ const App: React.FC = () => {
     // Beta 用户特殊逻辑：每日最多消耗 200 积分，从总余额中扣除
     if (userTier === 'beta') {
       const dailyLimit = 200;
-      const todayConsumed = 200 - dailyPoints; // 今日已消耗
-      
-      if (todayConsumed + amount > dailyLimit) {
-        window.alert(`内测用户每日限额 200 积分，今日已使用 ${todayConsumed} 积分，剩余 ${dailyPoints} 积分可用。`);
+      const todayUsed = betaDailyUsed; // 今日已使用
+
+      // 检查每日限额
+      if (todayUsed + amount > dailyLimit) {
+        window.alert(`内测用户每日限额 200 积分，今日已使用 ${todayUsed} 积分，剩余 ${dailyLimit - todayUsed} 积分可用。`);
         return false;
       }
-      
+
+      // 检查总积分是否足够
       if (purchasedPoints < amount) {
+        window.alert(`总积分不足，当前剩余 ${purchasedPoints} 积分。`);
         return false;
       }
-      
+
+      // 只从总积分（purchasedPoints）中扣除一次
       const newPurchased = purchasedPoints - amount;
-      const newDaily = dailyPoints - amount; // 用于追踪今日剩余额度
-      
+      const newDailyUsed = todayUsed + amount;
+      const newDailyRemaining = dailyLimit - newDailyUsed;
+
       setPurchasedPoints(newPurchased);
-      setDailyPoints(Math.max(0, newDaily));
-      savePoints(Math.max(0, newDaily), newPurchased, lastResetDate);
-      
+      setBetaDailyUsed(newDailyUsed);
+      setDailyPoints(newDailyRemaining); // 显示今日剩余额度
+      savePoints(newDailyRemaining, newPurchased, lastResetDate);
+
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
       localStorage.setItem(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString());
-      
+
       return true;
     }
 
@@ -450,11 +614,12 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout 
-      activeTab={activeTab} 
+    <Layout
+      activeTab={activeTab}
       onTabChange={setActiveTab}
       currentDomain={currentDomain}
       onDomainChange={(d) => { setCurrentDomain(d); localStorage.setItem(DOMAIN_KEY, d); }}
+      onDomainDoubleClick={() => setShowPresetPanel(p => !p)}
       isDeveloper={isDeveloper}
       isDeveloperMode={isDeveloperMode}
       userTier={userTier}
@@ -463,113 +628,33 @@ const App: React.FC = () => {
       onOpenSettings={() => setIsSettingsOpen(true)}
       currentModelName={dynamicModelName}
       modelStatus={modelStatus}
-      dailyUsage={TIER_CONFIG[userTier].daily - dailyPoints}
-      balance={userTier === 'beta' ? purchasedPoints : dailyPoints + purchasedPoints}
+      dailyUsage={totalConsumedPoints}
+      balance={dailyPoints + purchasedPoints}
+      activeSessionId={activeSessionId}
+      onSessionChange={(id, mode) => {
+        setActiveSessionId(id);
+        if (mode) {
+          const modeToTab: Record<ConversationMode, AppTab> = { chat: 'chat', architect: 'architect', video: 'video' };
+          setActiveTab(modeToTab[mode]);
+        }
+      }}
+      preferences={preferences}
+      onPreferencesChange={handlePreferencesChange}
     >
-      <div className="w-full h-full p-8 md:p-12 overflow-y-auto custom-scrollbar relative">
-        {/* Token Monitor Window */}
-        {showTokenMonitor && (
-          <div className="fixed top-24 right-8 z-[100] bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-5 shadow-2xl animate-in slide-in-from-right-4 duration-500 w-64 glass-card">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-theme-light rounded-full animate-pulse" />
-                <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Token Monitor</span>
-              </div>
-              <button 
-                onClick={handleResetSessionTokens}
-                className="w-6 h-6 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-theme transition-all"
-                title="Reset Session"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Last Operation</p>
-                <div className="flex justify-between text-[11px] font-mono">
-                  <span className="text-slate-500">P: {lastOpTokens.prompt}</span>
-                  <span className="text-theme-light">C: {lastOpTokens.completion}</span>
-                  <span className="font-black text-slate-900 dark:text-white">T: {lastOpTokens.total}</span>
-                </div>
-              </div>
-              <div className="pt-3 border-t border-slate-100 dark:border-white/5 space-y-1">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Session Total</p>
-                <p className="text-lg font-black italic text-theme font-mono">{sessionTotalTokens.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: activeTab === 'architect' ? 'block' : 'none' }}>
-          <div className="max-w-7xl mx-auto space-y-12 pb-24">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-8">
-               <div className="space-y-1">
-                 <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight italic">全域渲染工坊 <span className="text-theme font-normal tracking-normal">Spatial Engine</span></h3>
-                 <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] leading-none">High-Fidelity Architectural Synthesis & CMF Rendering</p>
-               </div>
-            </div>
-            <PromptEnhancer 
-              idea={rawIdea} 
-              onIdeaChange={setRawIdea}
-              result={enhancedPrompt}
-              onResultChange={setEnhancedPrompt}
-              instructions={currentInstructions}
-              fontSize={preferences.promptFontSize}
-              modelConfig={activeModel}
-              domain={currentDomain}
-              usePromptEnhance={usePromptEnhance}
-              onTogglePromptEnhance={handleTogglePromptEnhance}
-            />
-            <ImageGenerator 
-              currentPrompt={enhancedPrompt.en || rawIdea}
-              history={history}
-              onImageGenerated={(item) => setHistory([item, ...history])}
-              onReset={handleResetArchitect}
-              instructions={currentInstructions}
-              fontSize={preferences.promptFontSize}
-              modelConfig={activeModel}
-              domain={currentDomain}
-              userTier={userTier}
-              points={{ daily: dailyPoints, purchased: purchasedPoints }}
-              onConsumePoints={handleConsumePoints}
-              useThirdPartyGateway={useThirdPartyGateway}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
-          <ChatBot
-            instructions={currentInstructions}
-            fontSize={preferences.promptFontSize}
-            modelConfig={activeModel}
-            points={{ daily: dailyPoints, purchased: purchasedPoints }}
-            onConsumePoints={handleConsumePoints}
-          />
-        </div>
-
-        <div style={{ display: activeTab === 'analyze' ? 'block' : 'none' }}>
-          <ImageAnalyzer
-            onImportToArchitect={handleImportFromAnalyzer}
-            instructions={currentInstructions}
-            modelConfig={activeModel}
-            points={{ daily: dailyPoints, purchased: purchasedPoints }}
-            onConsumePoints={handleConsumePoints}
-          />
-        </div>
-
-        <div style={{ display: activeTab === 'video' ? 'block' : 'none' }}>
-          <VideoGenerator 
-            instructions={currentInstructions}
-            fontSize={preferences.promptFontSize}
-            userTier={userTier}
-            points={{ daily: dailyPoints, purchased: purchasedPoints }}
-            onConsumePoints={handleConsumePoints}
-            useThirdPartyGateway={useThirdPartyGateway}
-            isDeveloperMode={isDeveloperMode}
-            onReset={() => {}}
-          />
-        </div>
-      </div>
+      {/* ── Gemini-style conversation ── */}
+      <ConversationView
+        key={architectKey}
+        modelConfig={activeModel}
+        domain={currentDomain}
+        instructions={currentInstructions}
+        points={{ daily: dailyPoints, purchased: purchasedPoints }}
+        onConsumePoints={handleConsumePoints}
+        useThirdPartyGateway={useThirdPartyGateway}
+        isDeveloperMode={isDeveloperMode}
+        showPresetPanel={showPresetPanel}
+        onTogglePresetPanel={() => setShowPresetPanel(p => !p)}
+        language={preferences.language}
+      />
 
       <SettingsPanel 
         isOpen={isSettingsOpen}

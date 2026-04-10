@@ -2,6 +2,30 @@
 import piexif from 'piexifjs';
 import { ContentIdService } from './contentIdService';
 
+// 将字符串编码为二进制位数组
+function strToBits(str: string): number[] {
+  const bits: number[] = [];
+  // 4字节长度头 + 内容
+  const len = str.length;
+  for (let i = 24; i >= 0; i -= 8) bits.push(...Array.from({length: 8}, (_, b) => (len >> (i - b)) & 1));
+  for (const c of str) {
+    const code = c.charCodeAt(0);
+    for (let b = 7; b >= 0; b--) bits.push((code >> b) & 1);
+  }
+  return bits;
+}
+
+// LSB 隐写：将标识信息写入图片像素 R 通道最低位
+function embedLSB(ctx: CanvasRenderingContext2D, w: number, h: number, payload: string): void {
+  const bits = strToBits(payload);
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  for (let i = 0; i < bits.length && i * 4 < data.length; i++) {
+    data[i * 4] = (data[i * 4] & 0xFE) | bits[i]; // R 通道最低位
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
 export const WatermarkUtils = {
   generateContentId(): string {
     return ContentIdService.generateId();
@@ -62,8 +86,9 @@ export const WatermarkUtils = {
     }
   },
 
-  async addWatermark(imageSrc: string, logoSrc: string = './LOGOkbitwater.png'): Promise<{ dataUrl: string; contentId: string }> {
+  async addWatermark(imageSrc: string, logoSrc: string = '/architect/Com_Logo.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
+    const generatedAt = new Date().toISOString();
     
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -110,15 +135,33 @@ export const WatermarkUtils = {
             ctx.drawImage(tempCanvas, watermarkX, watermarkY, logoWidth, logoHeight);
           }
 
+          // 隐式标识：LSB 隐写
+          ctx.globalAlpha = 1.0;
+          const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
+          embedLSB(ctx, canvas.width, canvas.height, payload);
+
           let dataUrl = canvas.toDataURL('image/png');
           dataUrl = this.addAIMetadata(dataUrl, contentId);
 
           resolve({ dataUrl, contentId });
+          // 异步注册到服务器，不阻塞返回
+          fetch('/api/content/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } })
+          }).catch(() => {});
         };
         logo.onerror = () => {
+          const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
+          embedLSB(ctx, canvas.width, canvas.height, payload);
           let dataUrl = canvas.toDataURL('image/png');
           dataUrl = this.addAIMetadata(dataUrl, contentId);
           resolve({ dataUrl, contentId });
+          fetch('/api/content/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } })
+          }).catch(() => {});
         };
         logo.src = logoSrc;
       };

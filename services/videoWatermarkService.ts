@@ -12,7 +12,7 @@ export const VideoWatermarkUtils = {
 
   async addWatermark(
     videoUrl: string, 
-    logoUrl: string = './LOGOkbitwater.png',
+    logoUrl: string = '/architect/Com_Logo.png',
     onProgress?: (progress: number) => void
   ): Promise<{ objectUrl: string; contentId: string }> {
     const contentId = this.generateContentId();

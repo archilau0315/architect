@@ -132,7 +132,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      // 根据环境自动切换 API 地址
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+
+      const response = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,7 +208,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
 
     try {
-      const response = await fetch('/api/invite/register', {
+      const response = await fetch('https://api.kbitai.com.cn/api/invite/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -258,7 +262,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       <div className="relative w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden">
-            <img src="./archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
+            <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white italic tracking-wide mb-2">
             KBITAI <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Architect</span>
@@ -405,7 +409,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   {userAvatar ? (
                     <img src={userAvatar} alt="用户头像" className="w-full h-full object-cover" />
                   ) : (
-                    <img src="./archi01.png" alt="默认头像" className="w-full h-full object-cover" />
+                    <img src="/architect/archi01.png" alt="默认头像" className="w-full h-full object-cover" />
                   )}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <span className="text-white text-[9px] font-black uppercase tracking-wider">选择头像</span>

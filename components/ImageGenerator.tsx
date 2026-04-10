@@ -816,7 +816,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         </div>
         <div className="bg-white/60 dark:bg-slate-900/40 p-5 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 glass-card">
           <div className="flex justify-between items-center mb-3">
-            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">多样性 / Top_p</p>
+            <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">多样性 / Top_P</p>
             <span className={`text-[11px] font-mono font-bold text-${themeColor}-600`}>{config.top_p?.toFixed(2) || '0.95'}</span>
           </div>
           <input 
@@ -907,73 +907,56 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
       <div className="flex flex-col items-center gap-10">
         <div className="flex flex-col items-center gap-4">
-          <button onClick={handleGenerate} className={`px-32 py-6 rounded-[2.5rem] text-xl font-black uppercase tracking-[0.4em] shadow-2xl transition-all active:scale-95 bg-${themeColor}-600 text-white hover:bg-${themeColor}-500`}>{isGenerating ? "执行渲染中..." : (isCompositeMode ? "执行基因重组" : "执行全域渲染")}</button>
+          <button onClick={handleGenerate} className={`px-20 py-4 rounded-2xl text-base font-semibold tracking-wide shadow-xl transition-all active:scale-95 bg-${themeColor}-600 text-white hover:bg-${themeColor}-500`}>{isGenerating ? "渲染中..." : (isCompositeMode ? "执行基因重组" : "执行渲染")}</button>
         </div>
-        <div className="w-full min-h-[600px] bg-white/20 dark:bg-slate-900/30 rounded-[4rem] border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center p-12 relative overflow-hidden group">
+        <div className="w-full min-h-[600px] bg-[#111111] rounded-2xl border border-white/[0.06] flex items-center justify-center p-10 relative overflow-hidden">
            {isGenerating && <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-3xl z-[50] flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300"><div className={`w-16 h-16 border-4 border-${themeColor}-500 border-t-transparent rounded-full animate-spin`} /><p className="text-white font-black uppercase tracking-widest">Synthesis Progressing...</p></div>}
-           {generatedImages.length > 0 ? (
-             <>
-               <div className="relative cursor-zoom-in" onClick={() => { 
-                 const idx = hoveredImageIndex !== null ? hoveredImageIndex : 0;
-                 setFullscreenImageIndex(idx);
-                 setIsPreviewFullscreen(true);
-               }}>
-                 <img ref={mainImageRef} src={watermarkedImages[hoveredImageIndex !== null ? hoveredImageIndex : 0] || generatedImages[hoveredImageIndex !== null ? hoveredImageIndex : 0]} className="max-h-[65vh] rounded-[2.5rem] shadow-2xl border border-white/10" alt="Result" />
-                 {imgNaturalSize && (<div className="absolute top-6 left-6 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full border border-white/20 text-white font-mono text-[10px] font-black tracking-widest z-10 opacity-0 group-hover:opacity-100 transition-opacity">{imgNaturalSize.w} × {imgNaturalSize.h} PX</div>)}
-               </div>
-               {generatedImages.length > 1 && (
-                 <div className="flex gap-3 mt-6 flex-wrap justify-center">
-                   {generatedImages.map((img, idx) => (
-                     <div 
-                       key={idx} 
-                       className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${hoveredImageIndex === idx ? 'ring-2 ring-theme scale-105' : 'ring-1 ring-white/20 hover:ring-white/50'}`}
-                       onMouseEnter={() => setHoveredImageIndex(idx)}
-                       onMouseLeave={() => setHoveredImageIndex(null)}
-                       onClick={() => { setFullscreenImageIndex(idx); setIsPreviewFullscreen(true); }}
-                     >
-                       <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`Thumbnail ${idx + 1}`} />
-                       <button 
-                         onClick={(e) => { 
-                           e.stopPropagation(); 
-                           setSelectedImageIndices(prev => 
-                             prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
-                           );
-                         }}
-                         className={`absolute top-1 left-1 w-5 h-5 rounded flex items-center justify-center text-[10px] font-black transition-all ${selectedImageIndices.includes(idx) ? 'bg-theme text-white' : 'bg-black/50 text-white/70 hover:bg-black/70'}`}
-                       >
-                         {selectedImageIndices.includes(idx) ? '✓' : '□'}
+           {generatedImages.length > 0 ? (() => {
+             const activeIdx = hoveredImageIndex ?? 0;
+             return (
+               <div className="flex flex-col items-center gap-4 w-full">
+                 <div className="flex items-center gap-6">
+                   <div className="relative cursor-zoom-in" onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
+                     <img ref={mainImageRef} src={watermarkedImages[activeIdx] || generatedImages[activeIdx]} className="max-h-[60vh] rounded-xl shadow-2xl border border-white/10" alt="Result" />
+                     {imgNaturalSize && (<div className="absolute top-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 text-white font-mono text-[10px] font-black tracking-widest">{imgNaturalSize.w} × {imgNaturalSize.h} PX</div>)}
+                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[9px] text-white/50 font-medium tracking-wider pointer-events-none whitespace-nowrap">© AI Generated | 预览已添加溯源水印</div>
+                   </div>
+                   <div className="flex flex-col gap-3 shrink-0">
+                     {previousImages.length > 0 && (
+                       <button onClick={handleUndo} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="回退上一版本">
+                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                        </button>
-                       <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 rounded text-[8px] text-white font-bold">
-                         {idx + 1}
+                     )}
+                     <button onClick={(e) => handleDownload(e, false)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="带水印下载">
+                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                     </button>
+                     <button onClick={(e) => handleDownload(e, true)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="无水印下载">
+                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                     </button>
+                     <button onClick={handleUpscale} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="放大图片">
+                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>
+                     </button>
+                     <button onClick={(e) => { e.stopPropagation(); openMarkingMode('INPAINT'); }} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="局部修改">
+                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09-3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+                     </button>
+                   </div>
+                 </div>
+                 {generatedImages.length > 1 && (
+                   <div className="flex gap-3 flex-wrap justify-center">
+                     {generatedImages.map((img, idx) => (
+                       <div key={idx} onClick={() => setHoveredImageIndex(idx)}
+                         className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-500 scale-105` : 'ring-1 ring-white/20 hover:ring-white/50'}`}>
+                         <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} />
+                         <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 rounded text-[8px] text-white font-bold">{idx + 1}</div>
                        </div>
-                     </div>
-                   ))}
-                 </div>
-               )}
-               <div className="absolute bottom-8 right-8 flex flex-col gap-4 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
-                 {previousImages.length > 0 && (
-                   <button onClick={handleUndo} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="回退/对比上一个版本">
-                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                   </button>
+                     ))}
+                   </div>
                  )}
-                 <div className="flex flex-col gap-3">
-                   <button onClick={(e) => handleDownload(e, false)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title={`下载 (带水印) - 已选 ${selectedImageIndices.length} 张`}>
-                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                   </button>
-                   <button onClick={(e) => handleDownload(e, true)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title={`无水印下载 - 已选 ${selectedImageIndices.length} 张`}>
-                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                   </button>
-                 </div>
-                 <button onClick={handleUpscale} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg></button>
-                 <button onClick={(e) => { e.stopPropagation(); openMarkingMode('INPAINT'); }} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09-3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg></button>
                </div>
-               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] text-white/60 font-medium tracking-wider pointer-events-none">
-                 © AI Generated Content | 仅限合规用途 | 预览已添加溯源水印
-               </div>
-             </>
-           ) : (<div className="opacity-5 select-none grayscale flex flex-col items-center"><svg className="w-40 h-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg><span className="text-4xl font-black uppercase tracking-[0.8em] italic">Engine Idle</span></div>)}
+             );
+           })() : (<div className="opacity-5 select-none grayscale flex flex-col items-center"><svg className="w-40 h-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg><span className="text-4xl font-black uppercase tracking-[0.8em] italic">Engine Idle</span></div>)}
         </div>
-        <button onClick={() => { if(window.confirm("确定重置工坊吗？")) onReset?.(); }} className="px-12 py-3.5 bg-slate-100 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 border border-slate-200 dark:border-white/5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-sm flex items-center gap-2 group"><svg className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>一键重置当前工坊</button>
+        <button onClick={() => { if(window.confirm("确定重置工坊吗？")) onReset?.(); }} className="px-10 py-3 bg-white/5 text-white/30 hover:text-rose-400 hover:bg-rose-500/10 border border-white/[0.06] rounded-xl text-[11px] font-medium tracking-wide shadow-sm flex items-center gap-2 group transition-all"><svg className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>重置工坊</button>
       </div>
 
       {isPreviewFullscreen && fullscreenImageIndex !== null && generatedImages[fullscreenImageIndex] && (
@@ -1023,16 +1006,16 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
               <canvas ref={markCanvasRef} className="absolute inset-0 mix-blend-screen opacity-100" />
             </div>
           </div>
-          <div className="mt-4 bg-slate-900/90 p-8 rounded-[3rem] border border-white/10 shadow-3xl flex flex-col items-center gap-6 backdrop-blur-3xl max-h-[45vh] overflow-y-auto custom-scrollbar">
+          <div className="mt-4 bg-[#111111]/95 p-6 rounded-2xl border border-white/[0.08] shadow-2xl flex flex-col items-center gap-5 backdrop-blur-xl max-h-[45vh] overflow-y-auto custom-scrollbar">
              <div className="w-full max-w-6xl flex flex-col gap-6">
                 <div className="flex items-start gap-10">
                    <div className="flex flex-col gap-4">
-                     <div className="flex items-center gap-3"><span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-500 tracking-widest">选取工具:</span><div className="flex gap-1">{['brush', 'rect', 'poly'].map(t => (<button key={t} onClick={() => { setMarkingTool(t as any); setIsMidStroke(false); setIsRightDragging(false); setCurrentStroke(null); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${markingTool === t ? `bg-${themeColor}-600 text-white` : 'bg-white/5 text-slate-500 dark:text-slate-400'}`}>{t === 'brush' ? '画笔' : t === 'rect' ? '矩形' : '多边形'}</button>))}</div></div>
+                     <div className="flex items-center gap-3"><span className="text-[10px] font-medium uppercase text-white/30 tracking-widest">选取工具:</span><div className="flex gap-1">{['brush', 'rect', 'poly'].map(t => (<button key={t} onClick={() => { setMarkingTool(t as any); setIsMidStroke(false); setIsRightDragging(false); setCurrentStroke(null); }} className={`px-3 py-1.5 rounded-lg text-[10px] font-medium uppercase transition-all ${markingTool === t ? `bg-blue-500/20 text-blue-400 border border-blue-500/30` : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/70'}`}>{t === 'brush' ? '画笔' : t === 'rect' ? '矩形' : '多边形'}</button>))}</div></div>
                      {/* 差异化分流：资产重组模式（Slot A/B）强制隐藏彩色面板，仅保留白色遮罩 */}
-                     <div className="flex items-center gap-3"><span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-500 tracking-widest">材质颜色:</span><div className="flex gap-2">{(markingTarget === 'INPAINT' ? PRESET_COLORS : [PRESET_COLORS[0]]).map(c => (<button key={c.value} onClick={() => setActiveColor(c.value)} className={`w-10 h-10 rounded-xl border-2 transition-all ${activeColor === c.value ? 'border-white scale-110 shadow-lg' : 'border-transparent'}`} style={{ backgroundColor: c.value }} />))}</div></div>
+                     <div className="flex items-center gap-3"><span className="text-[10px] font-medium uppercase text-white/30 tracking-widest">材质颜色:</span><div className="flex gap-2">{(markingTarget === 'INPAINT' ? PRESET_COLORS : [PRESET_COLORS[0]]).map(c => (<button key={c.value} onClick={() => setActiveColor(c.value)} className={`w-10 h-10 rounded-xl border-2 transition-all ${activeColor === c.value ? 'border-white scale-110 shadow-lg' : 'border-transparent'}`} style={{ backgroundColor: c.value }} />))}</div></div>
                    </div>
                    <div className="flex-1">
-                      <div className="flex justify-between mb-2"><span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest">标记参数: (1-300 | 滾轮缩放 / 中键平移 / 左键点击连线 / 双击结束 / 右键涂鸦)</span><button onClick={() => { if (polyPoints.length > 0) setPolyPoints([]); else setStrokesMap(p => ({...p, [markingTarget]: p[markingTarget].slice(0,-1)})); }} className={`text-[10px] font-black text-${themeColor}-400 hover:text-white uppercase tracking-tighter`}>撤销上一笔 / 清空点位</button></div>
+                      <div className="flex justify-between mb-2"><span className="text-[10px] font-medium uppercase text-white/30 tracking-widest">标记参数: (1-300 | 滾轮缩放 / 中键平移 / 左键点击连线 / 双击结束 / 右键涂鸦)</span><button onClick={() => { if (polyPoints.length > 0) setPolyPoints([]); else setStrokesMap(p => ({...p, [markingTarget]: p[markingTarget].slice(0,-1)})); }} className={`text-[10px] font-medium text-white/30 hover:text-white/60 uppercase tracking-tighter`}>撤销上一笔 / 清空点位</button></div>
                       <div className="flex items-center gap-6"><input type="range" min="1" max="300" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className={`flex-1 h-2 bg-white/5 rounded-full appearance-none accent-${themeColor}-500 cursor-pointer`} /><input type="number" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value) || 1)} className="w-24 bg-white/5 border border-white/10 rounded-xl text-white text-[15px] font-mono text-center outline-none py-2.5" /></div>
                    </div>
                 </div>
@@ -1054,68 +1037,68 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                   </div>
                 )}
              </div>
-             <div className="flex gap-8 pt-2"><button onClick={discardMarking} className="px-12 py-4 bg-slate-800 text-slate-500 rounded-full text-[11px] font-black uppercase tracking-widest hover:text-rose-500 transition-all border border-transparent hover:border-rose-500/30">放弃</button><button onClick={saveAndExit} className={`px-24 py-4 bg-${themeColor}-600 text-white rounded-full text-[11px] font-black uppercase tracking-widest shadow-2xl hover:bg-${themeColor}-500 transition-all border border-white/10`}>确认标记</button></div>
+             <div className="flex gap-4 pt-2"><button onClick={discardMarking} className="px-10 py-3 bg-white/[0.04] border border-white/[0.06] text-white/40 rounded-xl text-[11px] font-medium uppercase tracking-widest hover:text-rose-400 hover:border-rose-500/30 transition-all">放弃</button><button onClick={saveAndExit} className={`px-20 py-3 bg-blue-500/80 text-white rounded-xl text-[11px] font-medium uppercase tracking-widest hover:bg-blue-500 transition-all`}>确认标记</button></div>
           </div>
         </div>
       )}
 
       {upscaleDialog.show && (
         <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in zoom-in duration-300">
-          <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl">
-            <h3 className="text-2xl font-black text-white italic mb-6">选择放大选项</h3>
-            <div className="mb-6">
-              <p className="text-slate-400 text-sm mb-2">当前图片尺寸：<span className="text-white font-bold">{upscaleDialog.width} × {upscaleDialog.height}</span> px</p>
-              <p className="text-slate-500 text-xs">放大后的图片将传入底图栏第一栏位</p>
+          <div className="bg-[#111111] border border-white/[0.08] rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+            <h3 className="text-base font-semibold text-white/80 mb-5">选择放大选项</h3>
+            <div className="mb-5">
+              <p className="text-white/40 text-sm mb-1">当前图片尺寸：<span className="text-white/70 font-medium">{upscaleDialog.width} × {upscaleDialog.height}</span> px</p>
+              <p className="text-white/25 text-xs">放大后的图片将传入底图栏第一栏位</p>
             </div>
-            
+
             {/* 解算引擎选择 */}
             <div className="mb-4">
-              <p className="text-slate-400 text-xs font-bold mb-2">解算引擎</p>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setUpscaleDialog(prev => ({ ...prev, tier: 'FAST' }))} 
-                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${upscaleDialog.tier === 'FAST' ? 'bg-theme text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+              <p className="text-white/30 text-xs font-medium mb-2">解算引擎</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setUpscaleDialog(prev => ({ ...prev, tier: 'FAST' }))}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${upscaleDialog.tier === 'FAST' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/70'}`}
                 >
                   FAST 极速
                 </button>
-                <button 
-                  onClick={() => setUpscaleDialog(prev => ({ ...prev, tier: 'QUALITY' }))} 
-                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${upscaleDialog.tier === 'QUALITY' ? 'bg-theme text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                <button
+                  onClick={() => setUpscaleDialog(prev => ({ ...prev, tier: 'QUALITY' }))}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${upscaleDialog.tier === 'QUALITY' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/70'}`}
                 >
                   QUALITY 质量
                 </button>
               </div>
             </div>
-            
+
             {/* 分辨率选择 */}
-            <div className="mb-6">
-              <p className="text-slate-400 text-xs font-bold mb-2">目标分辨率</p>
-              <div className="flex gap-4">
+            <div className="mb-5">
+              <p className="text-white/30 text-xs font-medium mb-2">目标分辨率</p>
+              <div className="flex gap-3">
                 {upscaleDialog.options.includes('2K') && (
-                  <button 
-                    onClick={() => executeUpscale('2K', upscaleDialog.tier)} 
-                    className={`flex-1 py-6 rounded-2xl text-white transition-all ${upscaleDialog.tier === 'QUALITY' ? 'bg-theme/20 border border-theme/30 hover:bg-theme/30' : 'bg-theme/20 border border-theme/30 hover:bg-theme/30'}`}
+                  <button
+                    onClick={() => executeUpscale('2K', upscaleDialog.tier)}
+                    className="flex-1 py-5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white hover:bg-white/8 transition-all"
                   >
-                    <div className="text-2xl font-black">2K</div>
-                    <div className="text-xs text-slate-400 mt-1">2048px</div>
+                    <div className="text-xl font-semibold">2K</div>
+                    <div className="text-xs text-white/30 mt-1">2048px</div>
                   </button>
                 )}
                 {upscaleDialog.options.includes('4K') && (
-                  <button 
-                    onClick={() => executeUpscale('4K', upscaleDialog.tier)} 
-                    className="flex-1 py-6 bg-theme border border-theme-light rounded-2xl text-white hover:bg-theme-dark transition-all shadow-theme relative"
+                  <button
+                    onClick={() => executeUpscale('4K', upscaleDialog.tier)}
+                    className="flex-1 py-5 bg-blue-500/20 border border-blue-500/30 rounded-xl text-white hover:bg-blue-500/30 transition-all relative"
                   >
-                    <div className="text-2xl font-black">4K</div>
-                    <div className="text-xs text-white/70 mt-1">4096px</div>
-                    <span className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded-full">推荐</span>
+                    <div className="text-xl font-semibold">4K</div>
+                    <div className="text-xs text-white/50 mt-1">4096px</div>
+                    <span className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-bold px-2 py-0.5 rounded-full">推荐</span>
                   </button>
                 )}
               </div>
             </div>
-            
-            <button 
-              onClick={() => setUpscaleDialog(prev => ({ ...prev, show: false }))} 
-              className="w-full py-3 bg-slate-800 text-slate-400 rounded-xl text-sm font-bold hover:text-white transition-all"
+
+            <button
+              onClick={() => setUpscaleDialog(prev => ({ ...prev, show: false }))}
+              className="w-full py-2.5 bg-white/[0.04] border border-white/[0.06] text-white/40 rounded-xl text-sm font-medium hover:text-white/70 transition-all"
             >
               取消
             </button>

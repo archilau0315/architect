@@ -7,34 +7,25 @@ import gatewayConfig from "../config/gateway_config.json";
  * 所有请求都通过后端代理，前端不直接接触 API Key
  */
 const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const base = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
-  
-  // 遍历所有配置的网关，匹配 URL 并替换为代理路径
+
   for (const [key, config] of Object.entries(gateways)) {
     const gatewayConfig = config as any;
     if (gatewayConfig.url && gatewayConfig.proxy_path) {
-      // 匹配网关 URL 并替换为代理路径
       if (url.startsWith(gatewayConfig.url)) {
-        if (useOpenaiPath) {
-          return `https://api.kbitai.com.cn${gatewayConfig.proxy_path}/openai/v1`;
-        }
-        return url.replace(gatewayConfig.url, `https://api.kbitai.com.cn${gatewayConfig.proxy_path}`);
+        if (useOpenaiPath) return `${base}${gatewayConfig.proxy_path}/openai/v1`;
+        return url.replace(gatewayConfig.url, `${base}${gatewayConfig.proxy_path}`);
       }
     }
   }
-  
-  // 兼容旧配置：如果没有匹配到，使用默认的 ph8 代理
+
   if (url.includes('ph8.co')) {
-    if (useOpenaiPath) {
-      return 'https://api.kbitai.com.cn/api/ph8/openai/v1';
-    }
-    // 处理 https://ph8.co/openai/v1 格式的 URL
-    if (url.includes('ph8.co/openai/v1')) {
-      return url.replace('https://ph8.co', 'https://api.kbitai.com.cn/api/ph8');
-    }
-    return url.replace('https://ph8.co', 'https://api.kbitai.com.cn/api/ph8');
+    if (useOpenaiPath) return `${base}/api/ph8/openai/v1`;
+    return url.replace('https://ph8.co', `${base}/api/ph8`);
   }
-  
+
   return url;
 };
 
@@ -656,7 +647,7 @@ export const GeminiService = {
           ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
           resolve(canvas.toDataURL("image/png"));
         };
-        logo.src = "./Com_Logo.png";
+        logo.src = "/architect/Com_Logo.png";
       };
       img.src = base64;
     });
@@ -1708,10 +1699,13 @@ export const GeminiService = {
         // 构建用户消息内容（支持文本+图片）
         const userContent: any[] = [{ type: "text", text: prompt }];
         for (const f of files) {
-          if (f.data && f.mimeType) {
+          const mimeType = f.mimeType || f.type;
+          if (f.data && mimeType && mimeType.startsWith('image/')) {
+            // f.data 可能是完整 data URL 或纯 base64，统一处理
+            const dataUrl = f.data.startsWith('data:') ? f.data : `data:${mimeType};base64,${f.data}`;
             userContent.push({
               type: "image_url",
-              image_url: { url: `data:${f.mimeType};base64,${f.data}` }
+              image_url: { url: dataUrl }
             });
           }
         }
@@ -1729,11 +1723,32 @@ export const GeminiService = {
         console.log(`[Chat Gateway] Model: ${modelId}`);
         console.log(`[Chat Gateway] 图片数量: ${files.length}`);
 
+        // 获取认证 token
+        let authToken = '';
+        try {
+          const session = localStorage.getItem('architect-invite-session');
+          console.log('[Chat Gateway] Session存在:', !!session);
+          if (session) {
+            const sessionData = JSON.parse(session);
+            authToken = sessionData.token || '';
+            console.log('[Chat Gateway] Token存在:', !!authToken);
+            console.log('[Chat Gateway] Token前10位:', authToken ? authToken.substring(0, 10) + '...' : 'empty');
+          } else {
+            console.warn('[Chat Gateway] 未找到session，用户可能未登录');
+          }
+        } catch (e) {
+          console.error('[Chat Gateway] 获取token失败:', e);
+        }
+
+        if (!authToken) {
+          throw new Error('未登录或登录已过期，请重新登录');
+        }
+
         const response = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
-            // Authorization 头由后端代理自动添加
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
           },
           body: JSON.stringify({
             model: modelId,
@@ -1802,8 +1817,11 @@ export const GeminiService = {
 
     const parts: any[] = [{ text: prompt }];
     for (const f of files) {
-      if (f.data && f.mimeType) {
-        parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
+      const mimeType = f.mimeType || f.type;
+      if (f.data && mimeType) {
+        // 从 data URL 中提取纯 base64（Gemini inlineData 不接受 data URL 前缀）
+        const base64 = f.data.includes(',') ? f.data.split(',')[1] : f.data;
+        parts.push({ inlineData: { mimeType, data: base64 } });
       }
     }
 

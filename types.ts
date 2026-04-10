@@ -1,5 +1,17 @@
 
-export type AppTab = 'architect' | 'chat' | 'analyze' | 'video';
+export type AppTab = 'architect' | 'chat' | 'video';
+export type ConversationMode = 'chat' | 'architect' | 'video';
+
+export interface ConversationNode {
+  id: string;
+  type: 'session' | 'group';
+  name: string;
+  mode?: ConversationMode;
+  messages?: ExtendedChatMessage[];
+  children?: ConversationNode[];
+  timestamp: number;
+  isExpanded?: boolean;
+}
 export type CreativeDomain = 'architecture' | 'product' | 'art' | 'character';
 export type UserTier = 'free' | 'beta' | 'basic' | 'pro' | 'plus';
 
@@ -43,12 +55,23 @@ export interface ChatSession {
   timestamp: number;
 }
 
-export type AppTheme = 'indigo' | 'ocean' | 'forest' | 'sunset' | 'minimal';
+export type AppTheme = 'indigo' | 'ocean' | 'forest' | 'sunset' | 'minimal' | 'dark' | 'light';
+export type Language = 'zh-CN' | 'en-US' | 'ja-JP' | 'ko-KR' | 'es-ES' | 'fr-FR' | 'de-DE' | 'ru-RU';
 
 export interface UserPreferences {
   promptFontSize: number;
   chatFontSize: number;
   theme: AppTheme;
+  language: Language;            // 界面语言
+  // 新增个性化选项
+  accentColor: string;           // 主题色
+  borderRadius: 'sharp' | 'normal' | 'rounded' | 'pill';  // 圆角风格
+  density: 'compact' | 'normal' | 'comfortable';  // 界面密度
+  animationSpeed: 'none' | 'fast' | 'normal' | 'slow';  // 动画速度
+  showWelcomeMessage: boolean;   // 显示欢迎消息
+  autoSaveHistory: boolean;      // 自动保存历史
+  compactSidebar: boolean;       // 紧凑侧边栏
+  fontSize: 'small' | 'medium' | 'large';  // 全局字体大小
 }
 
 export interface CustomModel {

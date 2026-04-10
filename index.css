@@ -6,69 +6,218 @@
 @layer base {
   body {
     @apply antialiased text-slate-900 dark:text-slate-100;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-size: var(--base-font-size, 14px) !important;
+    line-height: 1.6;
+  }
+
+  * {
+    @apply focus-visible:outline-none;
+  }
+
+  /* 确保所有文本元素继承 body 的字体大小 */
+  p, span, div, button, input, textarea, label, a {
+    font-size: inherit;
   }
 }
 
 :root {
-  --theme-primary: #4F46E5;
+  --base-font-size: 14px;
+  /* 默认深色主题：优雅的深蓝紫渐变 - 科技感 */
+  --theme-primary: #6366F1;
   --theme-primary-light: #818CF8;
-  --theme-primary-dark: #4338CA;
-  --theme-accent: #6366F1;
-  --theme-accent-light: #A5B4FC;
-  --theme-gradient-from: #4F46E5;
+  --theme-primary-dark: #4F46E5;
+  --theme-accent: #06B6D4;
+  --theme-accent-light: #22D3EE;
+  --theme-gradient-from: #6366F1;
   --theme-gradient-to: #818CF8;
-  --theme-shadow: rgba(79, 70, 229, 0.4);
+  --theme-shadow: rgba(99, 102, 241, 0.4);
+  --theme-ring: rgba(99, 102, 241, 0.3);
+  --glow-color: rgba(99, 102, 241, 0.5);
+
+  /* Animation tokens */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Dark mode colors (default) */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] {
+  /* 亮色主题：优雅的靛蓝色 - 专业感 */
+  --theme-primary: #4F46E5;
+  --theme-primary-light: #6366F1;
+  --theme-primary-dark: #4338CA;
+  --theme-accent: #0EA5E9;
+  --theme-accent-light: #38BDF8;
+  --theme-gradient-from: #4F46E5;
+  --theme-gradient-to: #6366F1;
+  --theme-shadow: rgba(79, 70, 229, 0.2);
   --theme-ring: rgba(79, 70, 229, 0.3);
+  --glow-color: rgba(79, 70, 229, 0.3);
+
+  /* Light mode colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a5568;
+  --text-tertiary: #718096;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] {
+  --theme-primary: #8B5CF6;
+  --theme-primary-light: #A78BFA;
+  --theme-primary-dark: #7C3AED;
+  --theme-accent: #EC4899;
+  --theme-accent-light: #F472B6;
+  --theme-gradient-from: #8B5CF6;
+  --theme-gradient-to: #A78BFA;
+  --theme-shadow: rgba(139, 92, 246, 0.4);
+  --theme-ring: rgba(139, 92, 246, 0.3);
+  --glow-color: rgba(139, 92, 246, 0.5);
+
+  /* Dark mode colors */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="indigo"] {
+  --theme-primary: #8B5CF6;
+  --theme-primary-light: #A78BFA;
+  --theme-primary-dark: #7C3AED;
+  --theme-accent: #EC4899;
+  --theme-accent-light: #F472B6;
+  --theme-gradient-from: #8B5CF6;
+  --theme-gradient-to: #A78BFA;
+  --theme-shadow: rgba(139, 92, 246, 0.4);
+  --theme-ring: rgba(139, 92, 246, 0.3);
+  --glow-color: rgba(139, 92, 246, 0.5);
+
+  /* Dark mode colors */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="ocean"] {
-  --theme-primary: #0369A1;
-  --theme-primary-light: #38BDF8;
-  --theme-primary-dark: #075985;
-  --theme-accent: #0EA5E9;
-  --theme-accent-light: #7DD3FC;
-  --theme-gradient-from: #0369A1;
-  --theme-gradient-to: #38BDF8;
-  --theme-shadow: rgba(3, 105, 161, 0.4);
-  --theme-ring: rgba(3, 105, 161, 0.3);
+  --theme-primary: #06B6D4;
+  --theme-primary-light: #22D3EE;
+  --theme-primary-dark: #0891B2;
+  --theme-accent: #8B5CF6;
+  --theme-accent-light: #A78BFA;
+  --theme-gradient-from: #06B6D4;
+  --theme-gradient-to: #22D3EE;
+  --theme-shadow: rgba(6, 182, 212, 0.4);
+  --theme-ring: rgba(6, 182, 212, 0.3);
+  --glow-color: rgba(6, 182, 212, 0.5);
+
+  /* Keep dark mode colors for ocean theme */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="forest"] {
-  --theme-primary: #059669;
+  --theme-primary: #10B981;
   --theme-primary-light: #34D399;
-  --theme-primary-dark: #047857;
-  --theme-accent: #10B981;
-  --theme-accent-light: #6EE7B7;
-  --theme-gradient-from: #059669;
+  --theme-primary-dark: #059669;
+  --theme-accent: #14B8A6;
+  --theme-accent-light: #5EEAD4;
+  --theme-gradient-from: #10B981;
   --theme-gradient-to: #34D399;
-  --theme-shadow: rgba(5, 150, 105, 0.4);
-  --theme-ring: rgba(5, 150, 105, 0.3);
+  --theme-shadow: rgba(16, 185, 129, 0.4);
+  --theme-ring: rgba(16, 185, 129, 0.3);
+  --glow-color: rgba(16, 185, 129, 0.5);
+
+  /* Keep dark mode colors for forest theme */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="sunset"] {
-  --theme-primary: #EA580C;
-  --theme-primary-light: #FB923C;
-  --theme-primary-dark: #C2410C;
-  --theme-accent: #F97316;
-  --theme-accent-light: #FDBA74;
-  --theme-gradient-from: #EA580C;
-  --theme-gradient-to: #FB923C;
-  --theme-shadow: rgba(234, 88, 12, 0.4);
-  --theme-ring: rgba(234, 88, 12, 0.3);
+  --theme-primary: #F59E0B;
+  --theme-primary-light: #FBBF24;
+  --theme-primary-dark: #D97706;
+  --theme-accent: #EF4444;
+  --theme-accent-light: #F87171;
+  --theme-gradient-from: #F59E0B;
+  --theme-gradient-to: #FBBF24;
+  --theme-shadow: rgba(245, 158, 11, 0.4);
+  --theme-ring: rgba(245, 158, 11, 0.3);
+  --glow-color: rgba(245, 158, 11, 0.5);
+
+  /* Keep dark mode colors for sunset theme */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
 [data-theme="minimal"] {
-  --theme-primary: #525252;
-  --theme-primary-light: #A3A3A3;
-  --theme-primary-dark: #404040;
-  --theme-accent: #737373;
-  --theme-accent-light: #D4D4D4;
-  --theme-gradient-from: #525252;
-  --theme-gradient-to: #A3A3A3;
-  --theme-shadow: rgba(82, 82, 82, 0.4);
-  --theme-ring: rgba(82, 82, 82, 0.3);
+  --theme-primary: #6B7280;
+  --theme-primary-light: #9CA3AF;
+  --theme-primary-dark: #4B5563;
+  --theme-accent: #8B5CF6;
+  --theme-accent-light: #A78BFA;
+  --theme-gradient-from: #6B7280;
+  --theme-gradient-to: #9CA3AF;
+  --theme-shadow: rgba(107, 114, 128, 0.4);
+  --theme-ring: rgba(107, 114, 128, 0.3);
+  --glow-color: rgba(107, 114, 128, 0.5);
+
+  /* Keep dark mode colors for minimal theme */
+  --bg-primary: #0e0e0e;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.2);
 }
 
+/* Theme utilities */
 .bg-theme { background-color: var(--theme-primary); }
 .bg-theme-light { background-color: var(--theme-primary-light); }
 .bg-theme-dark { background-color: var(--theme-primary-dark); }
@@ -91,19 +240,294 @@
 .group:hover .group-hover\:text-theme { color: var(--theme-primary); }
 .peer:checked ~ .peer-checked\:bg-theme { background-color: var(--theme-primary); }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* Scrollbar */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
 }
 
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500;
-}
-
+/* Glass effects */
 .glass-panel {
   @apply bg-white/85 dark:bg-slate-900/40 backdrop-blur-xl border border-slate-300 dark:border-slate-800/60 shadow-2xl;
 }
+
+.glass-card {
+  @apply bg-white/60 dark:bg-slate-900/60 backdrop-blur-2xl border border-white/20 dark:border-white/10;
+}
+
+/* Glow effects */
+.glow {
+  box-shadow: 0 0 20px var(--glow-color), 0 0 40px var(--glow-color);
+}
+
+.glow-sm {
+  box-shadow: 0 0 10px var(--glow-color);
+}
+
+.glow-text {
+  text-shadow: 0 0 20px var(--glow-color);
+}
+
+/* Gradient text */
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500;
+}
+
+.text-gradient-theme {
+  background: linear-gradient(135deg, var(--theme-gradient-from), var(--theme-gradient-to));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animated gradient background */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  background-size: 1000px 100%;
+  animation: shimmer 3s infinite;
+}
+
+/* Pulse glow */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--glow-color); }
+  50% { box-shadow: 0 0 40px var(--glow-color), 0 0 60px var(--glow-color); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Light Mode Overrides - Only apply when .light-mode class exists */
+.light-mode {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+/* Force ALL text to be dark in light mode */
+.light-mode * {
+  color: #1a1a1a !important;
+}
+
+.light-mode span,
+.light-mode p,
+.light-mode div,
+.light-mode button,
+.light-mode a,
+.light-mode label,
+.light-mode input,
+.light-mode textarea {
+  color: #1a1a1a !important;
+}
+
+/* Sidebar in light mode */
+.light-mode aside {
+  background-color: #f8f9fa !important;
+}
+
+.light-mode aside * {
+  background-color: transparent !important;
+  color: #1a1a1a !important;
+}
+
+/* Input area in light mode */
+.light-mode div[class*="rounded-2xl"] {
+  background-color: #ffffff !important;
+}
+
+.light-mode div[class*="rounded-2xl"] * {
+  color: #1a1a1a !important;
+}
+
+/* Override ALL background colors except colored ones in light mode */
+.light-mode [class*="bg-[#"] {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Borders in light mode */
+.light-mode [class*="border"] {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Preserve colored elements in light mode */
+.light-mode [class*="text-blue-"],
+.light-mode [class*="text-emerald-"],
+.light-mode [class*="text-rose-"],
+.light-mode [class*="text-red-"],
+.light-mode [class*="text-green-"],
+.light-mode [class*="text-amber-"],
+.light-mode [class*="text-indigo-"],
+.light-mode [class*="text-purple-"],
+.light-mode [class*="text-pink-"],
+.light-mode [class*="text-yellow-"],
+.light-mode [class*="text-orange-"] {
+  color: revert !important;
+}
+
+.light-mode [class*="bg-blue-"],
+.light-mode [class*="bg-emerald-"],
+.light-mode [class*="bg-rose-"],
+.light-mode [class*="bg-red-"],
+.light-mode [class*="bg-green-"],
+.light-mode [class*="bg-amber-"],
+.light-mode [class*="bg-indigo-"],
+.light-mode [class*="bg-purple-"] {
+  background-color: revert !important;
+}
+
+/* Form elements in light mode */
+.light-mode input,
+.light-mode textarea,
+.light-mode select {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   全局主题色映射 — 让 Tailwind 活跃色类跟随 --theme-primary
+   覆盖组件内 text-indigo-* / text-blue-* / bg-indigo-* / bg-blue-* 等
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 主题色：文字 */
+[class*="text-indigo-4"],
+[class*="text-blue-4"],
+[class*="text-violet-4"] { color: var(--theme-primary-light) !important; }
+
+[class*="text-indigo-5"],
+[class*="text-blue-5"],
+[class*="text-violet-5"] { color: var(--theme-primary) !important; }
+
+[class*="text-indigo-6"],
+[class*="text-blue-6"],
+[class*="text-violet-6"] { color: var(--theme-primary-dark) !important; }
+
+/* 主题色：背景（仅半透明变体，保留原透明度语义） */
+[class*="bg-indigo-5"][class*="/"],
+[class*="bg-blue-5"][class*="/"] {
+  background-color: color-mix(in srgb, var(--theme-primary) 20%, transparent) !important;
+}
+[class*="bg-indigo-6"][class*="/"],
+[class*="bg-blue-6"][class*="/"] {
+  background-color: color-mix(in srgb, var(--theme-primary) 30%, transparent) !important;
+}
+
+/* 主题色：实底按钮（bg-blue-500, bg-indigo-600 等） */
+.bg-blue-500, .hover\:bg-blue-500:hover,
+.bg-indigo-600, .hover\:bg-indigo-600:hover,
+.bg-indigo-500, .hover\:bg-indigo-500:hover {
+  background-color: var(--theme-primary) !important;
+}
+.bg-blue-500\/80, .bg-indigo-600\/80 {
+  background-color: color-mix(in srgb, var(--theme-primary) 80%, transparent) !important;
+}
+.hover\:bg-indigo-500:hover { background-color: var(--theme-primary-light) !important; }
+
+/* 主题色：边框 */
+[class*="border-indigo-5"],
+[class*="border-blue-5"] { border-color: color-mix(in srgb, var(--theme-primary) 40%, transparent) !important; }
+
+/* 主题色：ring */
+[class*="ring-indigo-5"],
+[class*="ring-blue-5"] { --tw-ring-color: var(--theme-ring) !important; }
+
+/* 主题色：focus ring */
+.focus\:ring-2:focus { --tw-ring-color: var(--theme-ring) !important; }
+.focus-within\:border-white\/20:focus-within { border-color: var(--border-hover) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   全局字体大小继承 — 让 text-[Npx] 固定写法也响应 --base-font-size
+   通过 data-font-size 属性在 <html> 上控制缩放比例
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root { --font-scale: 1; }
+html[data-font-size="small"]  { --font-scale: 0.857; }  /* 12/14 */
+html[data-font-size="medium"] { --font-scale: 1;     }  /* 14/14 */
+html[data-font-size="large"]  { --font-scale: 1.143; }  /* 16/14 */
+
+/* 对所有固定 text-[Npx] 做缩放补偿 */
+body { font-size: calc(14px * var(--font-scale)) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   多语言字体支持 — 按 <html lang="xx"> 切换字体族
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root { --font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+html[lang="zh-CN"], html[lang="zh"] {
+  --font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+}
+html[lang="ja-JP"], html[lang="ja"] {
+  --font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", ui-sans-serif, system-ui, sans-serif;
+}
+html[lang="ko-KR"], html[lang="ko"] {
+  --font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", ui-sans-serif, system-ui, sans-serif;
+}
+html[lang="ru-RU"], html[lang="ru"] {
+  --font-family: "PT Sans", "Open Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+body { font-family: var(--font-family) !important; }
+
+
+.light-mode ::placeholder {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Buttons in light mode */
+.light-mode button {
+  color: #1a1a1a !important;
+}
+
+.light-mode button:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* SVG in light mode */
+.light-mode svg {
+  color: #1a1a1a !important;
+  stroke: currentColor !important;
+}
+
+/* Scrollbar in light mode */
+.light-mode ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
