@@ -3,6 +3,8 @@
  * 注意：API Key 由后端管理，前端不再直接接触
  */
 
+import { getProxiedUrl } from './apiService';
+
 export interface Ph8UsageData {
   total_tokens: number;
   prompt_tokens: number;
@@ -101,11 +103,14 @@ export const Ph8UsageService = {
     // API Key 由后端代理自动添加，前端不再传递
     console.log('[Ph8Usage] 正在通过后端代理获取用量数据...');
 
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+    
     const endpoints = [
-      '/api/ph8/usage',
-      '/api/ph8/dashboard/usage',
-      '/api/ph8-openai/usage',
-      '/api/ph8/users/me'
+      `${baseUrl}/api/ph8/usage`,
+      `${baseUrl}/api/ph8/dashboard/usage`,
+      `${baseUrl}/api/ph8-openai/usage`,
+      `${baseUrl}/api/ph8/users/me`
     ];
 
     for (const url of endpoints) {

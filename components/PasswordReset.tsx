@@ -24,9 +24,12 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     }
   }, []);
 
+  const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3001' : '';
+
   const verifyToken = async (tokenToVerify: string) => {
     try {
-      const response = await fetch(`/api/auth/verify-reset-token?token=${tokenToVerify}`);
+      const response = await fetch(`${apiBase}/api/auth/verify-reset-token?token=${tokenToVerify}`);
       const data = await response.json();
       
       if (data.success) {
@@ -52,7 +55,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
+      const response = await fetch(`${apiBase}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -93,7 +96,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await fetch(`${apiBase}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword })

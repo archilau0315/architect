@@ -10,7 +10,42 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        strictPort: false,
+        origin: 'http://localhost:3000/architect',
         proxy: {
+          '/architect/api/auth': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/architect\/api\/auth/, '/api/auth'),
+            secure: true,
+            timeout: 30000
+          },
+          '/api/user': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            secure: true,
+            timeout: 30000
+          },
+          '/api/content': {
+            target: 'http://localhost:3001',
+            changeOrigin: true,
+            timeout: 30000
+          },
+          '/api/usage': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            secure: true,
+            timeout: 30000
+          },
+          '/api/ph8/user-info': {
+            target: 'http://localhost:3001',
+            changeOrigin: true,
+          },
+          '/architect/api/ph8/user-info': {
+            target: 'http://localhost:3001',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/architect/, ''),
+          },
           '/api/ph8': {
             target: 'https://ph8.co',
             changeOrigin: true,

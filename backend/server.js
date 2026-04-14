@@ -106,6 +106,16 @@ app.post('/api/logs/download', contentController.logDownload);
 app.post('/api/admin/login', adminController.login);
 
 app.get('/api/admin/users', adminController.getUsers);
+app.get('/api/admin/users/:id', adminController.getUser);
+app.put('/api/admin/users/:id', adminController.updateUser);
+app.delete('/api/admin/users/:id', adminController.deleteUser);
+app.get('/api/admin/dashboard', adminController.getDashboard);
+app.get('/api/admin/logs', adminController.getLogs);
+app.get('/api/admin/configs', adminController.getConfigs);
+app.put('/api/admin/configs/:key', adminController.updateConfig);
+app.get('/api/admin/beta-requests', adminController.getBetaRequests);
+app.post('/api/admin/beta-requests/:id/approve', adminController.approveBetaRequest);
+app.post('/api/admin/beta-requests/:id/reject', adminController.rejectBetaRequest);
 
 // ==================== 定时任务：每日重置 ====================
 // 每天凌晨 0:00 重置每日使用计数

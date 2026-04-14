@@ -143,7 +143,7 @@
                         // 登录成功，保存token并跳转到仪表盘
                         localStorage.setItem('admin_token', data.data.token);
                         localStorage.setItem('admin_user', JSON.stringify(data.data.admin));
-                        window.location.href = 'dashboard.php';
+                        window.location.href = 'dashboard.html';
                     } else {
                         // 登录失败
                         alert(data.error || '登录失败，请检查用户名和密码');

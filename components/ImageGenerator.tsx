@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GeminiService, ImageGenerationConfig, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
-import { CustomModel, Point, Stroke, HistoryItem, CreativeDomain, UserTier } from '../types.ts';
-
+import { CustomModel, Point, Stroke, HistoryItem, CreativeDomain, UserTier, Language } from '../types.ts';
+import { getTranslation } from '../i18n/locales.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 
@@ -18,8 +18,9 @@ interface ImageGeneratorProps {
   domain: CreativeDomain;
   userTier?: UserTier;
   points: { daily: number; purchased: number };
-  onConsumePoints: (amount: number) => boolean;
+  onConsumePoints: (amount: number) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
+  language?: Language;
 }
 
 type UploadTarget = 'BASE' | 'SLOT_A' | 'SLOT_B' | 'SLOT_C';
@@ -36,7 +37,8 @@ const PRESET_COLORS = [
 
 const WORKSHOP_STATE_KEY = 'architect-workshop-state-v1';
 
-const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageGenerated, onReset, history, instructions, fontSize = 15, modelConfig, onBusyStateChange, domain, userTier = 'free', points, onConsumePoints, useThirdPartyGateway }) => {
+const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageGenerated, onReset, history, instructions, fontSize = 15, modelConfig, onBusyStateChange, domain, userTier = 'free', points, onConsumePoints, useThirdPartyGateway, language = 'zh-CN' }) => {
+  const t = getTranslation(language);
   const isDeveloper = userTier === 'pro' || userTier === 'plus';
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
@@ -46,6 +48,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   const [selectedImageIndices, setSelectedImageIndices] = useState<number[]>([]);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number | null>(null);
+  const [isMainImageHovered, setIsMainImageHovered] = useState(false);
   const [isCompositeMode, setIsCompositeMode] = useState(false);
   
   const [customRatioW, setCustomRatioW] = useState<number>(1);
@@ -55,6 +58,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   const [activePreset, setActivePreset] = useState<string>("1:1");
 
   const [config, setConfig] = useState<ImageGenerationConfig>({ aspectRatio: "1:1", imageSize: "1K", modelTier: "FAST", imageCount: 1, temperature: 1.0, top_p: 0.95 });
+  // 强制单图模式
+  const effectiveImageCount = 1;
   
   const [baseRefs, setBaseRefs] = useState<string[]>([]);
   const [baseRefsOriginalSizes, setBaseRefsOriginalSizes] = useState<{width: number, height: number}[]>([]);
@@ -344,6 +349,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     setIsMarkingMode(false); setPolyPoints([]); setIsMidStroke(false); setIsRightDragging(false); setCurrentStroke(null);
   };
 
+  const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+
   const syncRatioFromImage = (dataUrl: string) => {
     const img = new Image();
     img.onload = () => { setCustomRatioW(img.naturalWidth); setCustomRatioH(img.naturalHeight); setActivePreset("CUSTOM"); };
@@ -376,13 +383,13 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     
     const maxDim = Math.max(imgInfo.w, imgInfo.h);
     const options: ('2K' | '4K')[] = [];
-    
+
     if (maxDim < 2048) {
       options.push('2K', '4K');
     } else if (maxDim < 4096) {
       options.push('4K');
     } else {
-      alert('当前图片已是 4K 分辨率，无需放大');
+      alert(t.parameters.alreadyMax4K);
       return;
     }
     
@@ -463,13 +470,13 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         const upscaleCost = targetSize === '4K' ? 250 : 180; // 放大的积分成本（万分之一元）
         Ph8UsageService.recordUsage(
           userId,
-          { total: tokenCost },
+          { total: upscaleCost },
           targetTier || 'FAST',
           'image_upscale'
         ).catch(err => console.error('记录token使用失败:', err));
       }
     } catch (err: any) {
-      if (err.name !== 'AbortError') alert(`${targetSize} 放大失败: ${err.message}`);
+      if (err.name !== 'AbortError') alert(`${targetSize} ${t.parameters.upscaleFailed}: ${err.message}`);
     } finally { 
       setIsGenerating(false); 
       onBusyStateChange?.(false); 
@@ -570,7 +577,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
             // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
             if (realCost > 0 && onConsumePoints) {
               const userPoints = Math.ceil(realCost / 10);
-              const deducted = onConsumePoints(userPoints);
+              const deducted = await onConsumePoints(userPoints);
               if (!deducted) {
                 console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
               }
@@ -686,7 +693,14 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   };
   const openUpload = (uploadTargetVal: UploadTarget) => { setUploadTarget(uploadTargetVal); uploadInputRef.current?.click(); };
 
-  const SlotFrame = ({ title, badge, values, onUpload, onRemove, single = false, showBrush = false, subtitle = "", locked = false, onToggleLock, lockedIndices = [], onUpscale }: any) => (
+  const getResolutionLabel = (w: number, h: number) => {
+    const maxDim = Math.max(w, h);
+    if (maxDim >= 4096) return { label: '4K', next: null, color: 'text-emerald-400' };
+    if (maxDim >= 2048) return { label: '2K', next: '4K', color: 'text-blue-400' };
+    return { label: '1K', next: '2K', color: 'text-amber-400' };
+  };
+
+  const SlotFrame = ({ title, badge, values, onUpload, onRemove, single = false, showBrush = false, subtitle = "", locked = false, onToggleLock, lockedIndices = [], onUpscale, originalSizes = [] }: any) => (
     <div className={`flex-1 min-h-[260px] rounded-[2rem] border ${(locked || lockedIndices.length > 0) ? `border-${themeColor}-500 ring-2 ring-${themeColor}-500/20 shadow-xl` : 'border-slate-200 dark:border-slate-800'} bg-white/40 dark:bg-slate-900/20 glass-card flex flex-col overflow-hidden transition-all hover:shadow-2xl`}>
        <div className="px-5 py-3 flex items-center justify-between border-b border-slate-100 dark:border-white/5 bg-white/60 dark:bg-slate-900/60">
           <div className="flex flex-col"><span className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest italic">{title}</span><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase">{badge}</span></div>
@@ -700,6 +714,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                  return (
                    <div key={i} className={`relative group rounded-xl overflow-hidden border border-slate-100 dark:border-white/5 ${single ? 'w-full h-full' : 'aspect-square shadow-sm'} ${isThisImageLocked ? `ring-2 ring-${themeColor}-500` : ''}`}>
                      <img src={v} className="w-full h-full object-cover" />
+                     {originalSizes[i] && (() => { const { label, next, color } = getResolutionLabel(originalSizes[i].width, originalSizes[i].height); return (<div className={`absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded-md text-[9px] font-black pointer-events-none ${color}`}>{label}{next ? ` → ${next}` : ' MAX'}</div>); })()}
                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
                         <div className="flex items-center gap-2">
                           {onToggleLock && (
@@ -734,10 +749,13 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                 {["1:1", "16:9", "4:3", "3:4", "CUSTOM"].map(r => (<button key={r} disabled={lockSource !== null || lockedIndices.length > 0} onClick={() => { setActivePreset(r); if (r !== 'CUSTOM') { const [w, h] = r.split(':').map(Number); setCustomRatioW(w); setCustomRatioH(h); } }} className={`flex-1 py-2 text-[9px] font-black rounded-lg transition-all ${activePreset === r ? `bg-${themeColor}-600 text-white shadow-lg` : 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400'}`}>{r}</button>))}
              </div>
              {(activePreset === 'CUSTOM' || lockSource !== null || lockedIndices.length > 0) && (
-               <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden"><span className="pl-2 text-[8px] font-black text-slate-500 dark:text-slate-400">W</span><input type="number" disabled={lockSource !== null || lockedIndices.length > 0} value={customRatioW} onChange={(e) => setCustomRatioW(parseInt(e.target.value) || 1)} className="w-full bg-transparent p-1 text-[10px] font-mono text-center outline-none text-slate-700 dark:text-slate-300" /></div>
-                  <span className="text-slate-300 font-black">:</span>
-                  <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden"><span className="pl-2 text-[8px] font-black text-slate-500 dark:text-slate-400">H</span><input type="number" disabled={lockSource !== null || lockedIndices.length > 0} value={customRatioH} onChange={(e) => setCustomRatioH(parseInt(e.target.value) || 1)} className="w-full bg-transparent p-1 text-[10px] font-mono text-center outline-none text-slate-700 dark:text-slate-300" /></div>
+               <div className="flex flex-col gap-1">
+                 <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden"><span className="pl-2 text-[8px] font-black text-slate-500 dark:text-slate-400">W</span><input type="number" disabled={lockSource !== null || lockedIndices.length > 0} value={customRatioW} onChange={(e) => setCustomRatioW(parseInt(e.target.value) || 1)} className="w-full bg-transparent p-1 text-[10px] font-mono text-center outline-none text-slate-700 dark:text-slate-300" /></div>
+                    <span className="text-slate-300 font-black">:</span>
+                    <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-white/5 overflow-hidden"><span className="pl-2 text-[8px] font-black text-slate-500 dark:text-slate-400">H</span><input type="number" disabled={lockSource !== null || lockedIndices.length > 0} value={customRatioH} onChange={(e) => setCustomRatioH(parseInt(e.target.value) || 1)} className="w-full bg-transparent p-1 text-[10px] font-mono text-center outline-none text-slate-700 dark:text-slate-300" /></div>
+                 </div>
+                 {(lockSource !== null || lockedIndices.length > 0) && (() => { const g = gcd(customRatioW, customRatioH); return <span className={`text-[8px] font-black text-${themeColor}-500 text-center`}>底图比例 {customRatioW/g}:{customRatioH/g}</span>; })()}
                </div>
              )}
           </div>
@@ -782,8 +800,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
           <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">生成数量 / Count</p>
           <div className="flex gap-2">
             {[1, 2, 3, 4].map(n => (
-              <button 
-                key={n} 
+              <button
+                key={n}
                 onClick={() => setConfig({...config, imageCount: n})}
                 className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${config.imageCount === n ? `bg-${themeColor}-600 text-white shadow-md` : 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400'}`}
               >
@@ -849,7 +867,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
           </>
         ) : (
           <div className="col-span-3">
-             <SlotFrame title="Base References" badge="Normal Mode" values={baseRefs} allowMultiLock lockedIndices={lockedIndices} onUpload={() => openUpload('BASE')} onRemove={(i: number) => { setBaseRefs(prev => prev.filter((_, idx) => idx !== i)); setBaseRefsOriginalSizes(prev => prev.filter((_, idx) => idx !== i)); setLockedIndices(prev => prev.filter(idx => idx !== i)); if(i === 0) { setMaskRefB(null); setStrokesMap(p => ({...p, INPAINT: []})); } }} onToggleLock={(i: number) => { setLockedIndices(prev => { const exists = prev.includes(i); const next = exists ? prev.filter(idx => idx !== i) : [...prev, i].sort(); if (!exists && next.length > 0) syncRatioFromImage(baseRefs[next[0]]); return next; }); }} showBrush={baseRefs.length > 0} onUpscale={(i: number) => triggerUpscale(baseRefs[i])} />
+             <SlotFrame title="Base References" badge="Normal Mode" values={baseRefs} allowMultiLock lockedIndices={lockedIndices} onUpload={() => openUpload('BASE')} onRemove={(i: number) => { setBaseRefs(prev => prev.filter((_, idx) => idx !== i)); setBaseRefsOriginalSizes(prev => prev.filter((_, idx) => idx !== i)); setLockedIndices(prev => prev.filter(idx => idx !== i)); if(i === 0) { setMaskRefB(null); setStrokesMap(p => ({...p, INPAINT: []})); } }} onToggleLock={(i: number) => { setLockedIndices(prev => { const exists = prev.includes(i); const next = exists ? prev.filter(idx => idx !== i) : [...prev, i].sort(); if (!exists && next.length > 0) syncRatioFromImage(baseRefs[next[0]]); return next; }); }} showBrush={baseRefs.length > 0} onUpscale={(i: number) => triggerUpscale(baseRefs[i])} originalSizes={baseRefsOriginalSizes} />
           </div>
         )}
       </div>
@@ -907,47 +925,80 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
       <div className="flex flex-col items-center gap-10">
         <div className="flex flex-col items-center gap-4">
-          <button onClick={handleGenerate} className={`px-20 py-4 rounded-2xl text-base font-semibold tracking-wide shadow-xl transition-all active:scale-95 bg-${themeColor}-600 text-white hover:bg-${themeColor}-500`}>{isGenerating ? "渲染中..." : (isCompositeMode ? "执行基因重组" : "执行渲染")}</button>
+          <button onClick={handleGenerate} className={`px-20 py-4 rounded-2xl text-base font-semibold tracking-wide shadow-xl transition-all active:scale-95 cursor-pointer ${isGenerating ? `bg-white hover:bg-slate-50 text-rose-600 border border-rose-300 dark:bg-white dark:hover:bg-slate-50 dark:text-rose-600 dark:border-rose-300` : `bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 dark:bg-${themeColor}-600 dark:hover:bg-${themeColor}-700 dark:text-white dark:border-transparent`}`}>
+            {isGenerating ? (
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                停止生成
+              </span>
+            ) : (isCompositeMode ? "执行基因重组" : "执行渲染")}
+          </button>
         </div>
-        <div className="w-full min-h-[600px] bg-[#111111] rounded-2xl border border-white/[0.06] flex items-center justify-center p-10 relative overflow-hidden">
+        <div className="w-full min-h-[600px] bg-[#111111] rounded-2xl border border-white/[0.06] flex items-center justify-center p-10 relative overflow-visible">
            {isGenerating && <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-3xl z-[50] flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300"><div className={`w-16 h-16 border-4 border-${themeColor}-500 border-t-transparent rounded-full animate-spin`} /><p className="text-white font-black uppercase tracking-widest">Synthesis Progressing...</p></div>}
            {generatedImages.length > 0 ? (() => {
              const activeIdx = hoveredImageIndex ?? 0;
              return (
                <div className="flex flex-col items-center gap-4 w-full">
-                 <div className="flex items-center gap-6">
-                   <div className="relative cursor-zoom-in" onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
-                     <img ref={mainImageRef} src={watermarkedImages[activeIdx] || generatedImages[activeIdx]} className="max-h-[60vh] rounded-xl shadow-2xl border border-white/10" alt="Result" />
-                     {imgNaturalSize && (<div className="absolute top-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 text-white font-mono text-[10px] font-black tracking-widest">{imgNaturalSize.w} × {imgNaturalSize.h} PX</div>)}
-                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[9px] text-white/50 font-medium tracking-wider pointer-events-none whitespace-nowrap">© AI Generated | 预览已添加溯源水印</div>
+                 {/* 层1：主图区 */}
+                 <div className="relative cursor-zoom-in group w-full flex justify-center" onMouseEnter={() => setIsMainImageHovered(true)} onMouseLeave={() => setIsMainImageHovered(false)} onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
+                   <img ref={mainImageRef} src={watermarkedImages[activeIdx] || generatedImages[activeIdx]} className="max-h-[60vh] rounded-xl shadow-2xl border border-white/10 transition-transform duration-300 origin-center" style={{ transform: isMainImageHovered ? 'scale(1.02)' : 'scale(1)' }} alt="Result" />
+                   {imgNaturalSize && <div className="absolute top-3 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-white font-mono text-[10px] font-black tracking-widest pointer-events-none">{imgNaturalSize.w} × {imgNaturalSize.h}</div>}
+                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                     <div className="bg-black/50 backdrop-blur-sm rounded-full p-3"><svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></div>
                    </div>
-                   <div className="flex flex-col gap-3 shrink-0">
-                     {previousImages.length > 0 && (
-                       <button onClick={handleUndo} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="回退上一版本">
-                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-[9px] text-white/50 pointer-events-none whitespace-nowrap">© AI Generated | 预览已添加溯源水印</div>
+                 </div>
+                 {/* 层2：操作栏 */}
+                 <div className="flex flex-col items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 pt-2 pb-2.5 shadow-lg">
+                   <div className={`text-[9px] font-black uppercase tracking-widest text-${themeColor}-500 pb-1 border-b border-slate-100 dark:border-slate-800 w-full text-center`}>
+                     当前操作：图 {activeIdx + 1}{generatedImages.length > 1 ? ` / 共 ${generatedImages.length} 张` : ''}
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <button onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all" title="全屏查看">
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                       <span className="text-[9px] font-medium">全屏</span>
+                     </button>
+                     <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
+                     <button onClick={(e) => handleDownload(e, false)} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all" title="带水印下载">
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                       <span className="text-[9px] font-medium">标准下载</span>
+                     </button>
+                     <button onClick={(e) => handleDownload(e, true)} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${isDeveloper ? `hover:bg-${themeColor}-50 dark:hover:bg-${themeColor}-900/30 text-${themeColor}-600 dark:text-${themeColor}-400` : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'}`} title={isDeveloper ? '无水印原图下载' : '升级 PRO/PLUS 解锁无水印下载'}>
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                       <span className="text-[9px] font-medium">{isDeveloper ? '原图下载' : '🔒 原图'}</span>
+                     </button>
+                     <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
+                     <button onClick={(e) => { e.stopPropagation(); if (!window.confirm(`将对图 ${activeIdx + 1} 进行局部修改，确认继续？`)) return; openMarkingMode('INPAINT'); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all" title="局部修改">
+                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                       <span className="text-[9px] font-medium">{t.parameters.inpaintEdit}</span>
+                     </button>
+                     <div className="flex flex-col items-center gap-1">
+                       <div className="flex gap-1">
+                         <button onClick={(e) => { e.stopPropagation(); const img = generatedImages[activeIdx]; if (!img) return; const i = new Image(); i.onload = () => { const max = Math.max(i.naturalWidth, i.naturalHeight); if (max >= 2048) { alert(t.parameters.alreadyMax2K); return; } setUpscaleDialog({ show: true, image: img, width: i.naturalWidth, height: i.naturalHeight, options: ['2K'], tier: 'FAST' }); }; i.src = img; }} className="px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all text-[10px] font-black border border-slate-200 dark:border-slate-700" title="快捷放大到2K">2K</button>
+                         <button onClick={(e) => { e.stopPropagation(); const img = generatedImages[activeIdx]; if (!img) return; const i = new Image(); i.onload = () => { const max = Math.max(i.naturalWidth, i.naturalHeight); if (max >= 4096) { alert(t.parameters.alreadyMax4K); return; } setUpscaleDialog({ show: true, image: img, width: i.naturalWidth, height: i.naturalHeight, options: ['4K'], tier: 'FAST' }); }; i.src = img; }} className="px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all text-[10px] font-black border border-slate-200 dark:border-slate-700" title="快捷放大到4K">4K</button>
+                       </div>
+                       <span className="text-[9px] font-medium text-slate-500">{t.parameters.hdUpscale}</span>
+                     </div>
+                     {previousImages.length > 0 && <>
+                       <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
+                       <button onClick={handleUndo} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all" title="回退上一版本">
+                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                         <span className="text-[9px] font-medium">回退</span>
                        </button>
-                     )}
-                     <button onClick={(e) => handleDownload(e, false)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="带水印下载">
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                     </button>
-                     <button onClick={(e) => handleDownload(e, true)} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="无水印下载">
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                     </button>
-                     <button onClick={handleUpscale} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="放大图片">
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>
-                     </button>
-                     <button onClick={(e) => { e.stopPropagation(); openMarkingMode('INPAINT'); }} className="w-12 h-12 flex items-center justify-center bg-theme/80 backdrop-blur-xl border border-theme-light/30 rounded-full text-white hover:bg-theme transition-all shadow-xl shadow-theme/20" title="局部修改">
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09-3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-                     </button>
+                     </>}
                    </div>
                  </div>
+                 {/* 层3：缩略图条（多图时显示） */}
                  {generatedImages.length > 1 && (
                    <div className="flex gap-3 flex-wrap justify-center">
                      {generatedImages.map((img, idx) => (
                        <div key={idx} onClick={() => setHoveredImageIndex(idx)}
-                         className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-500 scale-105` : 'ring-1 ring-white/20 hover:ring-white/50'}`}>
+                         className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-400 scale-110 shadow-lg` : 'ring-1 ring-white/20 opacity-60 hover:opacity-100 hover:ring-white/40'}`}>
                          <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} />
-                         <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/60 rounded text-[8px] text-white font-bold">{idx + 1}</div>
+                         <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[9px] font-bold ${activeIdx === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/70'}`}>
+                           {activeIdx === idx ? `▶ ${idx + 1}` : idx + 1}
+                         </div>
                        </div>
                      ))}
                    </div>
@@ -960,40 +1011,64 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       </div>
 
       {isPreviewFullscreen && fullscreenImageIndex !== null && generatedImages[fullscreenImageIndex] && (
-        <div 
-          className="fixed inset-0 z-[400] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300 cursor-zoom-out group" 
-          onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); }}
-        >
-          <img 
-            src={watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]} 
-            className="max-h-full max-w-full rounded-lg shadow-2xl object-contain" 
-            alt="Fullscreen" 
-            onClick={(e) => e.stopPropagation()}
-          />
-          {generatedImages.length > 1 && (
-            <>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setFullscreenImageIndex(prev => prev !== null ? (prev > 0 ? prev - 1 : generatedImages.length - 1) : 0); 
-                }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all opacity-0 group-hover:opacity-100"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setFullscreenImageIndex(prev => prev !== null ? (prev < generatedImages.length - 1 ? prev + 1 : 0) : 0); 
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all opacity-0 group-hover:opacity-100"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
-              </button>
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm font-bold">
-                {fullscreenImageIndex + 1} / {generatedImages.length}
+        <div className="fixed inset-0 z-[400] bg-slate-950 flex flex-col animate-in fade-in duration-300" onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); }}>
+          {/* 层1：主图区 */}
+          <div className="flex-1 flex items-center justify-center p-6 min-h-0 cursor-zoom-out">
+            <img
+              src={watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]}
+              className="max-h-full max-w-full rounded-xl shadow-2xl object-contain"
+              alt="Fullscreen"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          {/* 层2：操作栏 */}
+          <div className="flex-shrink-0 flex justify-center pb-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-1.5 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 pt-2 pb-2.5 shadow-2xl">
+              <div className={`text-[9px] font-black uppercase tracking-widest text-${themeColor}-400 pb-1 border-b border-white/10 w-full text-center`}>
+                当前操作：图 {fullscreenImageIndex + 1}{generatedImages.length > 1 ? ` / 共 ${generatedImages.length} 张` : ''}
               </div>
-            </>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="退出全屏">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <span className="text-[9px] font-medium">关闭</span>
+                </button>
+                <div className="w-px h-8 bg-white/10" />
+                <button onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]; a.download = `Creative_STD_${Date.now()}.png`; a.click(); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="标准下载">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  <span className="text-[9px] font-medium">标准下载</span>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); if (!isDeveloper) { alert('升级 PRO/PLUS 解锁无水印下载'); return; } const a = document.createElement('a'); a.href = generatedImages[fullscreenImageIndex]; a.download = `Creative_PRO_${Date.now()}.png`; a.click(); }} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${isDeveloper ? `hover:bg-${themeColor}-900/40 text-${themeColor}-400 hover:text-${themeColor}-300` : 'text-white/30 hover:bg-white/5'}`} title={isDeveloper ? '无水印原图' : '升级解锁'}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <span className="text-[9px] font-medium">{isDeveloper ? '原图下载' : '🔒 原图'}</span>
+                </button>
+                <div className="w-px h-8 bg-white/10" />
+                <button onClick={(e) => { e.stopPropagation(); setHoveredImageIndex(fullscreenImageIndex); setIsPreviewFullscreen(false); setFullscreenImageIndex(null); setTimeout(() => openMarkingMode('INPAINT'), 100); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="局部修改">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                  <span className="text-[9px] font-medium">{t.parameters.inpaintEdit}</span>
+                </button>
+                <div className="flex flex-col items-center gap-1">
+                  <div className="flex gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); const img = generatedImages[fullscreenImageIndex]; if (!img) return; const im = new Image(); im.onload = () => { const max = Math.max(im.naturalWidth, im.naturalHeight); if (max >= 2048) { alert(t.parameters.alreadyMax2K); return; } setIsPreviewFullscreen(false); setFullscreenImageIndex(null); setTimeout(() => setUpscaleDialog({ show: true, image: img, width: im.naturalWidth, height: im.naturalHeight, options: ['2K'], tier: 'FAST' }), 100); }; im.src = img; }} className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all text-[10px] font-black border border-white/20" title="快捷放大到2K">2K</button>
+                    <button onClick={(e) => { e.stopPropagation(); const img = generatedImages[fullscreenImageIndex]; if (!img) return; const im = new Image(); im.onload = () => { const max = Math.max(im.naturalWidth, im.naturalHeight); if (max >= 4096) { alert(t.parameters.alreadyMax4K); return; } setIsPreviewFullscreen(false); setFullscreenImageIndex(null); setTimeout(() => setUpscaleDialog({ show: true, image: img, width: im.naturalWidth, height: im.naturalHeight, options: ['4K'], tier: 'FAST' }), 100); }; im.src = img; }} className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-all text-[10px] font-black border border-white/20" title="快捷放大到4K">4K</button>
+                  </div>
+                  <span className="text-[9px] font-medium text-white/50">{t.parameters.hdUpscale}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* 层3：缩略图条 */}
+          {generatedImages.length > 1 && (
+            <div className="flex-shrink-0 flex gap-2 justify-center pb-4 px-4 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+              {generatedImages.map((img, idx) => (
+                <div key={idx} onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(idx); }}
+                  className={`relative flex-shrink-0 cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${fullscreenImageIndex === idx ? `ring-2 ring-${themeColor}-400 scale-110` : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
+                  <img src={watermarkedImages[idx] || img} className="w-16 h-16 object-cover" alt={`${idx + 1}`} />
+                  <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[8px] font-bold ${fullscreenImageIndex === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/60'}`}>
+                    {fullscreenImageIndex === idx ? `▶ ${idx + 1}` : idx + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -1045,15 +1120,15 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       {upscaleDialog.show && (
         <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in zoom-in duration-300">
           <div className="bg-[#111111] border border-white/[0.08] rounded-2xl p-8 max-w-lg w-full shadow-2xl">
-            <h3 className="text-base font-semibold text-white/80 mb-5">选择放大选项</h3>
+            <h3 className="text-base font-semibold text-white/80 mb-5">{t.parameters.selectUpscaleOption}</h3>
             <div className="mb-5">
-              <p className="text-white/40 text-sm mb-1">当前图片尺寸：<span className="text-white/70 font-medium">{upscaleDialog.width} × {upscaleDialog.height}</span> px</p>
-              <p className="text-white/25 text-xs">放大后的图片将传入底图栏第一栏位</p>
+              <p className="text-white/40 text-sm mb-1">{t.parameters.currentSize}<span className="text-white/70 font-medium">{upscaleDialog.width} × {upscaleDialog.height}</span> px</p>
+              <p className="text-white/25 text-xs">{t.parameters.upscaleHint}</p>
             </div>
 
             {/* 解算引擎选择 */}
             <div className="mb-4">
-              <p className="text-white/30 text-xs font-medium mb-2">解算引擎</p>
+              <p className="text-white/30 text-xs font-medium mb-2">{t.parameters.engineLabel}</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setUpscaleDialog(prev => ({ ...prev, tier: 'FAST' }))}
@@ -1072,7 +1147,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
             {/* 分辨率选择 */}
             <div className="mb-5">
-              <p className="text-white/30 text-xs font-medium mb-2">目标分辨率</p>
+              <p className="text-white/30 text-xs font-medium mb-2">{t.parameters.targetRes}</p>
               <div className="flex gap-3">
                 {upscaleDialog.options.includes('2K') && (
                   <button
@@ -1090,7 +1165,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                   >
                     <div className="text-xl font-semibold">4K</div>
                     <div className="text-xs text-white/50 mt-1">4096px</div>
-                    <span className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-bold px-2 py-0.5 rounded-full">推荐</span>
+                    <span className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-bold px-2 py-0.5 rounded-full">{t.parameters.recommended}</span>
                   </button>
                 )}
               </div>
@@ -1100,7 +1175,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
               onClick={() => setUpscaleDialog(prev => ({ ...prev, show: false }))}
               className="w-full py-2.5 bg-white/[0.04] border border-white/[0.06] text-white/40 rounded-xl text-sm font-medium hover:text-white/70 transition-all"
             >
-              取消
+              {t.common.cancel}
             </button>
           </div>
         </div>

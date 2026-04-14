@@ -3,8 +3,7 @@
     "ph8": {
       "name": "ph8.co",
       "url": "https://ph8.co",
-      "proxy_path": "/api/ph8",
-      "api_key": ""
+      "proxy_path": "/api/ph8"
     }
   },
   "models": {
@@ -116,9 +115,33 @@
         "priority": 10,
         "active": true
       }
+    ],
+    "KbitVeo-speed": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "doubao-seedance-1-0-pro-fast-251015",
+        "priority": 20,
+        "active": true
+      }
+    ],
+    "KbitVeo-normal": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "v1.0-lite-i2v-250428",
+        "priority": 20,
+        "active": true
+      }
+    ],
+    "KbitVeo-pro": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "v1.5-pro-251215",
+        "priority": 20,
+        "active": true
+      }
     ]
-  },
-  "api_keys": {
-    "ph8": ""
   }
 }

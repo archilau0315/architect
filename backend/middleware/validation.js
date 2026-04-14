@@ -1,27 +1,31 @@
 const validator = require('validator');
 
+// 不需要清理的字段（base64 图片/视频数据、媒体类型）
+const SKIP_SANITIZE_KEYS = new Set(['image', 'video', 'data', 'base64', 'imageData', 'videoData', 'reference_images', 'mimeType', 'mime_type']);
+
 // 输入清理函数
 const sanitizeInput = (input) => {
   if (typeof input === 'string') {
-    // 移除潜在的 XSS 攻击代码
     return validator.escape(input.trim());
   }
   return input;
 };
 
 // 递归清理对象中的所有字符串属性
-const sanitizeObject = (obj) => {
+const sanitizeObject = (obj, key = '') => {
   if (typeof obj !== 'object' || obj === null) {
+    // 跳过白名单字段（base64 数据、媒体类型等）
+    if (SKIP_SANITIZE_KEYS.has(key)) return obj;
     return sanitizeInput(obj);
   }
-  
+
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
+    return obj.map(item => sanitizeObject(item, key));
   }
-  
+
   const sanitized = {};
-  for (const [key, value] of Object.entries(obj)) {
-    sanitized[key] = sanitizeObject(value);
+  for (const [k, value] of Object.entries(obj)) {
+    sanitized[k] = sanitizeObject(value, k);
   }
   return sanitized;
 };
@@ -46,7 +50,7 @@ const validatePassword = (password) => {
 
 // 验证用户ID格式
 const validateUserId = (userId) => {
-  // 只允许字母、数字、下划线和连字符
+  if (!userId || typeof userId !== 'string') return false;
   return validator.isAlphanumeric(userId.replace(/[_-]/g, ''));
 };
 

@@ -57,23 +57,23 @@
             </div>
             
             <nav class="flex-1 p-4 space-y-1">
-                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gray-800 text-white">
+                <a href="dashboard.html" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gray-800 text-white">
                     <i class="fa fa-dashboard w-5 text-center"></i>
                     <span>仪表盘</span>
                 </a>
-                <a href="users.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <a href="users.html" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
                     <i class="fa fa-users w-5 text-center"></i>
                     <span>用户管理</span>
                 </a>
-                <a href="beta.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <a href="beta.html" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
                     <i class="fa fa-envelope w-5 text-center"></i>
                     <span>内测申请</span>
                 </a>
-                <a href="models.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <a href="models.html" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
                     <i class="fa fa-cogs w-5 text-center"></i>
                     <span>系统配置</span>
                 </a>
-                <a href="logs.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <a href="logs.html" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
                     <i class="fa fa-list-alt w-5 text-center"></i>
                     <span>使用日志</span>
                 </a>
@@ -244,7 +244,7 @@
                 <div class="bg-white rounded-xl card-shadow p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">最近活动</h3>
-                        <a href="logs.php" class="text-sm text-primary hover:text-secondary transition-colors">
+                        <a href="logs.html" class="text-sm text-primary hover:text-secondary transition-colors">
                             查看全部
                         </a>
                     </div>
@@ -289,7 +289,7 @@
             // 检查登录状态
             const adminToken = localStorage.getItem('admin_token');
             if (!adminToken) {
-                window.location.href = 'index.php';
+                window.location.href = 'index.html';
                 return;
             }
             
@@ -304,7 +304,7 @@
             document.getElementById('logoutButton').addEventListener('click', function() {
                 localStorage.removeItem('admin_token');
                 localStorage.removeItem('admin_user');
-                window.location.href = 'index.php';
+                window.location.href = 'index.html';
             });
             
             // 加载仪表盘数据

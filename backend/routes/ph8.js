@@ -282,7 +282,7 @@ router.all('/*', async (req, res) => {
                     cachedTokens: usage.cachedTokens,
                     requestType: requestType,
                     endpoint: fullPath,
-                    status: proxyRes.statusCode === 200 ? 'success' : 'error',
+                    status: proxyRes.statusCode === 200 ? 'success' : 'failed',
                     errorMessage: responseBody.error?.message || null,
                     responseTimeMs: responseTime,
                     ipAddress: req.ip || req.connection.remoteAddress
@@ -373,7 +373,7 @@ router.all('/*', async (req, res) => {
       cachedTokens: 0,
       requestType: requestType,
       endpoint: fullPath,
-      status: 'error',
+      status: 'failed',
       errorMessage: err.message,
       responseTimeMs: Date.now() - startTime,
       ipAddress: req.ip || req.connection.remoteAddress

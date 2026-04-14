@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { UserPreferences, CustomModel, VersionRecord, UserTier, AppTheme, Language } from '../types.ts';
 import SystemSpec from './SystemSpec.tsx';
 import { TERMS_OF_SERVICE } from '../legal/termsOfService.ts';
+import { AVATAR_KEY } from '../constants.ts';
 import { PRIVACY_POLICY } from '../legal/privacyPolicy.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { getTranslation } from '../i18n/locales.ts';
@@ -66,7 +67,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const AVATAR_KEY = 'user-architect-avatar-v120-locked';
+  // AVATAR_KEY imported from constants.ts
 
   useEffect(() => {
     const loadAvatar = () => {
@@ -122,7 +123,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     return null;
   };
 
-  const loggedInUser = getLoggedInUser();
+  const loggedInUser = useMemo(() => getLoggedInUser(), []);
   const isLoggedIn = !!loggedInUser;
 
   // 获取当前语言的翻译
@@ -730,7 +731,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex min-h-0">
           <div className="w-56 border-r border-white/[0.06] p-4 flex flex-col gap-1 shrink-0">
             {[
               { id: 'prefs',     label: t.settings.tabs.preferences, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" /></svg> },
@@ -739,7 +740,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               { id: 'agreement', label: t.settings.tabs.agreement, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> },
               { id: 'about',     label: t.settings.tabs.about, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg> },
               { id: 'system',    label: t.settings.tabs.system, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" /></svg>, hidden: !isSystemVisible }
-            ].filter(t => !t.hidden).map(tab => (
+            ].filter(tabItem => !tabItem.hidden).map(tab => (
               <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setIsCheckout(false); }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' : 'text-white/40 hover:bg-white/5 hover:text-white/70'}`}>
                 {tab.icon}
@@ -963,15 +964,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
 
                 <div className="pt-4 border-t border-white/[0.06] space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 min-w-0">
                       <h4 className="text-sm font-medium text-white/80">开发者模式</h4>
                       <p className="text-[10px] text-white/30 uppercase tracking-widest">
                         {isDeveloperMode ? '已开启开发者权限（无限）' : '当前为普通模式'}
                       </p>
                     </div>
                     <button onClick={() => isDeveloperMode ? onToggleDeveloper() : setShowAuthInput(!showAuthInput)}
-                      className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 ${isDeveloperMode ? 'bg-blue-500' : 'bg-white/10'}`}>
+                      className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 shrink-0 ${isDeveloperMode ? 'bg-blue-500' : 'bg-slate-300 dark:bg-white/25'}`}>
                       <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 pointer-events-none"
                         style={{ transform: isDeveloperMode ? 'translateX(24px)' : 'translateX(0)' }} />
                     </button>
@@ -1034,29 +1035,29 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   )}
 
                   <div className="pt-4 border-t border-white/[0.06] space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5 min-w-0">
                         <h4 className="text-sm font-medium text-white/80">第三方网关分流 {isDeveloperMode ? '' : '(需开发者权限)'}</h4>
                         <p className="text-[10px] text-white/30 uppercase tracking-widest">
                           {useThirdPartyGateway ? '已开启商业矩阵 + 第三方网关' : '已开启开发模式 + 官方通道'}
                         </p>
                       </div>
                       <button onClick={() => isDeveloperMode && onToggleGateway(!useThirdPartyGateway)} disabled={!isDeveloperMode}
-                        className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 ${!isDeveloperMode ? 'opacity-30 cursor-not-allowed' : ''} ${useThirdPartyGateway ? 'bg-blue-500' : 'bg-white/10'}`}>
+                        className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 shrink-0 ${!isDeveloperMode ? 'opacity-30 cursor-not-allowed' : ''} ${useThirdPartyGateway ? 'bg-blue-500' : 'bg-slate-300 dark:bg-white/25'}`}>
                         <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 pointer-events-none"
                           style={{ transform: useThirdPartyGateway ? 'translateX(24px)' : 'translateX(0)' }} />
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-0.5 min-w-0">
                         <h4 className="text-sm font-medium text-white/80">显示开发监控窗口</h4>
                         <p className="text-[10px] text-white/30 uppercase tracking-widest">
                           {showTokenMonitor ? '已开启实时 Token 流量监控' : '已关闭开发监控窗口'}
                         </p>
                       </div>
                       <button onClick={() => onToggleTokenMonitor(!showTokenMonitor)}
-                        className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 ${showTokenMonitor ? 'bg-blue-500' : 'bg-white/10'}`}>
+                        className={`w-12 h-6 rounded-full transition-all duration-300 relative active:scale-95 shrink-0 ${showTokenMonitor ? 'bg-blue-500' : 'bg-slate-300 dark:bg-white/25'}`}>
                         <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 pointer-events-none"
                           style={{ transform: showTokenMonitor ? 'translateX(24px)' : 'translateX(0)' }} />
                       </button>

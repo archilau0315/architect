@@ -387,6 +387,15 @@ tail -f backend/logs/error-$(date +%Y-%m-%d).log
 
 ## Change Log
 
+- [v4.0.0 / 2026-04-10]：**NewUI 全面重构版**。
+  - 全新 UI 架构，组件体系重构（Layout、ConversationView、UnifiedInput、ChatBot 等）。
+  - 图像生成、视频生成模块独立拆分为专属组件。
+  - 水印服务（watermarkService）集成，视频/图像水印统一管理。
+  - 密码重置、邀请验证流程优化。
+  - 国际化支持（i18n/locales.ts）。
+  - 前端常量统一管理（constants.ts）。
+  - 网关配置（gateway_config.json）支持 Gemini 3 系列模型（Pro/Flash/Flash-Lite）。
+
 - [v3.8.0 / 2026-03-19]：**内测版账户体系与邀请码验证系统**。
   - 新增邀请码验证页面：支持内测邀请码注册（KBITDEMO1、KBITAI2026、KBITTEST）。
   - 新增内测申请表单：用户可申请内测资格，模拟模式自动发放邀请码。

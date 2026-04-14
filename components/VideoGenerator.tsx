@@ -5,7 +5,8 @@ import { GeminiService, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { VideoWatermarkUtils } from '../services/videoWatermarkService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
-import { UserTier } from '../types.ts';
+import { UserTier, Language } from '../types.ts';
+import { getTranslation } from '../i18n/locales.ts';
 
 interface VideoGeneratorProps {
   instructions: typeof DEFAULT_SYSTEM_PRESETS;
@@ -13,9 +14,10 @@ interface VideoGeneratorProps {
   fontSize?: number;
   userTier?: UserTier;
   points: { daily: number; purchased: number };
-  onConsumePoints: (amount: number) => boolean;
+  onConsumePoints: (amount: number) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;
+  language?: Language;
 }
 
 const STORAGE_KEY = 'ARCHITECT_VIDEO_WORKBENCH_V2';
@@ -53,22 +55,48 @@ const incrementDownloadCount = (): number => {
   return newCount;
 };
 
-const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false }) => {
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false, language = 'zh-CN' }) => {
+  const t = getTranslation(language);
+  const isDeveloper = userTier === 'pro' || userTier === 'plus' || isDeveloperMode;
   const effectiveTier = (isDeveloperMode ? 'dev' : userTier) as UserTier | 'dev';
   const [prompt, setPrompt] = useState('');
   const [assets, setAssets] = useState<string[]>([]);
   const [aspectRatio, setAspectRatio] = useState<string>('16:9');
-  const [selectedEngine, setSelectedEngine] = useState<string>('veo-3.1-fast-generate-preview');
+  const [selectedEngine, setSelectedEngine] = useState<string>('KbitVeo-speed');
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [watermarkedVideoUrl, setWatermarkedVideoUrl] = useState<string | null>(null);
   const [isWatermarkProcessing, setIsWatermarkProcessing] = useState(false);
-  const [watermarkProgress, setWatermarkProgress] = useState(0);
   const [lastVideoRef, setLastVideoRef] = useState<any>(null);
   const [progress, setProgress] = useState(0);
-  
+  const [statusText, setStatusText] = useState('解算引擎运行中');
+  const [showMenu, setShowMenu] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  // 组件卸载时释放 Blob URL
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current?.startsWith('blob:')) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+    };
+  }, []);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showMenu && !target.closest('.video-menu-container')) {
+        setShowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const capabilities = useMemo(() => GeminiService.getVideoModelCapabilities(assets.length, useThirdPartyGateway), [assets.length, useThirdPartyGateway]);
 
@@ -168,12 +196,10 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
 
     setIsGenerating(true);
     setProgress(0);
+    setStatusText('正在初始化引擎...');
+    setWatermarkedVideoUrl(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
-    const timer = setInterval(() => {
-      setProgress(p => Math.min(p + 1, 98));
-    }, 2000);
 
     const finalPrompt = (assets.length >= 2
       ? `[SHOT-BY-SHOT EVOLUTION]: Evolve the scene through the ${assets.length} provided reference assets. `
@@ -187,80 +213,81 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         instructions,
         controller.signal,
         lastVideoRef,
-        selectedEngine
+        selectedEngine,
+        (p) => {
+          setProgress(p);
+          // 根据进度更新状态文本
+          if (p < 15) {
+            setStatusText('正在分析场景...');
+          } else if (p < 35) {
+            setStatusText('正在构建3D模型...');
+          } else if (p < 55) {
+            setStatusText('正在计算光影...');
+          } else if (p < 75) {
+            setStatusText('正在渲染帧序列...');
+          } else if (p < 95) {
+            setStatusText('正在合成视频...');
+          } else {
+            setStatusText('即将完成...');
+          }
+        }
       );
+      setProgress(100);
+      if (blobUrlRef.current?.startsWith('blob:')) URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = result.url.startsWith('blob:') ? result.url : null;
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
-      setProgress(100);
 
-      // 获取 PH8 真实费用并扣除积分
+      // 前端浏览器端加水印（使用 FFmpeg WebAssembly）
+      setIsWatermarkProcessing(true);
+      setStatusText('生成水印版本中...');
+      setProgress(70); // 水印处理开始，进度从70%开始
+      try {
+        console.log('[视频水印] 开始浏览器端水印处理...');
+        
+        const watermarkResult = await VideoWatermarkUtils.addWatermark(
+          result.url,
+          '/LOGOkbitwater.png',
+          (watermarkProgress: number) => {
+            console.log(`[视频水印] 进度: ${watermarkProgress}%`);
+            // 水印处理进度映射到 70%-100%
+            const mappedProgress = 70 + (watermarkProgress / 100) * 30;
+            setProgress(Math.round(mappedProgress));
+          }
+        );
+        
+        setWatermarkedVideoUrl(watermarkResult.objectUrl);
+        setProgress(100);
+        console.log('[视频水印] 浏览器端水印处理完成');
+      } catch (e) {
+        console.warn('[视频水印] 浏览器端水印失败，降级到原视频:', e);
+      } finally {
+        setIsWatermarkProcessing(false);
+      }
+
+      // 扣积分
       setTimeout(async () => {
         try {
           const session = localStorage.getItem('architect-invite-session');
           if (!session) return;
           const sessionData = JSON.parse(session);
           const userId = sessionData.user_id || sessionData.email;
-
           const usageResult = await Ph8UsageService.getLatestUsage(userId);
           if (usageResult.success && usageResult.data) {
             const realCost = usageResult.data.total_tokens || 0;
-            console.log('[PH8真实费用-Video]', {
-              requestId: usageResult.data.request_id,
-              cost: realCost,
-              costInYuan: (realCost * 0.0001).toFixed(4),
-              model: usageResult.data.model
-            });
-
             if (realCost > 0 && onConsumePoints) {
-              const userPoints = Math.ceil(realCost / 10);
-              const deducted = onConsumePoints(userPoints);
-              if (!deducted) {
-                console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-              }
+              await onConsumePoints(Math.ceil(realCost / 10));
             }
           }
         } catch (err) {
           console.error('获取PH8真实费用失败:', err);
         }
       }, 500);
-
-      // 获取用户ID
-      let userId = 'guest';
-      try {
-        const sessionData = localStorage.getItem('architect-invite-session');
-        if (sessionData) {
-          const parsed = JSON.parse(sessionData);
-          userId = parsed.userId || parsed.email || 'guest';
-        }
-      } catch (e) {
-        console.error('获取用户ID失败:', e);
-      }
-      
-      // 延迟获取真实的 Token 消耗数据（等待后端记录完成）
-      setTimeout(async () => {
-        try {
-          const result = await Ph8UsageService.getLatestUsage(userId);
-          if (result.success && result.data) {
-            console.log('[Video真实Token消耗]', {
-              requestId: result.data.request_id,
-              promptTokens: result.data.prompt_tokens,
-              completionTokens: result.data.completion_tokens,
-              totalTokens: result.data.total_tokens,
-              model: result.data.model
-            });
-          } else {
-            console.log('[Video] 未获取到真实Token消耗数据');
-          }
-        } catch (err) {
-          console.error('[Video] 获取真实Token消耗失败:', err);
-        }
-      }, 500); // 延迟500ms确保后端已记录
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         alert(`视频生成失败: ${err.message}`);
       }
     } finally {
-      clearInterval(timer);
       setIsGenerating(false);
     }
   };
@@ -286,18 +313,36 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       const currentCount = getTodayDownloadCount();
       
       if (limits.daily === 0) {
-        window.alert("权限不足：无水印下载仅限 Pro/Plus 用户。\n\n请升级套餐以解锁此功能。");
+        window.alert(t.buttons.unlockOriginal);
         return;
       }
       
       if (currentCount >= limits.daily) {
-        window.alert(`今日无水印下载次数已用完。\n\n您的额度：${limits.label}\n已下载：${currentCount} 次\n\n请明天再试或升级套餐。`);
+        const messages: Record<Language, string> = {
+          'zh-CN': `今日无水印下载次数已用完。\n\n您的额度：${limits.label}\n已下载：${currentCount} 次\n\n请明天再试或升级套餐。`,
+          'en-US': `Daily watermark-free downloads exhausted.\n\nYour quota: ${limits.label}\nDownloaded: ${currentCount} times\n\nPlease try again tomorrow or upgrade.`,
+          'ja-JP': `今日の透かしなしダウンロード回数が使い尽くされました。\n\nあなたのクォータ：${limits.label}\nダウンロード済み：${currentCount}回\n\n明日再試行するか、アップグレードしてください。`,
+          'ko-KR': `오늘 무수표 다운로드 횟수가 소진되었습니다.\n\n귀하의 할당량: ${limits.label}\n다운로드한 횟수: ${currentCount}회\n\n내일 다시 시도하거나 업그레이드하세요.`,
+          'es-ES': `Descargas sin marca de agua agotadas hoy.\n\nCuota: ${limits.label}\nDescargados: ${currentCount} veces\n\nIntente mañana o actualice.`,
+          'fr-FR': `Téléchargements sans filigrane épuisés aujourd'hui.\n\nVotre quota: ${limits.label}\nTéléchargés: ${currentCount} fois\n\nVeuillez réessayer demain ou mettre à niveau.`,
+          'de-DE': `Wassermarkenfreie Downloads heute erschöpft.\n\nIhr Kontingent: ${limits.label}\nHeruntergeladen: ${currentCount} Mal\n\nBitte versuchen Sie morgen erneut oder aktualisieren Sie.`,
+          'ru-RU': `Скачивания без водяного знака исчерпаны.\n\nВаш квота: ${limits.label}\nСкачано: ${currentCount} раз\n\nПопробуйте завтра или обновите подписку.`,
+        };
+        window.alert(messages[language]);
         return;
       }
       
-      const confirmed = window.confirm(
-        `【版权合规声明】\n本 AI 生成视频仅限个人/合法使用，禁止用于违法、侵权用途。平台已记录下载日志，请合规使用。\n\n今日剩余下载次数：${limits.daily - currentCount}\n\n确认下载无水印高清原片？`
-      );
+      const confirmMessages: Record<Language, string> = {
+        'zh-CN': `【版权合规声明】\n本 AI 生成视频仅限个人/合法使用，禁止用于违法、侵权用途。平台已记录下载日志，请合规使用。\n\n今日剩余下载次数：${limits.daily - currentCount}\n\n确认下载无水印高清原片？`,
+        'en-US': `【Copyright Compliance】\nThis AI-generated video is for personal/legal use only. Prohibited for illegal or infringing purposes. Download logs are recorded. Please use legally.\n\nRemaining downloads today: ${limits.daily - currentCount}\n\nConfirm download watermark-free HD video?`,
+        'ja-JP': `【著作権コンプライアンス】\nこのAI生成動画は個人/合法的使用のみ許可されています。違法・権利侵害目的の使用は禁止されています。ダウンロードログが記録されます。\n\n今日の残りダウンロード回数：${limits.daily - currentCount}\n\n透かしなしHD動画をダウンロードしますか？`,
+        'ko-KR': `【저작권 준수】\n이 AI 생성 비디오는 개인/법적 사용만 허용됩니다. 불법 또는 저작권 침해 목적으로 사용하는 것은 금지됩니다. 다운로드 로그가 기록됩니다. 법적으로 사용해주세요.\n\n오늘 남은 다운로드 횟수: ${limits.daily - currentCount}\n\n무수표 HD 비디오 다운로드 확인?`,
+        'es-ES': `【Cumplimiento de Derechos de Autor】\nEste video generado por AI solo está permitido para uso personal/legal. Prohibido para fines ilegales o de infracción. Se registran los registros de descarga.\n\nDescargas restantes hoy: ${limits.daily - currentCount}\n\n¿Confirmar descarga de video HD sin marca de agua?`,
+        'fr-FR': `【Conformité Copyright】\nCette vidéo générée par AI est réservée à un usage personnel/légal uniquement. Interdit pour des fins illégales ou d'infraction. Les journaux de téléchargement sont enregistrés.\n\nTéléchargements restants aujourd'hui: ${limits.daily - currentCount}\n\nConfirmer le téléchargement de la vidéo HD sans filigrane ?`,
+        'de-DE': `【Urheberrechtskonformität】\nDieses AI-generierte Video ist nur für persönliche/rechtliche Nutzung zulässig. Verboten für illegale oder verletzende Zwecke. Download-Logs werden aufgezeichnet.\n\nVerbleibende Downloads heute: ${limits.daily - currentCount}\n\nWatermark-freies HD-Video herunterladen bestätigen?`,
+        'ru-RU': `【Соответствие авторским правам】\nЭто видео, сгенерированное AI, предназначено только для личного/правового использования. Запрещено для незаконных или нарушающих права целей. Журналы загрузок записываются.\n\nОсталось загрузок сегодня: ${limits.daily - currentCount}\n\nПодтвердить загрузку HD-видео без водяного знака?`,
+      };
+      const confirmed = window.confirm(confirmMessages[language]);
       if (!confirmed) return;
       
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'pro' });
@@ -310,39 +355,38 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     } else {
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'standard' });
       
-      const confirmed = window.confirm(
-        "【标准下载】\n将为您生成带水印的视频版本。\n处理时间约需 10-30 秒，请耐心等待。\n\n确认下载带水印版本？"
-      );
+      const confirmMessages: Record<Language, string> = {
+        'zh-CN': "【标准下载】\n将为您生成带水印的视频版本。\n处理时间约需 10-30 秒，请耐心等待。\n\n确认下载带水印版本？",
+        'en-US': "【Standard Download】\nA watermarked version will be generated for you.\nProcessing time is about 10-30 seconds, please wait.\n\nConfirm download watermarked version?",
+        'ja-JP': "【スタンダードダウンロード】\n透かし付きバージョンを生成します。\n処理時間は10-30秒程度かかりますので、お待ちください。\n\n透かし付きバージョンをダウンロードしますか？",
+        'ko-KR': "【표준 다운로드】\n워터마크가 있는 버전이 생성됩니다.\n처리 시간은 약 10-30초입니다. 기다려주세요.\n\n워터마크 버전 다운로드 확인?",
+        'es-ES': "【Descarga Estándar】\nSe generará una versión con marca de agua.\nEl tiempo de procesamiento es de aproximadamente 10-30 segundos.\n\n¿Confirmar descarga de la versión con marca de agua?",
+        'fr-FR': "【Téléchargement Standard】\nUne version avec filigrane sera générée pour vous.\nLe temps de traitement est d'environ 10-30 secondes.\n\nConfirmer le téléchargement de la version avec filigrane ?",
+        'de-DE': "【Standard-Download】\nEs wird eine Version mit Wasserzeichen generiert.\nDie Verarbeitungszeit beträgt etwa 10-30 Sekunden.\n\nWatermark-Version herunterladen bestätigen?",
+        'ru-RU': "【Стандартная загрузка】\nБудет сгенерирована версия с водяным знаком.\nВремя обработки около 10-30 секунд.\n\nПодтвердить загрузку версии с водяным знаком?",
+      };
+      const confirmed = window.confirm(confirmMessages[language]);
       if (!confirmed) return;
       
       try {
         setIsWatermarkProcessing(true);
-        setWatermarkProgress(0);
-        
-        const wmResult = await VideoWatermarkUtils.addWatermark(
-          videoUrl,
-          './LOGOkbitwater.png',
-          (progress) => setWatermarkProgress(progress)
-        );
-        
-        setWatermarkedVideoUrl(wmResult.objectUrl);
-        
-        const link = document.createElement('a');
-        link.href = wmResult.objectUrl;
-        link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
-        link.click();
-        
-      } catch (error: any) {
-        console.error('[标准下载] 水印处理失败:', error);
-        alert(`水印处理失败: ${error.message}\n将下载原视频。`);
-        
-        const link = document.createElement('a');
-        link.href = videoUrl;
-        link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
-        link.click();
+
+        // 标准下载必须使用带水印的版本，如果没有则提示用户
+        if (watermarkedVideoUrl) {
+          const link = document.createElement('a');
+          link.href = watermarkedVideoUrl;
+          link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
+          link.click();
+        } else {
+          // 如果没有水印版本，提示用户并下载原视频（带播放器上的文字水印）
+          window.alert(t.buttons.watermarkProcessingFailed || '水印处理暂不可用，将下载原视频');
+          const link = document.createElement('a');
+          link.href = videoUrl;
+          link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
+          link.click();
+        }
       } finally {
         setIsWatermarkProcessing(false);
-        setWatermarkProgress(0);
       }
     }
   };
@@ -445,61 +489,90 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
               />
             </div>
 
-            <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-medium text-sm transition-all active:scale-95 ${isGenerating ? 'bg-white/[0.04] border border-white/[0.06] text-white/30 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}>
-              {isGenerating ? "解算中..." : "执行分镜动态解算"}
+            <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-4 rounded-xl font-medium text-sm transition-all active:scale-95 ${isGenerating ? 'bg-white/[0.04] border border-white/[0.06] text-white/50 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}>
+              {isGenerating ? (
+                <div className="flex items-center justify-center gap-3">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>{progress}% - {statusText}</span>
+                  <div className="w-32 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+              ) : (
+                "执行分镜动态解算"
+              )}
             </button>
           </div>
         </div>
 
         <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] flex flex-col items-center justify-center p-8 min-h-[500px] relative overflow-hidden">
-           {isGenerating && (
-             <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
-                <div className="relative w-16 h-16 mb-6">
-                   <div className="absolute inset-0 border-2 border-white/10 rounded-full" />
-                   <div className="absolute inset-0 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                   <div className="absolute inset-0 flex items-center justify-center text-white/70 text-sm font-medium">{progress}%</div>
-                </div>
-                <p className="text-base font-medium text-white/70">解算引擎运行中</p>
-                <button onClick={() => handleGenerate()} className="mt-8 min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 text-sm hover:bg-white/8 hover:text-white/70 transition-all">终止任务</button>
-             </div>
-           )}
-
             {videoUrl ? (
              <div className="w-full flex flex-col items-center gap-4 animate-in fade-in duration-300">
-                <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'}`}>
+                <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'} shadow-2xl`}>
                   <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-sm rounded-lg border border-white/10 text-[9px] text-white/40 font-medium pointer-events-none z-10">
-                    Preview · Watermarked
+                  <div className="absolute bottom-4 right-4 w-20 h-auto opacity-80 pointer-events-none z-10">
+                    <img src="/LOGOkbitwater.png" className="w-full h-full object-contain" />
                   </div>
                 </div>
-                <div className="flex gap-3 items-center flex-wrap">
-                  <button
-                    onClick={(e) => {
-                      if (effectiveTier === 'beta' || effectiveTier === 'free') { window.alert("视频下载仅限 Pro/Plus 用户。"); return; }
-                      handleDownload(e, false);
-                    }}
-                    disabled={isWatermarkProcessing || effectiveTier === 'beta' || effectiveTier === 'free'}
-                    className={`min-h-[36px] px-4 rounded-xl text-[11px] font-medium transition-all border ${(effectiveTier === 'beta' || effectiveTier === 'free') || isWatermarkProcessing ? 'bg-white/[0.02] border-white/[0.04] text-white/20 cursor-not-allowed' : 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70'}`}
-                  >标准下载 (带水印)</button>
-
-                  <button
-                    onClick={(e) => {
-                      if (getDownloadLimits(effectiveTier).daily === 0) { window.alert("无水印下载仅限 Pro/Plus 用户。"); return; }
-                      handleDownload(e, true);
-                    }}
-                    disabled={isWatermarkProcessing || getDownloadLimits(effectiveTier).daily === 0}
-                    className={`min-h-[36px] px-4 rounded-xl text-[11px] font-medium transition-all ${getDownloadLimits(effectiveTier).daily === 0 || isWatermarkProcessing ? 'bg-white/[0.02] border border-white/[0.04] text-white/20 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}
-                  >无水印下载 {effectiveTier !== 'dev' ? `(${getDownloadLimits(effectiveTier).label})` : ''}</button>
-
-                  {isWatermarkProcessing && (
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-400 transition-all duration-300" style={{ width: `${watermarkProgress}%` }} />
+                <div className="flex items-center justify-between w-full">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-blue-400">
+                    {t.tabs.video} {t.buttons.generate}
+                  </div>
+                  <div className="relative video-menu-container">
+                    <button 
+                      onClick={() => setShowMenu(!showMenu)} 
+                      className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/[0.06] text-white/60 hover:text-white transition-all"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </button>
+                    {showMenu && (
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in duration-150">
+                        <div className="py-1">
+                          <button 
+                            onClick={(e) => { handleDownload(e, false); setShowMenu(false); }} 
+                            className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span>{t.buttons.stdDownload}</span>
+                          </button>
+                          <button 
+                            onClick={(e) => { handleDownload(e, true); setShowMenu(false); }} 
+                            disabled={!isDeveloper}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isDeveloper ? 'text-blue-400 hover:bg-blue-500/10' : 'text-white/30 cursor-not-allowed'}`}
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>{isDeveloper ? t.buttons.originalDownload : '🔒 ' + t.buttons.originalDownload}</span>
+                          </button>
+                          <div className="border-t border-white/[0.06] my-1" />
+                          <button 
+                            onClick={() => { handleGenerate(); setShowMenu(false); }} 
+                            disabled={isGenerating}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isGenerating ? 'text-white/30 cursor-not-allowed' : 'text-white/70 hover:bg-white/[0.06] hover:text-white'}`}
+                          >
+                            <svg className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span>{isGenerating ? '生成中...' : t.buttons.regenerate}</span>
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-white/40 text-xs">{watermarkProgress}%</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
+                {isWatermarkProcessing && (
+                  <div className="text-white/40 text-[10px]">
+                    {t.parameters.upscaling.replace('{size}', 'WM')}
+                  </div>
+                )}
              </div>
            ) : (
              <div className="flex flex-col items-center text-center opacity-10 select-none">

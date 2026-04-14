@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import BetaApplicationBanner from './BetaApplicationBanner.tsx';
 import PasswordReset from './PasswordReset.tsx';
+import { AVATAR_KEY } from '../constants.ts';
 
 interface InviteVerifyProps {
   onVerified: (data: { email: string; tier: string; points: number }) => void;
 }
-
-const AVATAR_KEY = 'user-architect-avatar-v120-locked';
 
 const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [inviteCode, setInviteCode] = useState('');
@@ -24,6 +23,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -132,11 +132,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     setError('');
 
     try {
-      // 根据环境自动切换 API 地址
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
-
-      const response = await fetch(`${apiBase}/api/auth/login`, {
+      const response = await fetch('/architect/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -208,7 +204,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
 
     try {
-      const response = await fetch('https://api.kbitai.com.cn/api/invite/register', {
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+      const response = await fetch(`${apiBase}/api/invite/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -261,10 +259,10 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden">
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden">
             <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-3xl font-black text-white italic tracking-wide mb-2">
+          <h1 className="text-3xl font-black text-white italic tracking-wide mb-2 px-1">
             KBITAI <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Architect</span>
           </h1>
           <p className="text-indigo-300/60 text-sm font-medium tracking-widest uppercase">
@@ -366,13 +364,22 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       忘记密码？
                     </button>
                   </div>
-                  <input
-                    type="password"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                    placeholder="••••••••"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={registerData.password}
+                      onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                      placeholder="••••••••"
+                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all pr-14"
+                    />
+                    <button type="button" onClick={() => setShowPassword(p => !p)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                      {showPassword
+                        ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                        : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      }
+                    </button>
+                  </div>
                 </div>
 
                 {error && (
@@ -402,26 +409,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
           ) : (
             <>
               <div className="text-center mb-8">
-                <div 
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl shadow-2xl shadow-indigo-500/30 mb-4 overflow-hidden cursor-pointer hover:scale-105 transition-all relative group"
-                >
-                  {userAvatar ? (
-                    <img src={userAvatar} alt="用户头像" className="w-full h-full object-cover" />
-                  ) : (
-                    <img src="/architect/archi01.png" alt="默认头像" className="w-full h-full object-cover" />
-                  )}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="text-white text-[9px] font-black uppercase tracking-wider">选择头像</span>
-                  </div>
-                </div>
-                <input 
-                  type="file" 
-                  ref={avatarInputRef} 
-                  onChange={handleAvatarChange} 
-                  accept="image/*" 
-                  className="hidden" 
-                />
                 <h2 className="text-xl font-black text-white mb-2">邀请码有效</h2>
                 <p className="text-slate-400 text-sm">请完成账号注册以开始体验</p>
               </div>
@@ -453,13 +440,22 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       忘记密码？
                     </button>
                   </div>
-                  <input
-                    type="password"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                    placeholder="••••••••"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={registerData.password}
+                      onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                      placeholder="••••••••"
+                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all pr-14"
+                    />
+                    <button type="button" onClick={() => setShowPassword(p => !p)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                      {showPassword
+                        ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                        : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      }
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -501,7 +497,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
               <div className="mt-4 space-y-3">
                 {error === '该邮箱已注册' && (
                   <button
-                    onClick={() => setShowLogin(true)}
+                    onClick={() => setShowLoginForm(true)}
                     className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-colors"
                   >
                     已有账号？点击登录

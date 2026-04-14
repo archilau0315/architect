@@ -358,9 +358,13 @@
   background-color: #f8f9fa !important;
 }
 
-.light-mode aside * {
+.light-mode aside *:not(.tier-badge) {
   background-color: transparent !important;
   color: #1a1a1a !important;
+}
+
+.light-mode .tier-badge {
+  color: #ffffff !important;
 }
 
 /* Input area in light mode */

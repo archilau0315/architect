@@ -12,7 +12,7 @@ interface ChatBotProps {
   modelConfig: CustomModel;
   onBusyStateChange?: (busy: boolean) => void;
   points?: { daily: number; purchased: number };
-  onConsumePoints?: (amount: number) => boolean;
+  onConsumePoints?: (amount: number) => Promise<boolean>;
 }
 
 const SESSIONS_STORAGE_KEY = 'architect-chat-sessions-v135';
@@ -263,7 +263,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
             // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
             if (realCost > 0 && onConsumePoints) {
               const userPoints = Math.ceil(realCost / 10);
-              const deducted = onConsumePoints(userPoints);
+              const deducted = await onConsumePoints(userPoints);
               if (!deducted) {
                 console.warn('[Chat PH8费用] 积分不足，无法扣除:', userPoints);
               }

@@ -8,7 +8,7 @@ import gatewayConfig from "../config/gateway_config.json";
  */
 const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const base = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+  const base = isDev ? '' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {
@@ -39,47 +39,38 @@ const MASK_COLORS = [
   { name: 'cyan', rgb: { r: 0, g: 255, b: 255 }, hex: '#00FFFF' },
 ];
 
-// 检测遮罩中存在的颜色
+// 检测遮罩中存在的颜色（单次遍历所有像素，同时匹配所有颜色）
 const detectMaskColors = async (maskDataUrl: string): Promise<typeof MASK_COLORS> => {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
-    
+
     img.onload = () => {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx!.drawImage(img, 0, 0);
-      
-      const imageData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      const detectedColors: typeof MASK_COLORS = [];
+
+      const data = ctx!.getImageData(0, 0, canvas.width, canvas.height).data;
       const tolerance = 30;
-      
-      for (const colorDef of MASK_COLORS) {
-        let found = false;
-        for (let i = 0; i < data.length && !found; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          if (
-            Math.abs(r - colorDef.rgb.r) <= tolerance &&
-            Math.abs(g - colorDef.rgb.g) <= tolerance &&
-            Math.abs(b - colorDef.rgb.b) <= tolerance
-          ) {
-            found = true;
+      const found = new Set<string>();
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        for (const c of MASK_COLORS) {
+          if (!found.has(c.name) &&
+              Math.abs(r - c.rgb.r) <= tolerance &&
+              Math.abs(g - c.rgb.g) <= tolerance &&
+              Math.abs(b - c.rgb.b) <= tolerance) {
+            found.add(c.name);
           }
         }
-        if (found) {
-          detectedColors.push(colorDef);
-        }
+        if (found.size === MASK_COLORS.length) break; // 全部找到，提前退出
       }
-      
-      resolve(detectedColors);
+
+      resolve(MASK_COLORS.filter(c => found.has(c.name)));
     };
-    
+
     img.src = maskDataUrl;
   });
 };
@@ -128,28 +119,9 @@ const overlayMaskOnBaseImage = async (baseImageDataUrl: string, maskDataUrl: str
   });
 };
 
-// API Key 管理 - 已废弃，所有 API Key 都在后端管理
-// 前端不再直接接触任何 API Key
-interface ApiKeyInfo {
-  key: string;
-  isActive: boolean;
-  lastUsed: number;
-}
-
-// 保留空数组，兼容旧代码
-const apiKeys: ApiKeyInfo[] = [];
-let currentApiKeyIndex = 0;
-
-// 获取下一个可用的API Key - 已废弃，返回空字符串
-const getNextApiKey = (): string => {
-  console.warn('[GeminiService] getNextApiKey 已废弃，API Key 由后端管理');
-  return '';
-};
-
-// 标记API Key为不可用 - 已废弃
-const markApiKeyAsInactive = (key: string): void => {
-  console.warn('[GeminiService] markApiKeyAsInactive 已废弃，API Key 由后端管理');
-};
+// API Key 管理 - 已由后端接管，前端不直接持有任何 Key
+const getNextApiKey = (): string => '';
+const markApiKeyAsInactive = (_key: string): void => {};
 
 // 底图缓存管理
 interface BaseImageCache {
@@ -420,24 +392,7 @@ const getAI = (modelConfig?: CustomModel, targetModelId?: string) => {
           if (selectedNode.remoteModelId) {
             effectiveModelId = selectedNode.remoteModelId;
           }
-          // 从网关配置中获取 API Key（支持多网关）
-          const gateways = (gatewayConfig as any).gateways || {};
-          const gatewayKey = Object.keys(gateways).find(key => 
-            gateways[key].name === providerName || 
-            gateways[key].url === baseUrl
-          );
-          
-          if (gatewayKey && gateways[gatewayKey]?.api_key) {
-            apiKey = gateways[gatewayKey].api_key;
-          } else {
-            // 兼容旧配置：如果是 ph8.co 节点，从 api_keys 中获取
-            if (providerName === "ph8.co") {
-              const ph8Key = (gatewayConfig.api_keys as any)?.ph8;
-              if (ph8Key) {
-                apiKey = ph8Key;
-              }
-            }
-          }
+          // API Key 由后端代理管理，前端不持有任何 Key
         }
       }
     }
@@ -647,7 +602,7 @@ export const GeminiService = {
           ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
           resolve(canvas.toDataURL("image/png"));
         };
-        logo.src = "/architect/Com_Logo.png";
+        logo.src = "/logokbitwater.png";
       };
       img.src = base64;
     });
@@ -1173,7 +1128,6 @@ export const GeminiService = {
             model: modelId,
             prompt: enhancedPrompt,
             size: imageSize,
-            response_format: "b64_json",
             n: 1,
             seed: Math.floor(Math.random() * 2147483647),
             temperature: dynamicTemperature,
@@ -1345,7 +1299,6 @@ export const GeminiService = {
                 model: newModelId,
                 prompt: fallbackPrompt,
                 size: imageSize,
-                response_format: "b64_json",
                 n: 1,
                 seed: Math.floor(Math.random() * 2147483647),
                 temperature: fallbackTemperature,
@@ -1420,7 +1373,6 @@ export const GeminiService = {
             model: finalFallbackId,
             prompt: finalFallbackPrompt,
             size: imageSize,
-            response_format: "b64_json",
             n: 1,
             seed: Math.floor(Math.random() * 2147483647),
             temperature: finalFallbackTemperature,
@@ -1671,11 +1623,7 @@ export const GeminiService = {
         }
       } else {
         // 有图片的多模态对话
-        if (mode === 'DEEP') {
-          defaultModel = 'gemini-3.1-flash-lite-preview';  // 深度模式
-        } else {
-          defaultModel = 'qwen3-vl-flash';  // 极速/逻辑模式
-        }
+        defaultModel = 'gemini-3.1-flash-lite-preview';  // 图片分析统一用 gemini
       }
     } else {
       // 开发模式：使用 Gemini 官方模型
@@ -1723,32 +1671,11 @@ export const GeminiService = {
         console.log(`[Chat Gateway] Model: ${modelId}`);
         console.log(`[Chat Gateway] 图片数量: ${files.length}`);
 
-        // 获取认证 token
-        let authToken = '';
-        try {
-          const session = localStorage.getItem('architect-invite-session');
-          console.log('[Chat Gateway] Session存在:', !!session);
-          if (session) {
-            const sessionData = JSON.parse(session);
-            authToken = sessionData.token || '';
-            console.log('[Chat Gateway] Token存在:', !!authToken);
-            console.log('[Chat Gateway] Token前10位:', authToken ? authToken.substring(0, 10) + '...' : 'empty');
-          } else {
-            console.warn('[Chat Gateway] 未找到session，用户可能未登录');
-          }
-        } catch (e) {
-          console.error('[Chat Gateway] 获取token失败:', e);
-        }
-
-        if (!authToken) {
-          throw new Error('未登录或登录已过期，请重新登录');
-        }
-
         const response = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
+            'Content-Type': 'application/json'
+            // Authorization 头由后端代理自动添加
           },
           body: JSON.stringify({
             model: modelId,
@@ -1931,13 +1858,6 @@ export const GeminiService = {
           supportedRatios: ['16:9', '9:16', '21:9'],
           duration: '5-45s'
         },
-        {
-          id: 'Kbit-fast',
-          label: 'Kbit-fast',
-          desc: 'Kbit Fast 视频模型 - 极速生成',
-          supportedRatios: ['16:9'],
-          duration: '5-15s'
-        }
       ];
     }
 
@@ -1958,8 +1878,8 @@ export const GeminiService = {
     };
   },
 
-  async generateVideo(prompt: string, assets: string[], aspectRatio: string, instructions: any, signal?: AbortSignal, lastVideo?: any, engineId?: string) {
-    const requestedModel = engineId || 'veo-3.1-fast-generate-preview';
+  async generateVideo(prompt: string, assets: string[], aspectRatio: string, instructions: any, signal?: AbortSignal, lastVideo?: any, engineId?: string, onProgress?: (progress: number) => void) {
+    const requestedModel = engineId || 'KbitVeo-speed';
     const { ai, modelId, node, apiKey } = getAI(undefined, requestedModel); 
     
     // 如果是第三方非 Google 节点，使用 ph8 视频 API
@@ -2059,7 +1979,7 @@ export const GeminiService = {
             let statusData: any = null;
             
             // ph8 视频 API 使用 openai/v1 路径进行状态查询
-            const openaiProxiedUrl = '/api/ph8/openai/v1';
+            const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
             
             // 格式1: GET /videos/{id} (使用 openai 路径)
             let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {
@@ -2082,6 +2002,7 @@ export const GeminiService = {
             if (statusData && statusData.id) {
               status = statusData.status;
               progress = statusData.progress || progress;
+              onProgress?.(Math.min(progress, 95));
               console.log(`[Video Gateway] Status: ${status}, Progress: ${progress}%`);
               console.log(`[Video Gateway] Response data:`, JSON.stringify(statusData).substring(0, 500));
               
@@ -2144,7 +2065,7 @@ export const GeminiService = {
                       `${proxiedUrl}/videos/${videoId}/content`,
                       `${proxiedUrl}/openai/v1/videos/${videoId}/content`,
                       `${proxiedUrl}/videos/${videoId}/download_content`,
-                      `/api/ph8/openai/v1/videos/${videoId}/content`
+                      `${openaiProxiedUrl}/videos/${videoId}/content`
                     ];
                     
                     for (const contentUrl of contentUrls) {
@@ -2259,7 +2180,7 @@ export const GeminiService = {
     }
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    const finalUrl = `${downloadLink}&key=${process.env.GEMINI_API_KEY}`;
+    const finalUrl = downloadLink || '';
     
     return {
       url: finalUrl,

@@ -4,9 +4,31 @@ import { ConversationMode, CustomModel, CreativeDomain } from '../types.ts';
 import UnifiedInput, { UnifiedPayload } from './UnifiedInput.tsx';
 import InpaintEditor from './InpaintEditor.tsx';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
+import { WatermarkUtils } from '../services/watermarkService.ts';
 import { getTranslation } from '../i18n/locales.ts';
 import type { Language } from '../i18n/locales.ts';
 import { MessageCircle, Image, Video, Download, RefreshCw, Copy, StopCircle, UserCircle, Palette, X } from 'lucide-react';
+
+// ─── PH8 费用扣除（共享函数，避免竞态：每次调用独立查询，不依赖闭包状态）─────────
+async function deductPh8Cost(label: string, onConsumePoints?: (n: number) => Promise<boolean>) {
+  try {
+    const session = localStorage.getItem('architect-invite-session');
+    if (!session) return;
+    const { user_id, email } = JSON.parse(session);
+    const userId = user_id || email;
+    const result = await Ph8UsageService.getLatestUsage(userId);
+    if (result.success && result.data) {
+      const realCost = result.data.total_tokens || 0;
+      console.log(`[PH8真实费用-${label}]`, { requestId: result.data.request_id, cost: realCost, model: result.data.model });
+      if (realCost > 0 && onConsumePoints) {
+        const userPoints = Math.ceil(realCost / 10);
+        if (!onConsumePoints(userPoints)) console.warn('[PH8费用] 积分不足:', userPoints);
+      }
+    }
+  } catch (err) {
+    console.error('获取PH8真实费用失败:', err);
+  }
+}
 
 // ─── Mode Icons ────────────────────────────────────────────────────────────────
 const MODE_ICONS: Record<ConversationMode, React.FC<{ className?: string }>> = {
@@ -16,30 +38,6 @@ const MODE_ICONS: Record<ConversationMode, React.FC<{ className?: string }>> = {
 };
 
 
-// ─── Preset tags by domain ────────────────────────────────────────────────────
-const DOMAIN_PRESETS: Record<CreativeDomain, { label: string; tags: string[] }[]> = {
-  architecture: [
-    { label: '时段环境', tags: ['晨曦 Dawn', '正午 Noon', '黄金时刻 Golden Hour', '蓝调时刻 Blue Hour', '暮色 Dusk', '深夜 Deep Night'] },
-    { label: '建筑风格', tags: ['极简主义 Minimalism', '赛博朋克 Cyberpunk', '侘寂 Wabi-sabi', '包豪斯 Bauhaus', '参数化主义 Parametric', '野兽主义 Brutalism'] },
-    { label: '材质纹理', tags: ['清水混凝土', '中空玻璃', '原木质感', '烧毛面花岗岩', '手工黏土砖', '不锈钢蒙皮'] },
-    { label: '气象光影', tags: ['丁达尔效应', '全局光照', '逆光 Cinematic', '柔和扩散', '体积云', '大雾 Dense Fog'] }
-  ],
-  product: [
-    { label: '产品分类', tags: ['智能手机', '高端腕表', '极简家具', '电动汽车', '工业无人机', '人体工学椅'] },
-    { label: 'CMF 工艺', tags: ['阳极氧化铝', '碳纤维纹理', '拉丝不锈钢', '喷砂工艺', '高光陶瓷', '透明亚克力'] },
-    { label: '影棚灯光', tags: ['三点布光', '边缘勾勒光', '柔光箱', '顶部环形灯', '焦外虚化', '微距特写'] }
-  ],
-  art: [
-    { label: '艺术流派', tags: ['波普艺术 Pop Art', '超现实主义', '印象派', '抽象表现主义', '蒸汽波 Vaporwave', '故障艺术 Glitch'] },
-    { label: '视觉要素', tags: ['极简排版', '大胆对比色', '波尔卡圆点', '几何重组', '液体流动感', '噪点肌理'] },
-    { label: '表现媒介', tags: ['丝网印刷', '油画笔触', '矢量插画', '3D 渲染', '水墨晕染', '拼贴艺术'] }
-  ],
-  character: [
-    { label: '角色原型', tags: ['赛博武士', '暗黑巫师', '未来士兵', '机甲驾驶员', '荒原流浪者', '维多利亚绅士'] },
-    { label: '装备材质', tags: ['战损盔甲', '战术尼龙', '仿生肌肉', '做旧皮革', '发光排线', '全息目镜'] },
-    { label: '氛围呈现', tags: ['史诗级宏大', '电影级构图', '剪影表现', '暗黑压抑', '圣洁之光', '鲜血溅射'] }
-  ]
-};
 
 // ─── Message types ────────────────────────────────────────────────────────────
 type MsgRole = 'user' | 'assistant';
@@ -51,7 +49,9 @@ interface Message {
   type: MsgType;
   text?: string;
   images?: string[];   // base64 data URLs
+  watermarkedImages?: string[];  // 带水印版本
   videoUrl?: string;
+  watermarkedVideoUrl?: string;  // 带水印的视频版本
   timestamp: number;
   rerunPayload?: UnifiedPayload;
 }
@@ -61,7 +61,7 @@ interface ConversationViewProps {
   domain: CreativeDomain;
   instructions: any;
   points: { daily: number; purchased: number };
-  onConsumePoints: (n: number) => boolean;
+  onConsumePoints: (n: number) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;
   showPresetPanel?: boolean;
@@ -74,7 +74,7 @@ let msgId = 0;
 const uid = () => `m${++msgId}_${Date.now()}`;
 
 // ─── Text renderer with code block support ────────────────────────────────────
-const renderTextWithCode = (text: string, isError: boolean) => {
+const renderTextWithCode = (text: string, isError: boolean, copyLabel = 'Copy') => {
   const parts = text.split(/(```[\w]*\n?[\s\S]*?```)/g);
   return parts.map((part, i) => {
     const match = part.match(/^```([\w]*)\n?([\s\S]*?)```$/);
@@ -89,7 +89,7 @@ const renderTextWithCode = (text: string, isError: boolean) => {
               onClick={() => navigator.clipboard.writeText(code)}
               className="text-[10px] text-white/30 hover:text-white/70 transition-colors px-2 py-0.5 rounded hover:bg-white/10 flex items-center gap-1">
               <Copy className="w-3 h-3" strokeWidth={2} />
-              复制
+              {copyLabel}
             </button>
           </div>
           <pre className="bg-black/40 p-3 text-[12px] overflow-x-auto font-mono leading-relaxed text-emerald-400 custom-scrollbar">{code}</pre>
@@ -100,11 +100,148 @@ const renderTextWithCode = (text: string, isError: boolean) => {
   });
 };
 
+
+// ─── ImageBubble：三层结构成图展示 ────────────────────────────────────────────
+const ImageBubble: React.FC<{
+  images: string[];
+  watermarkedImages?: string[];
+  onInpaint?: (imageUrl: string) => void;
+  onRerun?: (payload: UnifiedPayload) => void;
+  onUpscale?: (imageUrl: string) => void;
+  rerunPayload?: UnifiedPayload;
+  t: any;
+  rerunCount: number;
+  setRerunCount: (n: number) => void;
+  isDeveloper?: boolean;
+}> = ({ images, watermarkedImages = [], onInpaint, onRerun, onUpscale, rerunPayload, t, rerunCount, setRerunCount, isDeveloper = false }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fsIdx, setFsIdx] = useState(0);
+
+  const safeIdx = Math.min(activeIdx, images.length - 1);
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {/* 层1：主图区 */}
+      <div className="relative group cursor-zoom-in rounded-xl overflow-hidden border border-white/10 shadow-lg"
+        onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}>
+        <img src={watermarkedImages[safeIdx] || images[safeIdx]} className="w-full rounded-xl object-contain transition-transform duration-200 group-hover:scale-[1.01]" />
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="bg-black/50 backdrop-blur-sm rounded-full p-2.5">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+          </div>
+        </div>
+      </div>
+
+      {/* 层2：操作栏 */}
+      <div className="flex items-center gap-1 pt-1.5 border-t border-white/[0.06] flex-wrap">
+        <span className="text-[9px] text-white/25 mr-1">{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
+        <button onClick={() => { const a = document.createElement('a'); a.href = watermarkedImages[safeIdx] || images[safeIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
+          className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
+          <Download className="w-3 h-3" strokeWidth={2} />{t.buttons.stdDownload}
+        </button>
+        {/* 原图下载（权限分级） */}
+        <button
+          onClick={() => {
+            if (!isDeveloper) { alert(t.buttons.unlockOriginal); return; }
+            const a = document.createElement('a'); a.href = images[safeIdx]; a.download = `image_PRO_${Date.now()}.png`; a.click();
+          }}
+          title={isDeveloper ? t.buttons.originalDownload : t.buttons.unlockOriginal}
+          className={`flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg border text-[11px] transition-all ${isDeveloper ? 'bg-white/[0.06] border-white/[0.08] text-white/60 hover:bg-white/[0.12] hover:text-white/80' : 'bg-white/[0.03] border-white/[0.05] text-white/25 cursor-not-allowed'}`}>
+          <Download className="w-3 h-3" strokeWidth={2} />{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownloadLocked}
+        </button>
+        <button onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}
+          className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>{t.buttons.fullscreen}
+        </button>
+        {onInpaint && (
+          <button onClick={() => { if (window.confirm(t.buttons.inpaintConfirm.replace('{n}', String(safeIdx + 1)))) onInpaint(images[safeIdx]); }}
+            className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>{t.buttons.inpaintShort}
+          </button>
+        )}
+        {/* 高清放大 */}
+        {onUpscale && (
+          <button onClick={() => onUpscale(images[safeIdx])}
+            title={t.parameters.hdUpscale}
+            className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>{t.buttons.hdShort}
+          </button>
+        )}
+        {onRerun && rerunPayload && <>
+          <div className="w-px h-5 bg-white/10 mx-1" />
+          <select value={rerunCount} onChange={e => setRerunCount(Number(e.target.value))}
+            className="min-h-[26px] px-2 py-0.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-[11px] focus:outline-none focus:border-indigo-500/40 cursor-pointer">
+            {[1,2,3,4].map(n => <option key={n} value={n}>{n}张</option>)}
+          </select>
+          <button onClick={() => onRerun({ ...rerunPayload, imageConfig: rerunPayload.imageConfig ? { ...rerunPayload.imageConfig, imageCount: rerunCount } : undefined })}
+            className="ml-auto flex items-center gap-1 min-h-[26px] px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-indigo-500/20 hover:text-indigo-300 transition-all">
+            <RefreshCw className="w-3 h-3" strokeWidth={2} />{t.buttons.rerender}
+          </button>
+        </>}
+      </div>
+
+      {/* 层3：缩略图条（多图时） */}
+      {images.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {images.map((src, idx) => (
+            <div key={idx} onClick={() => setActiveIdx(idx)}
+              className={`relative cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${safeIdx === idx ? 'ring-2 ring-indigo-400 scale-110' : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
+              <img src={watermarkedImages[idx] || src} className="w-16 h-16 object-cover" />
+              <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[8px] font-bold ${safeIdx === idx ? 'bg-indigo-600 text-white' : 'bg-black/60 text-white/60'}`}>
+                {safeIdx === idx ? `▶ ${idx+1}` : idx+1}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 全屏模式 */}
+      {fullscreen && (
+        <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-xl flex flex-col" onClick={() => setFullscreen(false)}>
+          <div className="flex-1 flex items-center justify-center p-6 min-h-0 cursor-zoom-out">
+            <img src={watermarkedImages[fsIdx] || images[fsIdx]} className="max-h-full max-w-full rounded-lg shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+          </div>
+          {images.length > 1 && (
+            <>
+              <button onClick={e => { e.stopPropagation(); setFsIdx(p => p > 0 ? p-1 : images.length-1); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button onClick={e => { e.stopPropagation(); setFsIdx(p => p < images.length-1 ? p+1 : 0); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </>
+          )}
+          <div className="flex-shrink-0 flex justify-center pb-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2">
+              <span className="text-[10px] text-white/40">{fsIdx+1} / {images.length}</span>
+              <div className="w-px h-5 bg-white/10" />
+              <button onClick={() => { const a = document.createElement('a'); a.href = images[fsIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white transition-all">
+                <Download className="w-3 h-3" strokeWidth={2} />下载
+              </button>
+              <button onClick={() => setFullscreen(false)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white transition-all">
+                <X className="w-3 h-3" />关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Bubble ───────────────────────────────────────────────────────────────────
-const Bubble: React.FC<{ msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; language?: Language }> = ({ msg, onInpaint, onRerun, language = 'zh-CN' }) => {
+const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean }) => {
   const isUser = msg.role === 'user';
   const [rerunCount, setRerunCount] = useState(1);
   const [aiLogoError, setAiLogoError] = useState(false);
+  const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
+  const [videoMenuOpen, setVideoMenuOpen] = useState(false);
+  const t = getTranslation(language);
 
   // 获取用户头像
   const getUserAvatar = () => {
@@ -118,7 +255,19 @@ const Bubble: React.FC<{ msg: Message; onInpaint?: (imageUrl: string) => void; o
 
   const userAvatar = getUserAvatar();
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (videoMenuOpen && !target.closest('.video-menu-container')) {
+        setVideoMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [videoMenuOpen]);
+
   return (
+    <>
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'} items-end mb-4`}>
       {/* avatar */}
       <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center shadow-lg transition-all duration-200 overflow-hidden
@@ -154,17 +303,17 @@ const Bubble: React.FC<{ msg: Message; onInpaint?: (imageUrl: string) => void; o
             <span className="flex gap-1">
               {[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />)}
             </span>
-            <span className="text-[11px]">{msg.text || '思考中…'}</span>
+            <span className="text-[11px]">{msg.text || t.buttons.thinkingText}</span>
           </div>
         )}
 
         {/* text with code block support */}
         {(msg.type === 'text' || msg.type === 'error') && msg.text && (
-          <div>{renderTextWithCode(msg.text, msg.type === 'error')}</div>
+          <div>{renderTextWithCode(msg.text, msg.type === 'error', t.common.copy)}</div>
         )}
 
         {/* user uploaded images */}
-        {msg.images && msg.images.length > 0 && (
+        {msg.type !== 'image' && msg.images && msg.images.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {msg.images.map((src, i) => (
               <img key={i} src={src} className="max-h-48 rounded-xl object-cover border border-white/10" />
@@ -174,66 +323,97 @@ const Bubble: React.FC<{ msg: Message; onInpaint?: (imageUrl: string) => void; o
 
         {/* generated images */}
         {msg.type === 'image' && msg.images && msg.images.length > 0 && (
-          <div className="mt-2">
-            {/* 图片网格 */}
-            <div className={`grid gap-3 ${msg.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              {msg.images.map((src, i) => (
-                <div key={i} className="relative group">
-                  <img src={src} className="w-full rounded-xl object-cover border border-white/10 shadow-lg" />
-                  {/* 悬浮操作：下载 + 局部修改 */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-xl flex items-center justify-center gap-2">
-                    <a href={src} download={`kbitai_${i}.png`}
-                      className="min-w-[44px] min-h-[44px] bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-white/30 transition-all duration-150 active:scale-95">
-                      <Download className="w-5 h-5 text-white" strokeWidth={2} />
-                    </a>
-                    {onInpaint && (
-                      <button onClick={() => onInpaint(src)}
-                        className="min-h-[44px] px-3 py-2 bg-indigo-600/80 backdrop-blur-sm rounded-lg text-white text-[12px] font-bold hover:bg-indigo-500 transition-all duration-150 active:scale-95 flex items-center gap-1.5">
-                        <Palette className="w-4 h-4" strokeWidth={2} />
-                        {language === 'zh-CN' ? '局部修改' : 'Inpaint'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 常驻操作栏：再次渲染 + 数量选择 */}
-            {onRerun && msg.rerunPayload && (
-              <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-white/[0.06]">
-                <span className="text-[10px] text-white/25 uppercase tracking-wider shrink-0">{language === 'zh-CN' ? '数量' : 'Quantity'}</span>
-                {[1, 2, 3, 4].map(n => (
-                  <button key={n} onClick={() => setRerunCount(n)}
-                    className={`min-w-[30px] min-h-[30px] flex items-center justify-center rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95
-                      ${rerunCount === n
-                        ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40'
-                        : 'bg-white/[0.04] text-white/35 hover:bg-white/[0.08] hover:text-white/60'}`}>
-                    {n}
-                  </button>
-                ))}
-                <button
-                  onClick={() => onRerun({ ...msg.rerunPayload!, imageConfig: msg.rerunPayload!.imageConfig ? { ...msg.rerunPayload!.imageConfig, imageCount: rerunCount } : undefined })}
-                  className="ml-auto flex items-center gap-1.5 min-h-[30px] px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[12px] font-medium hover:bg-indigo-500/20 hover:border-indigo-500/30 hover:text-indigo-300 transition-all duration-150 active:scale-95">
-                  <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
-                  {language === 'zh-CN' ? '再次渲染' : 'Regenerate'}
-                </button>
-              </div>
-            )}
-          </div>
+          <ImageBubble images={msg.images} watermarkedImages={msg.watermarkedImages} onInpaint={onInpaint} onRerun={onRerun} onUpscale={onUpscale} rerunPayload={msg.rerunPayload} t={t} rerunCount={rerunCount} setRerunCount={setRerunCount} isDeveloper={isDeveloper} />
         )}
 
         {/* video */}
         {msg.type === 'video' && msg.videoUrl && (
-          <video src={msg.videoUrl} controls className="w-full rounded-xl mt-1 border border-white/10" />
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-lg">
+              <video src={msg.videoUrl} controls className="w-full object-cover" />
+              <div className="absolute bottom-2 right-2 w-24 h-auto opacity-80 pointer-events-none">
+                <img src="/LOGOkbitwater.png" className="w-full h-full object-contain" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end pt-1.5 border-t border-white/[0.06]">
+              <div className="relative video-menu-container">
+                <button onClick={() => setVideoMenuOpen(!videoMenuOpen)} className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-all">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </button>
+                {videoMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in duration-150">
+                    <div className="py-1">
+                      <button onClick={() => {
+                        const url = msg.watermarkedVideoUrl || msg.videoUrl;
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `video_${Date.now()}.mp4`;
+                        a.click();
+                        setVideoMenuOpen(false);
+                      }} className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3">
+                        <Download className="w-4 h-4" strokeWidth={2} />
+                        <span>{t.buttons.stdDownload}</span>
+                      </button>
+                      <button onClick={() => {
+                        if (!isDeveloper) { alert(t.buttons.unlockOriginal); return; }
+                        const a = document.createElement('a');
+                        a.href = msg.videoUrl;
+                        a.download = `video_PRO_${Date.now()}.mp4`;
+                        a.click();
+                        setVideoMenuOpen(false);
+                      }} className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isDeveloper ? 'text-blue-400 hover:bg-blue-500/10' : 'text-white/30 cursor-not-allowed'}`}>
+                        <Download className="w-4 h-4" strokeWidth={2} />
+                        <span>{isDeveloper ? t.buttons.originalDownload : '🔒 ' + t.buttons.originalDownload}</span>
+                      </button>
+                      {onRerun && msg.rerunPayload && (
+                        <>
+                          <div className="border-t border-white/[0.06] my-1" />
+                          <button onClick={() => { onRerun(msg.rerunPayload); setVideoMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3">
+                            <RefreshCw className="w-4 h-4" strokeWidth={2} />
+                            <span>{t.buttons.rerender}</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
-        <p className="text-[9px] opacity-30 mt-1 text-right">
-          {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
-        </p>
+        {/* 标识内容 */}
+        {!isUser && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.04]">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)] ring-1 ring-blue-400/50" />
+              <span className="text-[9px] text-white/30">人工智能KbitAI生成</span>
+            </div>
+            <span className="text-[9px] text-white/25">
+              {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        )}
+        {isUser && (
+          <p className="text-[9px] opacity-20 mt-1 text-right">
+            {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
       </div>
     </div>
+    {fullscreenImg && (
+      <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-xl flex items-center justify-center cursor-zoom-out" onClick={() => setFullscreenImg(null)}>
+        <img src={fullscreenImg} className="max-h-full max-w-full rounded-lg shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+        <button onClick={() => setFullscreenImg(null)} className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+    )}
+    </>
   );
-};
+});
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const ConversationView: React.FC<ConversationViewProps> = ({
@@ -249,12 +429,13 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const [expandedPresetGroup, setExpandedPresetGroup] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string>('');
   const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
+  const [upscaleDialog, setUpscaleDialog] = useState<{ show: boolean; imageUrl: string | null }>({ show: false, imageUrl: null });
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const chatHistoryRef = useRef<any[]>([]);
 
   const domainStyles = MASTER_STYLES.filter(s => s.domain === domain);
-  const domainPresets = DOMAIN_PRESETS[domain] || [];
+  const domainPresets = t.presets[domain] || [];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -269,9 +450,23 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const handleSubmit = async (payload: UnifiedPayload) => {
     if (isLoading) return;
 
+    // ── 自动模式推断 ──────────────────────────────────────────────────────────
+    const txt = payload.text.toLowerCase();
+    const videoKeywords = ['视频', '动画', '动态', 'video', 'animate', 'animation', 'motion', '生成视频', '制作视频', 'make video', 'create video', 'generate video'];
+    const imageKeywords = ['生成图', '渲染', '画', '设计', '效果图', '图片', '图像', 'render', 'generate image', 'draw', 'design', 'visualize', 'image of', 'picture of', 'photo of', 'illustration'];
+    let inferredMode: ConversationMode = payload.mode;
+    if (videoKeywords.some(k => txt.includes(k))) {
+      inferredMode = 'video';
+    } else if (payload.mode !== 'chat' && payload.mode !== 'video' && (imageKeywords.some(k => txt.includes(k)) || payload.images.length > 0)) {
+      inferredMode = 'architect';
+    } else if (payload.mode === 'chat') {
+      inferredMode = 'chat';
+    }
+    if (inferredMode !== mode) setMode(inferredMode);
+    const effectivePayload = { ...payload, mode: inferredMode };
     // 如果选择了大师风格或预设标签，将其添加到提示词中
     let finalText = payload.text;
-    if (payload.mode === 'architect') {
+    if (effectivePayload.mode === 'architect') {
       const additions: string[] = [];
       if (selectedStyle) {
         const styleObj = MASTER_STYLES.find(s => s.name === selectedStyle);
@@ -286,7 +481,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     }
 
     // add user bubble
-    addMsg({ role: 'user', type: 'text', text: payload.text, images: payload.images.map(f => f.data) });
+    if (!payload.silent) {
+      addMsg({ role: 'user', type: 'text', text: payload.text, images: payload.images.map(f => f.data) });
+    }
 
     setIsLoading(true);
     abortRef.current = new AbortController();
@@ -296,7 +493,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     addMsg({ role: 'assistant', type: 'thinking', text: t.buttons.thinkingText });
 
     try {
-      const m = payload.mode;
+      const m = effectivePayload.mode;
 
       // ── CHAT ──────────────────────────────────────────────────────────────
       if (m === 'chat') {
@@ -310,35 +507,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         ];
 
         // 获取 PH8 真实费用并扣除积分
-        setTimeout(async () => {
-          try {
-            const session = localStorage.getItem('architect-invite-session');
-            if (!session) return;
-            const sessionData = JSON.parse(session);
-            const userId = sessionData.user_id || sessionData.email;
-
-            const result = await Ph8UsageService.getLatestUsage(userId);
-            if (result.success && result.data) {
-              const realCost = result.data.total_tokens || 0;
-              console.log('[PH8真实费用-Chat]', {
-                requestId: result.data.request_id,
-                cost: realCost,
-                costInYuan: (realCost * 0.0001).toFixed(4),
-                model: result.data.model
-              });
-
-              if (realCost > 0 && onConsumePoints) {
-                const userPoints = Math.ceil(realCost / 10);
-                const deducted = onConsumePoints(userPoints);
-                if (!deducted) {
-                  console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('获取PH8真实费用失败:', err);
-          }
-        }, 500);
+        setTimeout(() => deductPh8Cost('Chat', onConsumePoints), 500);
       }
 
       // ── IMAGE ─────────────────────────────────────────────────────────────
@@ -359,38 +528,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           false, baseRefs, [], [], [], undefined, undefined, undefined,
           instructions, modelConfig, signal, domain
         );
-        updateLast({ type: 'image', images: Array.isArray(imgs) ? imgs : [], text: undefined, rerunPayload: payload });
+        const imgList = Array.isArray(imgs) ? imgs : [];
+        const wmList1: string[] = [];
+        for (const url of imgList) {
+          try { wmList1.push((await WatermarkUtils.addWatermark(url)).dataUrl); }
+          catch { wmList1.push(url); }
+        }
+        updateLast({ type: 'image', images: imgList, watermarkedImages: wmList1, text: undefined, rerunPayload: payload });
 
         // 获取 PH8 真实费用并扣除积分
-        setTimeout(async () => {
-          try {
-            const session = localStorage.getItem('architect-invite-session');
-            if (!session) return;
-            const sessionData = JSON.parse(session);
-            const userId = sessionData.user_id || sessionData.email;
-
-            const result = await Ph8UsageService.getLatestUsage(userId);
-            if (result.success && result.data) {
-              const realCost = result.data.total_tokens || 0;
-              console.log('[PH8真实费用-Image]', {
-                requestId: result.data.request_id,
-                cost: realCost,
-                costInYuan: (realCost * 0.0001).toFixed(4),
-                model: result.data.model
-              });
-
-              if (realCost > 0 && onConsumePoints) {
-                const userPoints = Math.ceil(realCost / 10);
-                const deducted = onConsumePoints(userPoints);
-                if (!deducted) {
-                  console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('获取PH8真实费用失败:', err);
-          }
-        }, 500);
+        setTimeout(() => deductPh8Cost('Image', onConsumePoints), 500);
       }
 
       // ── VIDEO ─────────────────────────────────────────────────────────────
@@ -398,46 +545,94 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         updateLast({ type: 'thinking', text: t.buttons.generatingVideo });
         const assets = payload.images.map(f => f.data);
         const res: any = await gemini.generateVideo(finalText, assets, '16:9', instructions, signal);
-        if (res?.url) updateLast({ type: 'video', videoUrl: res.url, text: undefined });
+        if (res?.url) {
+          let watermarkedVideoUrl: string | undefined;
+          try {
+            const videoWatermark = await import('../services/videoWatermarkService.ts');
+            const wmResult = await videoWatermark.VideoWatermarkUtils.addWatermark(res.url, '/LOGOkbitwater.png');
+            watermarkedVideoUrl = wmResult.objectUrl;
+          } catch (e) {
+            console.warn('[视频水印] 浏览器端水印失败:', e);
+          }
+          updateLast({ type: 'video', videoUrl: res.url, watermarkedVideoUrl, text: undefined, rerunPayload: payload });
+        }
         else updateLast({ type: 'error', text: t.buttons.videoGenerationFailed });
 
         // 获取 PH8 真实费用并扣除积分
-        setTimeout(async () => {
-          try {
-            const session = localStorage.getItem('architect-invite-session');
-            if (!session) return;
-            const sessionData = JSON.parse(session);
-            const userId = sessionData.user_id || sessionData.email;
-
-            const result = await Ph8UsageService.getLatestUsage(userId);
-            if (result.success && result.data) {
-              const realCost = result.data.total_tokens || 0;
-              console.log('[PH8真实费用-Video]', {
-                requestId: result.data.request_id,
-                cost: realCost,
-                costInYuan: (realCost * 0.0001).toFixed(4),
-                model: result.data.model
-              });
-
-              if (realCost > 0 && onConsumePoints) {
-                const userPoints = Math.ceil(realCost / 10);
-                const deducted = onConsumePoints(userPoints);
-                if (!deducted) {
-                  console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-                }
-              }
-            }
-          } catch (err) {
-            console.error('获取PH8真实费用失败:', err);
-          }
-        }, 500);
+        setTimeout(() => deductPh8Cost('Video', onConsumePoints), 500);
       }
 
     } catch (err: any) {
-      if (err?.name !== 'AbortError') updateLast({ type: 'error', text: err?.message || '请求失败' });
-      else updateLast({ type: 'error', text: '已取消' });
+      if (err?.name !== 'AbortError') updateLast({ type: 'error', text: err?.message || t.common.error });
+      else updateLast({ type: 'error', text: t.buttons.cancelled });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpscaleDirect = (size: '2K' | '4K' | null, uploadedImageUrl?: string) => {
+    let imageUrl = uploadedImageUrl;
+    if (!imageUrl) {
+      const lastImageMsg = [...messages].reverse().find(m => m.type === 'image' && m.images && m.images.length > 0);
+      imageUrl = lastImageMsg?.images?.[0];
+    }
+    if (!imageUrl) { alert('没有可放大的图片，请先上传底图或生成图片'); return; }
+    if (size === null) {
+      // 弹出选择弹窗
+      setUpscaleDialog({ show: true, imageUrl });
+      return;
+    }
+    const img = new window.Image();
+    img.onload = () => {
+      const max = Math.max(img.naturalWidth, img.naturalHeight);
+      if (size === '2K' && max >= 2048) { alert('当前图片已达 2K 或以上，请使用 4K 放大'); return; }
+      if (size === '4K' && max >= 4096) { alert('当前图片已是 4K 分辨率，无需放大'); return; }
+      setUpscaleDialog({ show: false, imageUrl });
+      executeUpscale(size, imageUrl);
+    };
+    img.src = imageUrl;
+  };
+
+  const handleUpscale = (imageUrl: string) => {
+    setUpscaleDialog({ show: true, imageUrl });
+  };
+
+  const executeUpscale = async (targetSize: '2K' | '4K', overrideUrl?: string) => {
+    const imageUrl = overrideUrl ?? upscaleDialog.imageUrl;
+    if (!imageUrl) return;
+    if (!overrideUrl) setUpscaleDialog({ show: false, imageUrl: null });
+    const maxPx = targetSize === '4K' ? 4096 : 2048;
+
+    addMsg({ role: 'assistant', type: 'thinking', text: t.parameters.upscaling.replace('{size}', targetSize) });
+
+    try {
+      const imgInfo = await new Promise<{w:number,h:number}>((res, rej) => {
+        const img = new window.Image(); img.onload = () => res({w:img.naturalWidth,h:img.naturalHeight}); img.onerror = rej; img.src = imageUrl;
+      });
+      if (Math.max(imgInfo.w, imgInfo.h) >= maxPx) {
+        updateLast({ type: 'error', text: `当前图片已达 ${targetSize} 分辨率，无需放大` });
+        return;
+      }
+      const ratio = `${imgInfo.w}:${imgInfo.h}`;
+      const imgs: string[] = await gemini.generateImage(
+        '[HIFI-EVOLUTION]: Enhance texture and clarity while maintaining 100% structural fidelity.',
+        { aspectRatio: ratio, imageSize: targetSize as any, modelTier: 'FAST', imageCount: 1, temperature: 1.0, top_p: 0.95 },
+        false, [imageUrl], [], [], [], undefined, undefined, undefined,
+        instructions, modelConfig, undefined, domain, undefined, true
+      );
+      const imgList = Array.isArray(imgs) ? imgs : [];
+      const wmList: string[] = [];
+      for (const url of imgList) {
+        try { wmList.push((await WatermarkUtils.addWatermark(url)).dataUrl); } catch { wmList.push(url); }
+      }
+      updateLast({ type: 'image', images: imgList, watermarkedImages: wmList, text: undefined, rerunPayload: {
+        text: '[HIFI-EVOLUTION]: Enhance texture and clarity while maintaining 100% structural fidelity.',
+        images: [{ name: 'upscaled.png', type: 'image/png', data: imgList[0], fileCategory: 'image' }],
+        mode: 'architect',
+        imageConfig: { aspectRatio: ratio, imageSize: targetSize as any, modelTier: 'FAST', model: 'gemini-3.1-flash-image-preview', imageCount: 1 }
+      } });
+    } catch (err: any) {
+      updateLast({ type: 'error', text: `${t.parameters.upscaleFailed}: ${err?.message}` });
     }
   };
 
@@ -447,7 +642,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     setIsLoading(true);
 
     // add user bubble
-    addMsg({ role: 'user', type: 'text', text: `${language === 'zh-CN' ? '局部修改' : 'Inpaint'}: ${prompt}`, images: [inpaintImage] });
+    addMsg({ role: 'user', type: 'text', text: `${t.buttons.inpaint}: ${prompt}`, images: [inpaintImage] });
     addMsg({ role: 'assistant', type: 'thinking', text: t.buttons.inpainting });
 
     try {
@@ -457,38 +652,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         false, [inpaintImage], [], [], [], maskDataUrl, prompt, undefined,
         instructions, modelConfig, abortRef.current?.signal, domain
       );
-      updateLast({ type: 'image', images: Array.isArray(imgs) ? imgs : [], text: undefined });
+      const imgList2 = Array.isArray(imgs) ? imgs : [];
+      const wmList2: string[] = [];
+      for (const url of imgList2) {
+        try { wmList2.push((await WatermarkUtils.addWatermark(url)).dataUrl); }
+        catch { wmList2.push(url); }
+      }
+      updateLast({ type: 'image', images: imgList2, watermarkedImages: wmList2, text: undefined });
 
       // 获取 PH8 真实费用并扣除积分
-      setTimeout(async () => {
-        try {
-          const session = localStorage.getItem('architect-invite-session');
-          if (!session) return;
-          const sessionData = JSON.parse(session);
-          const userId = sessionData.user_id || sessionData.email;
-
-          const result = await Ph8UsageService.getLatestUsage(userId);
-          if (result.success && result.data) {
-            const realCost = result.data.total_tokens || 0;
-            console.log('[PH8真实费用-Inpaint]', {
-              requestId: result.data.request_id,
-              cost: realCost,
-              costInYuan: (realCost * 0.0001).toFixed(4),
-              model: result.data.model
-            });
-
-            if (realCost > 0 && onConsumePoints) {
-              const userPoints = Math.ceil(realCost / 10);
-              const deducted = onConsumePoints(userPoints);
-              if (!deducted) {
-                console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-              }
-            }
-          }
-        } catch (err) {
-          console.error('获取PH8真实费用失败:', err);
-        }
-      }, 500);
+      setTimeout(() => deductPh8Cost('Inpaint', onConsumePoints), 500);
     } catch (err: any) {
       if (err?.name !== 'AbortError') updateLast({ type: 'error', text: err?.message || 'Inpaint 失败' });
       else updateLast({ type: 'error', text: '已取消' });
@@ -536,7 +709,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         )}
 
         <div className="max-w-3xl mx-auto space-y-4">
-          {messages.map(msg => <Bubble key={msg.id} msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} language={language} />)}
+          {messages.map(msg => (
+            <div key={msg.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
+              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloperMode} />
+            </div>
+          ))}
         </div>
         <div ref={bottomRef} />
       </div>
@@ -545,6 +722,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       {inpaintImage && (
         <InpaintEditor
           imageUrl={inpaintImage}
+          onSaveMask={() => {}}
           onSubmit={handleInpaintSubmit}
           onClose={() => setInpaintImage(null)}
           language={language}
@@ -555,9 +733,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       {isLoading && (
         <div className="flex justify-center pb-3">
           <button onClick={() => abortRef.current?.abort()}
-            className="flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-slate-800 border border-white/10 text-slate-300 text-[13px] font-medium hover:bg-slate-700 transition-all duration-150 active:scale-95 focus:outline-none focus:ring-2 focus:ring-rose-500/40 shadow-lg">
-            <StopCircle className="w-4 h-4 text-rose-400" strokeWidth={2} />
-            {language === 'zh-CN' ? '停止生成' : 'Stop'}
+            className="flex items-center gap-2 min-h-[44px] px-5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-300 text-[13px] font-medium hover:bg-white dark:hover:bg-slate-700 transition-all duration-150 active:scale-95 focus:outline-none focus:ring-2 focus:ring-rose-500/40 shadow-lg">
+            <StopCircle className="w-4 h-4 text-rose-500" strokeWidth={2} />
+            {t.buttons.stopGenerate}
           </button>
         </div>
       )}
@@ -590,7 +768,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
           </div>
         )}
-        <UnifiedInput mode={mode} onModeChange={setMode} onSubmit={handleSubmit} isLoading={isLoading} language={language} />
+        <UnifiedInput mode={mode} onModeChange={setMode} onSubmit={handleSubmit} isLoading={isLoading} language={language} onUpscale={handleUpscaleDirect} />
       </div>
 
       {/* ── 预设风格面板（双击领域按钮触发） ── */}
@@ -599,13 +777,13 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           onClick={e => { if (e.target === e.currentTarget) onTogglePresetPanel?.(); }}>
           <div className="w-full max-w-3xl bg-[#111111] border border-white/[0.08] rounded-2xl shadow-2xl overflow-y-auto max-h-[80vh] custom-scrollbar">
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] sticky top-0 bg-[#111111]">
-              <p className="text-base font-semibold text-white/90">预设风格</p>
+              <p className="text-base font-semibold text-white/90">{t.presets.title}</p>
               <div className="flex items-center gap-3">
                 {(selectedStyle || selectedPresets.length > 0) && (
                   <button onClick={() => { setSelectedStyle(''); setSelectedPresets([]); }}
                     className="text-[11px] text-red-400 hover:text-red-300 transition-all flex items-center gap-1">
                     <X className="w-3 h-3" strokeWidth={2} />
-                    清除全部
+                    {t.presets.clearAll}
                   </button>
                 )}
                 <button onClick={onTogglePresetPanel}
@@ -616,9 +794,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
 
             <div className="px-6 py-4 space-y-6">
-              {/* 大师风格 */}
+              {/* masterStyles */}
               <div>
-                <p className="text-[11px] font-medium uppercase text-white/30 tracking-widest mb-3">大师风格</p>
+                <p className="text-[11px] font-medium uppercase text-white/30 tracking-widest mb-3">{t.presets.masterStyles}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {domainStyles.map(style => (
                     <button key={style.name}
@@ -627,8 +805,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                         ${selectedStyle === style.name
                           ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                           : 'bg-white/[0.03] border border-white/[0.06] text-white/50 hover:bg-white/[0.06] hover:text-white/70'}`}>
-                      <div className="font-medium truncate">{style.name.split(' ')[0]}</div>
-                      <div className="text-[10px] opacity-50 truncate">{style.name.split(' ').slice(1).join(' ')}</div>
+                      <div className="font-medium truncate">{language === 'zh-CN' ? style.name.split(' ')[0] : style.name.split(' ').slice(1).join(' ').split('(')[0].trim()}</div>
+                      <div className="text-[10px] opacity-50 truncate">{language === 'zh-CN' ? style.name.split(' ').slice(1).join(' ') : style.name.split(' ')[0]}</div>
                     </button>
                   ))}
                 </div>
@@ -656,6 +834,32 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 高清放大弹窗 */}
+      {upscaleDialog.show && (
+        <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in duration-200">
+          <div className="bg-[#111111] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-sm font-semibold text-white/80 mb-4">选择放大分辨率</h3>
+            <div className="flex gap-3 mb-4">
+              <button onClick={() => executeUpscale('2K')}
+                className="flex-1 py-4 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white hover:bg-white/[0.08] transition-all">
+                <div className="text-lg font-semibold">2K</div>
+                <div className="text-xs text-white/30 mt-1">2048px</div>
+              </button>
+              <button onClick={() => executeUpscale('4K')}
+                className="flex-1 py-4 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-white hover:bg-indigo-500/30 transition-all relative">
+                <div className="text-lg font-semibold">4K</div>
+                <div className="text-xs text-white/50 mt-1">4096px</div>
+                <span className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-bold px-2 py-0.5 rounded-full">推荐</span>
+              </button>
+            </div>
+            <button onClick={() => setUpscaleDialog({ show: false, imageUrl: null })}
+              className="w-full py-2 bg-white/[0.04] border border-white/[0.06] text-white/40 rounded-xl text-sm hover:text-white/70 transition-all">
+              取消
+            </button>
           </div>
         </div>
       )}

@@ -78,7 +78,12 @@ export const WatermarkUtils = {
       newData.set(exifBytes, insertPos);
       newData.set(binaryArray.slice(insertPos), insertPos + exifBytes.length);
       
-      const base64 = btoa(String.fromCharCode(...newData));
+      let base64 = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < newData.length; i += chunkSize) {
+        base64 += String.fromCharCode(...newData.subarray(i, i + chunkSize));
+      }
+      base64 = btoa(base64);
       return `data:image/png;base64,${base64}`;
     } catch (error) {
       console.error('[Metadata] Failed to add EXIF:', error);
@@ -86,7 +91,7 @@ export const WatermarkUtils = {
     }
   },
 
-  async addWatermark(imageSrc: string, logoSrc: string = '/architect/Com_Logo.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
+  async addWatermark(imageSrc: string, logoSrc: string = '/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
     const generatedAt = new Date().toISOString();
     
@@ -140,9 +145,7 @@ export const WatermarkUtils = {
           const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
           embedLSB(ctx, canvas.width, canvas.height, payload);
 
-          let dataUrl = canvas.toDataURL('image/png');
-          dataUrl = this.addAIMetadata(dataUrl, contentId);
-
+          const dataUrl = canvas.toDataURL('image/png');
           resolve({ dataUrl, contentId });
           // 异步注册到服务器，不阻塞返回
           fetch('/api/content/register', {
@@ -154,8 +157,7 @@ export const WatermarkUtils = {
         logo.onerror = () => {
           const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
           embedLSB(ctx, canvas.width, canvas.height, payload);
-          let dataUrl = canvas.toDataURL('image/png');
-          dataUrl = this.addAIMetadata(dataUrl, contentId);
+          const dataUrl = canvas.toDataURL('image/png');
           resolve({ dataUrl, contentId });
           fetch('/api/content/register', {
             method: 'POST',

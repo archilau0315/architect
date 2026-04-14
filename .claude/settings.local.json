@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(php -r \"echo 'PHP Version: ' . PHP_VERSION . PHP_EOL;\")",
-      "Bash(python -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts', {}\\), indent=2, ensure_ascii=False\\)\\)\")"
+      "Bash(python -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts', {}\\), indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(node -e \"require\\('./db'\\).query\\('SELECT 1'\\).then\\(\\(\\)=>console.log\\('DB OK'\\)\\).catch\\(e=>console.error\\('DB ERROR:',e.message\\)\\)\")",
+      "Bash(node server.js)",
+      "Bash(netstat -ano)"
     ]
   }
 }

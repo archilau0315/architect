@@ -31,7 +31,7 @@ const TIER_CONFIG = {
   plus: { daily: 1800, label: 'PLUS 级' }
 };
 
-const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD || '';
+const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD ?? null;
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('architect');
@@ -41,7 +41,9 @@ const App: React.FC = () => {
   const [userTier, setUserTier] = useState<UserTier>('pro');
   const [needsInviteVerify, setNeedsInviteVerify] = useState(false);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
-  
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
+
   // Points State
   const [dailyPoints, setDailyPoints] = useState(150);
   const [purchasedPoints, setPurchasedPoints] = useState(0);
@@ -164,12 +166,13 @@ const App: React.FC = () => {
             if (!session) return;
 
             const sessionData = JSON.parse(session);
+            if (!sessionData.token) return;
             const userId = sessionData.user_id || sessionData.email;
 
             const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
             const response = await fetch(balanceUrl, {
               headers: {
-                'Authorization': `Bearer ${sessionData.token || ''}`,
+                'Authorization': `Bearer ${sessionData.token}`,
                 'Content-Type': 'application/json'
               }
             });
@@ -199,8 +202,7 @@ const App: React.FC = () => {
           setNeedsInviteVerify(true);
         }
         
-        // Beta Banner initialization - 对所有用户显示，先清除之前的关闭状态
-        localStorage.removeItem('architect-beta-banner-closed');
+        // Beta Banner initialization
         const betaBannerClosed = localStorage.getItem('architect-beta-banner-closed');
         if (savedTier !== 'free' && betaBannerClosed !== 'true') {
           setShowBetaBanner(true);
@@ -495,71 +497,54 @@ const App: React.FC = () => {
     localStorage.setItem(POINTS_KEY, JSON.stringify({ daily, purchased, lastReset: date }));
   };
 
-  const handleConsumePoints = (amount: number): boolean => {
+  const handleConsumePoints = useCallback(async (amount: number): Promise<boolean> => {
     // 开发者模式或开发模式（使用官方API）不消耗点数
     if (isDeveloperMode || !useThirdPartyGateway) {
       return true;
     }
 
-    // Beta 用户特殊逻辑：每日最多消耗 200 积分，从总余额中扣除
-    if (userTier === 'beta') {
-      const dailyLimit = 200;
-      const todayUsed = betaDailyUsed; // 今日已使用
+    // 先做本地余额预检（快速失败，避免无效请求）
+    const total = dailyPoints + purchasedPoints;
+    if (total < amount) {
+      showToast(`积分余额不足，当前剩余 ${total} 积分。`);
+      return false;
+    }
 
-      // 检查每日限额
-      if (todayUsed + amount > dailyLimit) {
-        window.alert(`内测用户每日限额 200 积分，今日已使用 ${todayUsed} 积分，剩余 ${dailyLimit - todayUsed} 积分可用。`);
+    // 调用后端扣减（服务端做最终校验）
+    try {
+      const session = localStorage.getItem('architect-invite-session');
+      const userId = session ? (JSON.parse(session).user_id || JSON.parse(session).email) : null;
+      if (!userId) return false;
+
+      const res = await fetch('/api/user/consume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
+        body: JSON.stringify({ amount, description: 'AI generation' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.error || '积分扣减失败');
         return false;
       }
 
-      // 检查总积分是否足够
-      if (purchasedPoints < amount) {
-        window.alert(`总积分不足，当前剩余 ${purchasedPoints} 积分。`);
-        return false;
-      }
-
-      // 只从总积分（purchasedPoints）中扣除一次
-      const newPurchased = purchasedPoints - amount;
-      const newDailyUsed = todayUsed + amount;
-      const newDailyRemaining = dailyLimit - newDailyUsed;
-
+      // 乐观更新本地 UI
+      const dailyUsed = Math.min(dailyPoints, amount);
+      const purchasedUsed = amount - dailyUsed;
+      const newDaily = dailyPoints - dailyUsed;
+      const newPurchased = purchasedPoints - purchasedUsed;
+      setDailyPoints(newDaily);
       setPurchasedPoints(newPurchased);
-      setBetaDailyUsed(newDailyUsed);
-      setDailyPoints(newDailyRemaining); // 显示今日剩余额度
-      savePoints(newDailyRemaining, newPurchased, lastResetDate);
-
+      savePoints(newDaily, newPurchased, lastResetDate);
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
       localStorage.setItem(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString());
-
       return true;
+    } catch (err) {
+      console.error('[consumePoints]', err);
+      showToast('网络错误，积分扣减失败');
+      return false;
     }
-
-    const total = dailyPoints + purchasedPoints;
-    if (total < amount) return false;
-
-    let remainingToConsume = amount;
-    let newDaily = dailyPoints;
-    let newPurchased = purchasedPoints;
-
-    if (newDaily >= remainingToConsume) {
-      newDaily -= remainingToConsume;
-    } else {
-      remainingToConsume -= newDaily;
-      newDaily = 0;
-      newPurchased -= remainingToConsume;
-    }
-
-    setDailyPoints(newDaily);
-    setPurchasedPoints(newPurchased);
-    savePoints(newDaily, newPurchased, lastResetDate);
-
-    const newTotalConsumed = totalConsumedPoints + amount;
-    setTotalConsumedPoints(newTotalConsumed);
-    localStorage.setItem(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString());
-    
-    return true;
-  };
+  }, [isDeveloperMode, useThirdPartyGateway, dailyPoints, purchasedPoints, totalConsumedPoints, lastResetDate, savePoints]);
 
   const handleBuyPoints = (amount: number) => {
     const newPurchased = purchasedPoints + amount;
@@ -579,18 +564,15 @@ const App: React.FC = () => {
       return false;
     }
 
-    // 必须提供密码
-    if (!providedPassword) return false;
+    // 必须提供密码，且后端必须配置了密码
+    if (!providedPassword || !DEVELOPER_PASSWORD) return false;
 
     const password = providedPassword.trim();
-    
+
     // 开发者模式口令
     if (password === DEVELOPER_PASSWORD) {
       setIsDeveloperMode(true);
-      // 进入开发者模式时，切换到开发模式（官方通道）
-      setUseThirdPartyGateway(false);
-      GeminiService.setGatewayMode(false);
-      localStorage.setItem(GATEWAY_MODE_KEY, 'false');
+      // 开发者模式仍走商业网关
       return true;
     }
 
@@ -614,6 +596,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <>
     <Layout
       activeTab={activeTab}
       onTabChange={setActiveTab}
@@ -683,6 +666,12 @@ const App: React.FC = () => {
         onTogglePromptEnhance={handleTogglePromptEnhance}
       />
     </Layout>
+    {toast && (
+      <div style={{position:'fixed',bottom:'2rem',left:'50%',transform:'translateX(-50%)',background:'rgba(30,30,40,0.95)',color:'#fff',padding:'0.75rem 1.5rem',borderRadius:'0.75rem',zIndex:9999,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',fontSize:'14px',maxWidth:'90vw',textAlign:'center'}}>
+        {toast}
+      </div>
+    )}
+    </>
   );
 };
 

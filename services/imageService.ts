@@ -180,7 +180,7 @@ export const applyWatermark = async (base64: string): Promise<string> => {
         ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
         resolve(canvas.toDataURL("image/png"));
       };
-      logo.src = "/architect/Com_Logo.png";
+      logo.src = "/logokbitwater.png";
     };
     img.src = base64;
   });

@@ -1,35 +1,12 @@
 import gatewayConfig from "../config/gateway_config.json";
 
-// API Key 管理 - 已废弃，所有 API Key 都在后端管理
-// 前端不再直接接触任何 API Key
-interface ApiKeyInfo {
-  key: string;
-  isActive: boolean;
-  lastUsed: number;
-}
-
-// 保留空数组，兼容旧代码
-const apiKeys: ApiKeyInfo[] = [];
-let currentApiKeyIndex = 0;
-
-// 获取下一个可用的API Key - 已废弃，返回空字符串
-export const getNextApiKey = (): string => {
-  console.warn('[GeminiService] getNextApiKey 已废弃，API Key 由后端管理');
-  return '';
-};
-
-// 标记API Key为不可用 - 已废弃
-export const markApiKeyAsInactive = (key: string): void => {
-  console.warn('[GeminiService] markApiKeyAsInactive 已废弃，API Key 由后端管理');
-};
-
 /**
  * 获取代理 URL
  * 所有请求都通过后端代理，前端不直接接触 API Key
  */
 export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const base = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+  const base = isDev ? '/architect' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {
@@ -47,7 +24,7 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
     return url.replace('https://ph8.co', `${base}/api/ph8`);
   }
 
-  if (url.includes('api.kbitai.com.cn/api/ph8')) {
+  if (url.includes('api.kbitai.com.cn')) {
     return url.replace('https://api.kbitai.com.cn', base);
   }
 

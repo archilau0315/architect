@@ -12,7 +12,7 @@ export const VideoWatermarkUtils = {
 
   async addWatermark(
     videoUrl: string, 
-    logoUrl: string = '/architect/Com_Logo.png',
+    logoUrl: string = '/LOGOkbitwater.png',
     onProgress?: (progress: number) => void
   ): Promise<{ objectUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
@@ -74,7 +74,7 @@ export const VideoWatermarkUtils = {
           '-i', 'input.mp4',
           '-i', 'logo.png',
           '-filter_complex',
-          '[1:v]scale=iw*0.30:-1,format=rgba,lutrgb=r=255:g=255:b=255,lut=a=val*0.5[logo];[0:v][logo]overlay=W-w-20:H-h-20',
+          '[1:v]scale=iw*0.40:-1,format=rgba,lutrgb=r=255:g=255:b=255,lut=a=val*0.7[logo];[0:v][logo]overlay=W-w-20:H-h-20',
           '-metadata', 'title=AI Generated Content',
           '-metadata', `comment=Platform:KBITAI|ID:${contentId}`,
           '-metadata', 'software=KBITAI AI Image Architect',

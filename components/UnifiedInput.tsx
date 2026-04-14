@@ -11,6 +11,7 @@ export interface UnifiedInputProps {
   isLoading?: boolean;
   placeholder?: string;
   language?: Language;
+  onUpscale?: (size: '2K' | '4K' | null, imageUrl?: string) => void;
 }
 
 export interface ImageItem {
@@ -27,6 +28,7 @@ export interface UnifiedPayload {
   text: string;
   images: ImageItem[];
   mode: ConversationMode;
+  silent?: boolean;
   imageConfig?: {
     aspectRatio: string;
     imageSize: '1K' | '2K' | '4K';
@@ -52,7 +54,7 @@ const MODE_ICONS: Record<ConversationMode, React.FC> = {
   video:     () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
 };
 
-const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmit, isLoading = false, placeholder, language = 'zh-CN' }) => {
+const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmit, isLoading = false, placeholder, language = 'zh-CN', onUpscale }) => {
   const t = getTranslation(language);
 
   // 动态翻译模式配置
@@ -129,11 +131,12 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
             const d = g(img.width, img.height);
             const ratio = `${img.width / d}:${img.height / d}`;
             setImages(prev => {
-              const newIdx = prev.length - 1;
-              const updated = prev.map((item, i) => i === newIdx ? { ...item, detectedRatio: ratio } : item);
+              const targetIdx = prev.findIndex(it => it.data === dataUrl);
+              if (targetIdx === -1) return prev;
+              const updated = prev.map((it, i) => i === targetIdx ? { ...it, detectedRatio: ratio } : it);
               if (idx === 0) {
                 setAspectRatio(ratio);
-                setLockRatio(String(newIdx));
+                setLockRatio(String(targetIdx));
               }
               return updated;
             });
@@ -160,9 +163,9 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
     const prompts = {
       analyze: '请详细分析这张图片，从构图、光影、色彩、材质、风格等维度进行专业解读。',
       reverse: '请根据这张图片反推生成其创意提示词，输出中文描述、英文提示词、风格特征、关键视觉元素和技术参数（光线、构图、情绪氛围）。',
-      reverse_json: '请根据这张图片反推生成创意提示词，严格按以下 JSON 格式输出，不要输出任何多余内容：\n```json\n{\n  "subject": {\n    "category": "主体类别描述",\n    "features": "主体特征描述",\n    "action": "动作或状态描述"\n  },\n  "details": {\n    "color": "颜色描述",\n    "texture": "纹理描述",\n    "material": "材质描述"\n  },\n  "environment": {\n    "scene": "场景地点描述",\n    "time": "时间描述",\n    "weather": "天气描述"\n  },\n  "lighting": {\n    "quality": "光质描述",\n    "effect": "光效描述",\n    "tone": "色调描述"\n  },\n  "style": {\n    "genre": "艺术流派",\n    "medium": "媒介类型",\n    "reference": "参考艺术家或作品"\n  },\n  "composition": {\n    "angle": "视角描述",\n    "shot": "景别描述",\n    "rule": "构图法则"\n  },\n  "parameters": {\n    "aspect_ratio": "画幅比例如16:9",\n    "quality": "质量参数",\n    "detail": "细节描述如8K ultra-detailed"\n  },\n  "prompt_en": "完整英文提示词（将以上模块整合为一段流畅的英文）",\n  "prompt_zh": "完整中文提示词"\n}\n```'
+      reverse_json: '分析这张图片，直接输出一个JSON对象，不要有任何其他文字。JSON结构：{"subject":{"category":"","features":"","action":""},"details":{"color":"","texture":"","material":""},"environment":{"scene":"","time":"","weather":""},"lighting":{"quality":"","effect":"","tone":""},"style":{"genre":"","medium":"","reference":""},"composition":{"angle":"","shot":"","rule":""},"parameters":{"aspect_ratio":"","quality":"","detail":""},"prompt_en":"","prompt_zh":""}'
     };
-    onSubmit({ text: prompts[action], images, mode });
+    onSubmit({ text: prompts[action], images, mode: 'chat', silent: true });
     setText('');
     setImages([]);
   };
@@ -291,25 +294,25 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
             <div className="flex flex-wrap items-center gap-3">
               {/* 比例 */}
               <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">比例:</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.aspectRatio}:</span>
                 <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)}
                   className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-2 py-1 text-white/70 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-white/20">
                   <option value="1:1">1:1</option>
                   <option value="3:4">3:4</option>
                   <option value="4:3">4:3</option>
                   <option value="16:9">16:9</option>
-                  <option value="custom">自定义</option>
+                  <option value="custom">{t.parameters.custom}</option>
                 </select>
                 {aspectRatio === 'custom' && (
                   <input value={customRatio} onChange={e => setCustomRatio(e.target.value)}
-                    placeholder="如 2:3"
+                    placeholder={t.parameters.customPlaceholder}
                     className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-2 py-1 text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
                 )}
               </div>
 
               {/* 尺寸 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">尺寸:</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.imageSize}:</span>
                 {(['1K', '2K', '4K'] as const).map(s => (
                   <button key={s} onClick={() => setImageSize(s)}
                     className={`min-w-[40px] min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${imageSize === s ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
@@ -320,30 +323,36 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
               {/* 质量 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">质量:</span>
-                {(['FAST', 'QUALITY'] as const).map(t => (
-                  <button key={t} onClick={() => setModelTier(t)}
-                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${modelTier === t ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {t === 'FAST' ? '快速' : '高质'}
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.quality}:</span>
+                {(['FAST', 'QUALITY'] as const).map(tier => (
+                  <button key={tier} onClick={() => setModelTier(tier)}
+                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${modelTier === tier ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
+                    {tier === 'FAST' ? t.parameters.fast : t.parameters.highQuality}
                   </button>
                 ))}
               </div>
 
               {/* 数量 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">数量:</span>
-                {[1, 2, 3, 4].map(n => (
-                  <button key={n} onClick={() => setImageCount(n)}
-                    className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${imageCount === n ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {n}
-                  </button>
-                ))}
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.count}:</span>
+                <select value={imageCount} onChange={e => setImageCount(Number(e.target.value))}
+                  className="min-h-[36px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-[12px] focus:outline-none focus:border-white/20 cursor-pointer">
+                  {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
               </div>
+
+              {/* 高清放大 */}
+              {onUpscale && (
+                <button onClick={() => onUpscale(null, images.find(i => i.fileCategory === 'image')?.data)} disabled={isLoading}
+                  className="flex items-center gap-1 min-h-[36px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[12px] hover:bg-white/[0.12] hover:text-white/80 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>高清
+                </button>
+              )}
 
               {/* 高级参数展开 */}
               <button onClick={() => setShowAdvanced(p => !p)}
                 className="text-[11px] text-white/30 hover:text-white/60 transition-colors flex items-center gap-1">
-                高级 {showAdvanced ? '▾' : '▸'}
+                {t.parameters.advanced} {showAdvanced ? '▾' : '▸'}
               </button>
             </div>
 
@@ -352,7 +361,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
               <div className="flex flex-wrap items-center gap-4 pt-1">
                 {/* 温度 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">温度</span>
+                  <span className="text-white/40 font-medium">{t.parameters.temperature}</span>
                   <input type="range" min="0" max="2" step="0.05" value={temperature}
                     onChange={e => setTemperature(parseFloat(e.target.value))}
                     className="w-20 h-1.5 accent-theme" />
@@ -361,7 +370,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
                 {/* top_p */}
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">Top-P</span>
+                  <span className="text-white/40 font-medium">{t.parameters.topP}</span>
                   <input type="range" min="0" max="1" step="0.01" value={topP}
                     onChange={e => setTopP(parseFloat(e.target.value))}
                     className="w-20 h-1.5 accent-theme" />
@@ -370,11 +379,11 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
                 {/* 随机种子 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">随机种子 / Seed</span>
+                  <span className="text-white/40 font-medium">{t.parameters.seed}</span>
                   <input type="number" value={seed ?? ''} onChange={e => setSeed(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="随机"
+                    placeholder={t.parameters.random}
                     className="w-20 min-h-[32px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
-                  <button onClick={() => setSeedLocked(p => !p)} title={seedLocked ? '解锁随机种子' : '固定随机种子'}
+                  <button onClick={() => setSeedLocked(p => !p)} title={seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}
                     className={`min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95 ${seedLocked ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-white/30 hover:text-white/60'}`}>
                     {seedLocked
                       ? <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
@@ -393,7 +402,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
             <div className="flex flex-wrap items-center gap-3">
               {/* 模型 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{language === 'zh-CN' ? '模型' : 'Model'}:</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.model}:</span>
                 {VIDEO_MODELS.map(m => (
                   <button key={m.id} onClick={() => { setVideoModel(m.id); if (!m.ratios.includes(videoRatio)) setVideoRatio(m.ratios[0]); }}
                     className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${videoModel === m.id ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
@@ -403,7 +412,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
               </div>
               {/* 比例 */}
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{language === 'zh-CN' ? '比例' : 'Ratio'}:</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.aspectRatio}:</span>
                 {currentVideoModel.ratios.map(r => (
                   <button key={r} onClick={() => setVideoRatio(r)}
                     className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${videoRatio === r ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
@@ -413,16 +422,14 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
               </div>
               {/* 时长（只显示） */}
               <div className="flex items-center gap-1.5 ml-auto">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{language === 'zh-CN' ? '时长' : 'Duration'}:</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.duration}:</span>
                 <span className="text-[12px] font-medium text-white/40">{currentVideoModel.duration}</span>
               </div>
             </div>
             {/* 运镜提示 */}
             <div className="mt-2 px-2 py-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10">
               <p className="text-[10px] text-blue-400/70 leading-relaxed">
-                {language === 'zh-CN'
-                  ? '💡 提示：请在提示词中描述运镜效果，如"镜头缓慢推进"、"从左向右平移"、"环绕旋转"等'
-                  : '💡 Tip: Describe camera motion in your prompt, e.g., "slow zoom in", "pan left to right", "orbit around"'}
+                {t.parameters.cameraMotionTip}
               </p>
             </div>
           </div>
@@ -488,7 +495,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
-          <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.ppt,.pptx,.txt,.md,.json,.csv" multiple className="hidden" onChange={e => handleFiles(e.target.files)} />
+          <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.ppt,.pptx,.txt,.md,.json,.csv" multiple className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
 
           <div className="flex-1" />
 

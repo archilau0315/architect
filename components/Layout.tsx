@@ -6,6 +6,7 @@ import {
   ChevronRight, ChevronDown, Plus, X, Settings, Moon, Sun,
   Building2, Sparkles
 } from 'lucide-react';
+import { AVATAR_KEY } from '../constants.ts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface LayoutProps {
@@ -35,7 +36,6 @@ interface LayoutProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TREE_KEY = 'kbitai-conv-tree-v1';
-const AVATAR_KEY = 'user-architect-avatar-v120-locked';
 const COMPANY_LOGO_KEY = 'kbit-company-logo-v120-locked';
 const THEME_KEY = 'architect-theme-v120';
 
@@ -93,6 +93,10 @@ const EditableLabel: React.FC<{ value: string; onChange: (v: string) => void; cl
   return <span className={className} onDoubleClick={() => { setDraft(value); setEditing(true); }}>{value}</span>;
 };
 
+// System-generated names across all languages — used for dynamic re-translation
+const SYS_TODAY = new Set(['今日对话',"Today's Conversations",'今日の会話','오늘의 대화','Conversaciones de Hoy',"Conversations d'Aujourd'hui",'Heutige Konversationen','Сегодняшние Беседы']);
+const SYS_NEWCHAT = new Set(['新对话','New Chat','新しいチャット','새 채팅','Nuevo Chat','Nouveau Chat','Neuer Chat','Новый Чат']);
+
 // ─── Tree node ────────────────────────────────────────────────────────────────
 const TreeNode: React.FC<{
   node: ConversationNode;
@@ -104,7 +108,8 @@ const TreeNode: React.FC<{
   onAddGroup: (parentId: string) => void;
   onAddSession: (parentId: string) => void;
   onToggle: (id: string) => void;
-}> = ({ node, depth, activeId, onSelect, onRename, onDelete, onAddGroup, onAddSession, onToggle }) => {
+  t: any;
+}> = ({ node, depth, activeId, onSelect, onRename, onDelete, onAddGroup, onAddSession, onToggle, t }) => {
   const [hover, setHover] = useState(false);
   const isGroup = node.type === 'group';
   const isActive = !isGroup && node.id === activeId;
@@ -128,7 +133,7 @@ const TreeNode: React.FC<{
           }
         </span>
 
-        <EditableLabel value={node.name} onChange={v => onRename(node.id, v)}
+        <EditableLabel value={SYS_TODAY.has(node.name) ? t.sidebar.todayConversations : SYS_NEWCHAT.has(node.name) ? t.main.newChat : node.name} onChange={v => onRename(node.id, v)}
           className="flex-1 text-[11px] truncate leading-none" />
 
         {/* action buttons */}
@@ -155,7 +160,7 @@ const TreeNode: React.FC<{
       {isGroup && node.isExpanded && node.children?.map(child => (
         <TreeNode key={child.id} node={child} depth={depth + 1} activeId={activeId}
           onSelect={onSelect} onRename={onRename} onDelete={onDelete}
-          onAddGroup={onAddGroup} onAddSession={onAddSession} onToggle={onToggle} />
+          onAddGroup={onAddGroup} onAddSession={onAddSession} onToggle={onToggle} t={t} />
       ))}
     </div>
   );
@@ -171,7 +176,6 @@ const Layout: React.FC<LayoutProps> = ({
   preferences, onPreferencesChange,
 }) => {
   const t = getTranslation(preferences?.language || 'zh-CN');
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [logoLoadError, setLogoLoadError] = useState(false);
@@ -190,9 +194,10 @@ const Layout: React.FC<LayoutProps> = ({
     } catch {}
     const firstId = genId();
     const lang = preferences?.language || 'zh-CN';
+    const tInit = getTranslation(lang);
     return [{
-      id: genId(), type: 'group', name: lang === 'zh-CN' ? '今日对话' : 'Today', isExpanded: true, timestamp: Date.now(),
-      children: [{ id: firstId, type: 'session', name: lang === 'zh-CN' ? '新对话' : 'New Chat', mode: 'chat', timestamp: Date.now() }]
+      id: genId(), type: 'group', name: tInit.sidebar.todayConversations, isExpanded: true, timestamp: Date.now(),
+      children: [{ id: firstId, type: 'session', name: tInit.main.newChat, mode: 'chat', timestamp: Date.now() }]
     }];
   });
 
@@ -207,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({
       const av = localStorage.getItem(AVATAR_KEY); if (av) setAvatarUrl(av);
       const cl = localStorage.getItem(COMPANY_LOGO_KEY); if (cl) setCompanyLogoUrl(cl);
       const th = localStorage.getItem(THEME_KEY);
-      if (th === 'light') { setIsDarkMode(false); document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); }
+      if (th === 'light') { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); }
       else { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light'); }
     } catch {}
     const onStorage = (e: StorageEvent) => {
@@ -301,22 +306,45 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="flex items-center gap-2 px-2 py-3 border-b shrink-0 min-h-[56px]" style={{ borderColor: 'var(--border-color)' }}>
           {!collapsed && (
             <>
-              <div onClick={() => avatarInputRef.current?.click()}
-                className="w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 cursor-pointer overflow-hidden hover:border-white/20 transition-all"
-                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
-                {avatarUrl
-                  ? <img src={avatarUrl} className="w-full h-full object-cover" />
-                  : <span className="text-[9px] font-bold tracking-tight" style={{ color: 'var(--text-secondary)' }}>KB</span>}
+              <div className="relative shrink-0 mr-1">
+                <div onClick={() => avatarInputRef.current?.click()}
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer overflow-hidden hover:border-white/20 transition-all
+                    ${isDeveloperMode ? 'ring-2 ring-rose-500/60' : userTier === 'plus' ? 'ring-2 ring-amber-400/60' : userTier === 'pro' ? 'ring-2 ring-blue-500/60' : ''}`}
+                  style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
+                  {avatarUrl
+                    ? <img src={avatarUrl} className="w-full h-full object-cover" />
+                    : <span className="text-[9px] font-bold tracking-tight" style={{ color: 'var(--text-secondary)' }}>KB</span>}
+                </div>
+                {(isDeveloperMode || userTier === 'plus' || userTier === 'pro') && (
+                  <div className="tier-badge" style={{
+                    position: 'absolute', bottom: '-7px', right: '-8px',
+                    background: isDeveloperMode
+                      ? 'linear-gradient(135deg,#7f1d1d,#e11d48)'
+                      : userTier === 'plus'
+                      ? 'linear-gradient(135deg,#d97706,#f97316)'
+                      : 'linear-gradient(135deg,#1d4ed8,#7c3aed)',
+                    color: '#fff',
+                    fontSize: '6px', fontWeight: 800, letterSpacing: '0.06em',
+                    padding: '1.5px 4px', borderRadius: '4px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    zIndex: 30, lineHeight: 1.5,
+                    border: '1px solid rgba(255,255,255,0.2)'
+                  }}>
+                    {isDeveloperMode ? 'DEV' : userTier === 'plus' ? 'PLUS' : 'PRO'}
+                  </div>
+                )}
               </div>
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden"
                 onChange={e => handleFileChange(e, setAvatarUrl, AVATAR_KEY)} />
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-bold tracking-tight truncate leading-tight" style={{ color: 'var(--text-primary)' }}>首席图像架构师</p>
                 <p className="text-[8px] font-medium tracking-tight truncate leading-tight opacity-60" style={{ color: 'var(--text-secondary)' }}>Chief Image Architect</p>
-                <p onClick={handleVersionClick} className={`text-[9px] font-mono cursor-pointer leading-tight ${isDeveloperMode ? 'text-emerald-400' : ''}`}
-                  style={{ color: isDeveloperMode ? undefined : 'var(--text-tertiary)' }}>
-                  V1.50 {isDeveloperMode && <span className="text-[8px] bg-red-600 text-white px-1 rounded ml-1">DEV</span>}
-                </p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <p onClick={handleVersionClick} className={`text-[9px] font-mono cursor-pointer leading-tight ${isDeveloperMode ? 'text-emerald-400' : ''}`}
+                    style={{ color: isDeveloperMode ? undefined : 'var(--text-tertiary)' }}>
+                    V2.00
+                  </p>
+                </div>
               </div>
             </>
           )}
@@ -349,7 +377,7 @@ const Layout: React.FC<LayoutProps> = ({
             {tree.map(node => (
               <TreeNode key={node.id} node={node} depth={0} activeId={activeSessionId}
                 onSelect={handleSelectSession} onRename={handleRename} onDelete={handleDelete}
-                onAddGroup={handleAddGroup} onAddSession={handleAddSession} onToggle={handleToggle} />
+                onAddGroup={handleAddGroup} onAddSession={handleAddSession} onToggle={handleToggle} t={t} />
             ))}
             <button onClick={() => handleAddGroup()}
               className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition-all">
@@ -433,11 +461,11 @@ const Layout: React.FC<LayoutProps> = ({
               <span className="text-[9px] font-mono truncate flex-1" style={{ color: 'var(--text-tertiary)' }} title={currentModelName}>{currentModelName}</span>
               <div className="flex flex-col items-start shrink-0 text-[9px] font-mono">
                 <div className="flex items-center gap-1">
-                  <span style={{ color: 'var(--text-tertiary)' }}>余额</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{t.account.balance}</span>
                   <span className={`font-black ${balance < 10 ? 'text-rose-400' : 'text-blue-400'}`}>{balance.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span style={{ color: 'var(--text-tertiary)' }}>消耗</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{t.account.consumed}</span>
                   <span className="font-black text-amber-400">{dailyUsage.toLocaleString()}</span>
                 </div>
               </div>

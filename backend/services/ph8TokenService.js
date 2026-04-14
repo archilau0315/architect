@@ -42,13 +42,6 @@ async function recordUsage(data) {
     // 计算费用：如果PH8 API返回了cost字段则使用，否则根据token数量估算
   let actualCost = data.cost || 0;
   
-  // 检查费用值，如果费用值很小，可能需要调整
-  if (actualCost > 0 && actualCost < 0.01) {
-    // 可能PH8返回的是分而不是元，需要转换
-    actualCost = actualCost * 10;
-    console.log('[PH8 Token] 调整费用值:', actualCost);
-  }
-  
   if (actualCost === 0 && data.totalTokens > 0) {
     // PH8 定价：输入0.3元/百万token，输出0.6元/百万token
     // 估算费用
@@ -57,8 +50,8 @@ async function recordUsage(data) {
     actualCost = (promptTokens * 0.3 + completionTokens * 0.6) / 1000000;
   }
   
-  // 计算积分：PH8费用 × 10（毛利润倍数）× 1000（1元=1000积分）= 费用 × 10000
-  const points = Math.round(actualCost * 10000);
+  // 计算积分：1元=1000积分，ph8消耗X元 → 扣用户 X×1000 积分
+  const points = Math.round(actualCost * 1000);
   
   await db.query(
       'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
