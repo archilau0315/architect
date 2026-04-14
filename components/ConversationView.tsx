@@ -135,7 +135,7 @@ const ImageBubble: React.FC<{
 
       {/* 层2：操作栏 */}
       <div className="flex items-center gap-1 pt-1.5 border-t border-white/[0.06] flex-wrap">
-        <span className="text-[9px] text-white/25 mr-1">{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
+        <span className="text-[10px] text-white/25 mr-1">{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
         <button onClick={() => { const a = document.createElement('a'); a.href = watermarkedImages[safeIdx] || images[safeIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
           className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
           <Download className="w-3 h-3" strokeWidth={2} />{t.buttons.stdDownload}
@@ -188,7 +188,7 @@ const ImageBubble: React.FC<{
             <div key={idx} onClick={() => setActiveIdx(idx)}
               className={`relative cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${safeIdx === idx ? 'ring-2 ring-indigo-400 scale-110' : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
               <img src={watermarkedImages[idx] || src} className="w-16 h-16 object-cover" />
-              <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[8px] font-bold ${safeIdx === idx ? 'bg-indigo-600 text-white' : 'bg-black/60 text-white/60'}`}>
+              <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[10px] font-bold ${safeIdx === idx ? 'bg-indigo-600 text-white' : 'bg-black/60 text-white/60'}`}>
                 {safeIdx === idx ? `▶ ${idx+1}` : idx+1}
               </div>
             </div>
@@ -365,7 +365,8 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
                         setVideoMenuOpen(false);
                       }} className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isDeveloper ? 'text-blue-400 hover:bg-blue-500/10' : 'text-white/30 cursor-not-allowed'}`}>
                         <Download className="w-4 h-4" strokeWidth={2} />
-                        <span>{isDeveloper ? t.buttons.originalDownload : '🔒 ' + t.buttons.originalDownload}</span>
+                        {!isDeveloper && <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>}
+                        <span>{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownload}</span>
                       </button>
                       {onRerun && msg.rerunPayload && (
                         <>
@@ -389,15 +390,15 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.04]">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)] ring-1 ring-blue-400/50" />
-              <span className="text-[9px] text-white/30">人工智能KbitAI生成</span>
+              <span className="text-[10px] text-white/30">人工智能KbitAI生成</span>
             </div>
-            <span className="text-[9px] text-white/25">
+            <span className="text-[10px] text-white/25">
               {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         )}
         {isUser && (
-          <p className="text-[9px] opacity-20 mt-1 text-right">
+          <p className="text-[10px] opacity-20 mt-1 text-right">
             {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
           </p>
         )}
@@ -676,15 +677,25 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       {/* ── messages ── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-6 text-center select-none px-4">
-            <div className="w-20 h-20 rounded-full overflow-hidden shadow-2xl shadow-indigo-500/40 animate-float">
-              <img src="/architect/archi01.png" className="w-full h-full object-cover" alt="Kbit" />
+          <div className="flex flex-col items-center justify-center h-full gap-8 text-center select-none px-4 relative">
+            {/* 背景光晕 */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-96 h-96 rounded-full bg-indigo-500/5 blur-3xl" />
             </div>
-            <div className="space-y-2">
-              <p className="text-[18px] font-bold" style={{ color: 'var(--text-primary)' }}>{t.main.welcome}</p>
-              <p className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>{t.main.welcomeMessage}</p>
+            {/* logo */}
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl scale-150" />
+              <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-2xl shadow-indigo-500/30 ring-1 ring-white/10">
+                <img src="/architect/archi01.png" className="w-full h-full object-cover" alt="Kbit" />
+              </div>
             </div>
-            <div className="flex gap-3 flex-wrap justify-center max-w-2xl">
+            {/* 文字 */}
+            <div className="space-y-2 relative">
+              <p className="text-[20px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{t.main.welcome}</p>
+              <p className="text-[13px] max-w-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{t.main.welcomeMessage}</p>
+            </div>
+            {/* 模式按钮 */}
+            <div className="flex gap-2 flex-wrap justify-center relative">
               {[
                 { icon: 'chat',      text: t.tabs.chat,      mode: 'chat'      as ConversationMode },
                 { icon: 'architect', text: t.tabs.imageGen,  mode: 'architect' as ConversationMode },
@@ -693,12 +704,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                 const Icon = MODE_ICONS[s.icon as ConversationMode];
                 return (
                   <button key={s.mode} onClick={() => setMode(s.mode)}
-                    className="flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border text-[13px] font-medium transition-all duration-150 shadow-sm hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                    style={{
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderColor: 'var(--border-color)',
-                      color: 'var(--text-primary)'
-                    }}>
+                    className="flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl border text-[13px] font-medium transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
                     <Icon className="w-4 h-4" />
                     <span>{s.text}</span>
                   </button>

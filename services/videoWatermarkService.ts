@@ -86,18 +86,21 @@ export const VideoWatermarkUtils = {
         ]);
         console.log('[Video Watermark] FFmpeg 命令执行完成');
       } catch (logoError) {
-        console.log('[Video Watermark] Logo not found, copying video without watermark');
+        console.log('[Video Watermark] Logo not found, adding text watermark instead');
         
         onProgress?.(30);
         
-        console.log('[Video Watermark] 开始执行 FFmpeg 命令 (复制视频 + 元数据)...');
+        console.log('[Video Watermark] 开始执行 FFmpeg 命令 (带文字水印 + 元数据)...');
         
         await ffmpeg.exec([
           '-i', 'input.mp4',
+          '-vf', `drawtext=text='AI Generated | Chief Image Architect':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=W-tw-20:y=H-th-20`,
           '-metadata', 'title=AI Generated Content',
           '-metadata', `comment=Platform:KBITAI|ID:${contentId}`,
           '-metadata', 'software=KBITAI AI Image Architect',
-          '-c', 'copy',
+          '-c:v', 'libx264',
+          '-preset', 'fast',
+          '-c:a', 'copy',
           '-y',
           'output.mp4'
         ]);

@@ -84,9 +84,9 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
   // 视频生成参数
   const VIDEO_MODELS = [
-    { id: 'KbitVeo-speed',  label: 'KbitVeo-speed',  ratios: ['16:9'],                   duration: '5-15s' },
-    { id: 'KbitVeo-normal', label: 'KbitVeo-normal', ratios: ['16:9', '9:16'],            duration: '5-30s' },
-    { id: 'KbitVeo-pro',    label: 'KbitVeo-pro',    ratios: ['16:9', '9:16', '21:9'],    duration: '5-45s' },
+    { id: 'KbitVeo-speed',  label: 'Speed-SD1',  ratios: ['16:9'],                   duration: '5-15s' },
+    { id: 'KbitVeo-normal', label: 'Normal-SD1.5', ratios: ['16:9', '9:16'],            duration: '5-30s' },
+    { id: 'KbitVeo-pro',    label: 'Pro-SD2',    ratios: ['16:9', '9:16', '21:9'],    duration: '5-45s' },
   ];
   const [videoModel, setVideoModel] = useState('KbitVeo-speed');
   const [videoRatio, setVideoRatio] = useState('16:9');
@@ -275,13 +275,13 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
           <div className="flex items-center gap-2 px-4 pt-2 pb-1 flex-wrap">
             <span className="text-[10px] text-white/20 uppercase tracking-wider">{language === 'zh-CN' ? '快捷操作:' : 'Quick Actions:'}</span>
             {[
-              { action: 'analyze' as const,       label: language === 'zh-CN' ? '解析图片' : 'Analyze',   icon: '🔍' },
-              { action: 'reverse' as const,        label: language === 'zh-CN' ? '反推提示词' : 'Reverse Prompt', icon: '✦' },
-              { action: 'reverse_json' as const,   label: language === 'zh-CN' ? 'JSON提示词' : 'JSON Prompt', icon: '{ }' },
+              { action: 'analyze' as const,       label: language === 'zh-CN' ? '解析图片' : 'Analyze',   icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0" /></svg> },
+              { action: 'reverse' as const,        label: language === 'zh-CN' ? '反推提示词' : 'Reverse Prompt', icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg> },
+              { action: 'reverse_json' as const,   label: language === 'zh-CN' ? 'JSON提示词' : 'JSON Prompt', icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg> },
             ].map(({ action, label, icon }) => (
               <button key={action} onClick={() => handleQuickAction(action)} disabled={isLoading}
                 className="flex items-center gap-1.5 min-h-[30px] px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/40 text-[11px] font-medium hover:bg-indigo-500/15 hover:border-indigo-500/30 hover:text-indigo-300 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                <span className="font-mono text-[10px]">{icon}</span>
+                <span className="flex items-center justify-center">{icon}</span>
                 <span>{label}</span>
               </button>
             ))}
@@ -289,102 +289,87 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
         )}
         {/* 图像生成参数（仅渲染模式） */}
         {mode === 'architect' && (
-          <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] space-y-2 text-[12px]">
-            {/* 第一行：比例 + 尺寸 + 质量 + 数量 + 锁定 */}
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="px-4 pt-2.5 pb-2 border-b border-white/[0.06]">
+            <div className="flex flex-wrap items-center gap-2">
               {/* 比例 */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.aspectRatio}:</span>
-                <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)}
-                  className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-2 py-1 text-white/70 text-[12px] font-medium cursor-pointer focus:outline-none focus:border-white/20">
-                  <option value="1:1">1:1</option>
-                  <option value="3:4">3:4</option>
-                  <option value="4:3">4:3</option>
-                  <option value="16:9">16:9</option>
-                  <option value="custom">{t.parameters.custom}</option>
-                </select>
-                {aspectRatio === 'custom' && (
-                  <input value={customRatio} onChange={e => setCustomRatio(e.target.value)}
-                    placeholder={t.parameters.customPlaceholder}
-                    className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-2 py-1 text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
-                )}
-              </div>
+              <select
+                value={lockRatio !== null ? 'custom' : aspectRatio}
+                onChange={e => { setLockRatio(null); setAspectRatio(e.target.value); }}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] cursor-pointer focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors">
+                <option value="1:1" className="bg-[#1a1a1a]">1:1</option>
+                <option value="3:4" className="bg-[#1a1a1a]">3:4</option>
+                <option value="4:3" className="bg-[#1a1a1a]">4:3</option>
+                <option value="16:9" className="bg-[#1a1a1a]">16:9</option>
+                <option value="custom" className="bg-[#1a1a1a]">{lockRatio !== null ? `${t.parameters.custom} (${effectiveRatio})` : t.parameters.custom}</option>
+              </select>
+              {(aspectRatio === 'custom' && lockRatio === null) && (
+                <input value={customRatio} onChange={e => setCustomRatio(e.target.value)}
+                  placeholder="w:h"
+                  className="h-8 w-16 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
+              )}
 
               {/* 尺寸 */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.imageSize}:</span>
-                {(['1K', '2K', '4K'] as const).map(s => (
-                  <button key={s} onClick={() => setImageSize(s)}
-                    className={`min-w-[40px] min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${imageSize === s ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {s}
-                  </button>
-                ))}
-              </div>
+              <select value={imageSize} onChange={e => setImageSize(e.target.value as any)}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] cursor-pointer focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors">
+                <option value="1K" className="bg-[#1a1a1a]">1K</option>
+                <option value="2K" className="bg-[#1a1a1a]">2K</option>
+                <option value="4K" className="bg-[#1a1a1a]">4K</option>
+              </select>
 
               {/* 质量 */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.quality}:</span>
-                {(['FAST', 'QUALITY'] as const).map(tier => (
-                  <button key={tier} onClick={() => setModelTier(tier)}
-                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${modelTier === tier ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {tier === 'FAST' ? t.parameters.fast : t.parameters.highQuality}
-                  </button>
-                ))}
-              </div>
+              <select value={modelTier} onChange={e => setModelTier(e.target.value as any)}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] cursor-pointer focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors">
+                <option value="FAST" className="bg-[#1a1a1a]">{t.parameters.fast}</option>
+                <option value="QUALITY" className="bg-[#1a1a1a]">{t.parameters.highQuality}</option>
+              </select>
 
               {/* 数量 */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.count}:</span>
-                <select value={imageCount} onChange={e => setImageCount(Number(e.target.value))}
-                  className="min-h-[36px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-[12px] focus:outline-none focus:border-white/20 cursor-pointer">
-                  {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
+              <select value={imageCount} onChange={e => setImageCount(Number(e.target.value))}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors cursor-pointer">
+                {[1,2,3,4].map(n => <option key={n} value={n} className="bg-[#1a1a1a]">×{n}</option>)}
+              </select>
 
               {/* 高清放大 */}
               {onUpscale && (
                 <button onClick={() => onUpscale(null, images.find(i => i.fileCategory === 'image')?.data)} disabled={isLoading}
-                  className="flex items-center gap-1 min-h-[36px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[12px] hover:bg-white/[0.12] hover:text-white/80 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>高清
+                  aria-label="高清放大"
+                  className="h-8 px-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/50 text-[12px] hover:bg-white/[0.08] hover:text-white/80 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>HD
                 </button>
               )}
 
               {/* 高级参数展开 */}
               <button onClick={() => setShowAdvanced(p => !p)}
-                className="text-[11px] text-white/30 hover:text-white/60 transition-colors flex items-center gap-1">
-                {t.parameters.advanced} {showAdvanced ? '▾' : '▸'}
+                className="h-8 px-2 rounded-lg text-[11px] text-white/25 hover:text-white/50 hover:bg-white/[0.04] transition-all flex items-center gap-1">
+                <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                {t.parameters.advanced}
               </button>
             </div>
 
-            {/* 第二行：高级参数 */}
+            {/* 高级参数 */}
             {showAdvanced && (
-              <div className="flex flex-wrap items-center gap-4 pt-1">
-                {/* 温度 */}
+              <div className="flex flex-wrap items-center gap-4 pt-2 mt-2 border-t border-white/[0.04]">
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">{t.parameters.temperature}</span>
+                  <span className="text-[11px] text-white/30">{t.parameters.temperature}</span>
                   <input type="range" min="0" max="2" step="0.05" value={temperature}
                     onChange={e => setTemperature(parseFloat(e.target.value))}
                     className="w-20 h-1.5 accent-theme" />
                   <span className="text-[11px] font-mono text-white/40 w-8">{temperature.toFixed(2)}</span>
                 </div>
-
-                {/* top_p */}
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">{t.parameters.topP}</span>
+                  <span className="text-[11px] text-white/30">{t.parameters.topP}</span>
                   <input type="range" min="0" max="1" step="0.01" value={topP}
                     onChange={e => setTopP(parseFloat(e.target.value))}
                     className="w-20 h-1.5 accent-theme" />
                   <span className="text-[11px] font-mono text-white/40 w-8">{topP.toFixed(2)}</span>
                 </div>
-
-                {/* 随机种子 */}
                 <div className="flex items-center gap-2">
-                  <span className="text-white/40 font-medium">{t.parameters.seed}</span>
+                  <span className="text-[11px] text-white/30">{t.parameters.seed}</span>
                   <input type="number" value={seed ?? ''} onChange={e => setSeed(e.target.value ? parseInt(e.target.value) : null)}
                     placeholder={t.parameters.random}
-                    className="w-20 min-h-[32px] px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
-                  <button onClick={() => setSeedLocked(p => !p)} title={seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}
-                    className={`min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95 ${seedLocked ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-white/30 hover:text-white/60'}`}>
+                    className="w-20 h-8 px-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/70 text-[12px] focus:outline-none focus:border-white/20" />
+                  <button onClick={() => setSeedLocked(p => !p)} aria-label={seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 ${seedLocked ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-white/30 hover:text-white/60'}`}>
                     {seedLocked
                       ? <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
                       : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
@@ -398,40 +383,21 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
         {/* 视频生成参数 */}
         {mode === 'video' && (
-          <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] text-[12px]">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="px-4 pt-2.5 pb-2 border-b border-white/[0.06]">
+            <div className="flex flex-wrap items-center gap-2">
               {/* 模型 */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.model}:</span>
-                {VIDEO_MODELS.map(m => (
-                  <button key={m.id} onClick={() => { setVideoModel(m.id); if (!m.ratios.includes(videoRatio)) setVideoRatio(m.ratios[0]); }}
-                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${videoModel === m.id ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {m.label.replace('KbitVeo-', '')}
-                  </button>
-                ))}
-              </div>
+              <select value={videoModel} onChange={e => { const m = VIDEO_MODELS.find(x => x.id === e.target.value)!; setVideoModel(m.id); if (!m.ratios.includes(videoRatio)) setVideoRatio(m.ratios[0]); }}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] cursor-pointer focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors">
+                {VIDEO_MODELS.map(m => <option key={m.id} value={m.id} className="bg-[#1a1a1a]">{m.label}</option>)}
+              </select>
               {/* 比例 */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.aspectRatio}:</span>
-                {currentVideoModel.ratios.map(r => (
-                  <button key={r} onClick={() => setVideoRatio(r)}
-                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 ${videoRatio === r ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                    {r}
-                  </button>
-                ))}
-              </div>
-              {/* 时长（只显示） */}
-              <div className="flex items-center gap-1.5 ml-auto">
-                <span className="text-[10px] uppercase tracking-wider text-white/30">{t.parameters.duration}:</span>
-                <span className="text-[12px] font-medium text-white/40">{currentVideoModel.duration}</span>
-              </div>
+              <select value={videoRatio} onChange={e => setVideoRatio(e.target.value)}
+                className="h-8 px-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white/70 text-[12px] cursor-pointer focus:outline-none focus:border-white/20 hover:border-white/20 transition-colors">
+                {currentVideoModel.ratios.map(r => <option key={r} value={r} className="bg-[#1a1a1a]">{r}</option>)}
+              </select>
+              <span className="text-[11px] text-white/25 ml-1">{currentVideoModel.duration}</span>
             </div>
-            {/* 运镜提示 */}
-            <div className="mt-2 px-2 py-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10">
-              <p className="text-[10px] text-blue-400/70 leading-relaxed">
-                {t.parameters.cameraMotionTip}
-              </p>
-            </div>
+            <p className="mt-1.5 text-[10px] text-blue-400/50 leading-relaxed">{t.parameters.cameraMotionTip}</p>
           </div>
         )}
 
@@ -488,6 +454,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
           {/* image upload */}
           <button
             onClick={() => fileInputRef.current?.click()}
+            aria-label="上传图片或文件"
             className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-white/30 hover:text-white/60 hover:bg-white/5 transition-all duration-150 active:scale-95 focus:outline-none"
             title="上传图片"
           >
@@ -508,6 +475,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
           <button
             onClick={handleSubmit}
             disabled={(!text.trim() && images.length === 0) || isLoading}
+            aria-label={isLoading ? "生成中" : "发送"}
             className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150
               ${(!text.trim() && images.length === 0) || isLoading
                 ? 'bg-white/[0.04] text-white/20 cursor-not-allowed'

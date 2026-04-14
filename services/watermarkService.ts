@@ -155,8 +155,21 @@ export const WatermarkUtils = {
           }).catch(() => {});
         };
         logo.onerror = () => {
+          // 添加文字水印
+          ctx.globalAlpha = 0.5;
+          const fontSize = Math.max(12, canvas.width * 0.02);
+          ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+          ctx.fillStyle = "white";
+          ctx.textAlign = "right";
+          const timestamp = new Date().toISOString().split('T')[0];
+          const text = `AI Generated | Chief Image Architect | ${timestamp}`;
+          ctx.fillText(text, canvas.width - 20, canvas.height - 20);
+          
+          // 隐式标识：LSB 隐写
+          ctx.globalAlpha = 1.0;
           const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
           embedLSB(ctx, canvas.width, canvas.height, payload);
+          
           const dataUrl = canvas.toDataURL('image/png');
           resolve({ dataUrl, contentId });
           fetch('/api/content/register', {

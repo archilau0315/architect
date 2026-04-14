@@ -1808,14 +1808,23 @@ export const GeminiService = {
           
           // 格式化标签
           let formattedLabel = modelId;
-          // 对于 KbitVeo 系列模型，强制格式化为 KbitVeo-xxx 格式（K，V大写，其它小写）
+          // 对于 KbitVeo 系列模型，设置显示标签
           if (modelId.startsWith('KbitVeo-')) {
             // 提取模型类型（speed、normal、pro、master）
             const modelType = modelId.split('-').find(part => 
               ['speed', 'normal', 'pro', 'master'].includes(part.toLowerCase())
             ) || 'speed';
-            // 强制格式化为 KbitVeo-xxx
-            formattedLabel = 'KbitVeo-' + modelType.toLowerCase();
+            // 特殊处理模型标签
+            if (modelType === 'speed') {
+              formattedLabel = 'Speed-SD1';
+            } else if (modelType === 'normal') {
+              formattedLabel = 'Normal-SD1.5';
+            } else if (modelType === 'pro') {
+              formattedLabel = 'Pro-SD2';
+            } else {
+              // 其他模型保持原有格式
+              formattedLabel = 'KbitVeo-' + modelType.toLowerCase();
+            }
           }
           
           dynamicEngines.push({
@@ -1839,22 +1848,22 @@ export const GeminiService = {
       engines = [
         {
           id: 'KbitVeo-speed',
-          label: 'KbitVeo-speed',
-          desc: 'KbitVeo Speed 视频模型 - 快速生成',
+          label: 'Speed-SD1',
+          desc: 'Speed-SD1 视频模型 - 快速生成',
           supportedRatios: ['16:9'],
           duration: '5-15s'
         },
         {
           id: 'KbitVeo-normal',
-          label: 'KbitVeo-normal',
-          desc: 'KbitVeo Normal 视频模型 - 标准质量',
+          label: 'Normal-SD1.5',
+          desc: 'Normal-SD1.5 视频模型 - 标准质量',
           supportedRatios: ['16:9', '9:16'],
           duration: '5-30s'
         },
         {
           id: 'KbitVeo-pro',
-          label: 'KbitVeo-pro',
-          desc: 'KbitVeo Pro 视频模型 - 高质量',
+          label: 'Pro-SD2',
+          desc: 'Pro-SD2 视频模型 - 高质量',
           supportedRatios: ['16:9', '9:16', '21:9'],
           duration: '5-45s'
         },

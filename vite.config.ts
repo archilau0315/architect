@@ -6,12 +6,12 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       base: '/architect/',
-      publicDir: path.resolve(__dirname, '../public'),
+      publicDir: 'public',
       server: {
         port: 3000,
         host: '0.0.0.0',
         strictPort: false,
-        origin: 'http://localhost:3000/architect',
+        origin: 'http://localhost:3000',
         proxy: {
           '/architect/api/auth': {
             target: 'https://api.kbitai.com.cn',
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
             timeout: 30000
           },
           '/api/content': {
-            target: 'http://localhost:3001',
+            target: 'http://localhost:3002',
             changeOrigin: true,
             timeout: 30000
           },
@@ -38,11 +38,11 @@ export default defineConfig(({ mode }) => {
             timeout: 30000
           },
           '/api/ph8/user-info': {
-            target: 'http://localhost:3001',
+            target: 'http://localhost:3002',
             changeOrigin: true,
           },
           '/architect/api/ph8/user-info': {
-            target: 'http://localhost:3001',
+            target: 'http://localhost:3002',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/architect/, ''),
           },

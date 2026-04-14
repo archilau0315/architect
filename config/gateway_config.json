@@ -129,7 +129,7 @@
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "v1.0-lite-i2v-250428",
+        "remoteModelId": "doubao-seedance-1-5-pro-251215",
         "priority": 20,
         "active": true
       }
@@ -138,7 +138,7 @@
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "v1.5-pro-251215",
+        "remoteModelId": "doubao-seedance-2-0-fast",
         "priority": 20,
         "active": true
       }

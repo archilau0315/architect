@@ -313,7 +313,7 @@ const Layout: React.FC<LayoutProps> = ({
                   style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
                   {avatarUrl
                     ? <img src={avatarUrl} className="w-full h-full object-cover" />
-                    : <span className="text-[9px] font-bold tracking-tight" style={{ color: 'var(--text-secondary)' }}>KB</span>}
+                    : <span className="text-[11px] font-bold tracking-tight" style={{ color: 'var(--text-secondary)' }}>KB</span>}
                 </div>
                 {(isDeveloperMode || userTier === 'plus' || userTier === 'pro') && (
                   <div className="tier-badge" style={{
@@ -338,9 +338,9 @@ const Layout: React.FC<LayoutProps> = ({
                 onChange={e => handleFileChange(e, setAvatarUrl, AVATAR_KEY)} />
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-bold tracking-tight truncate leading-tight" style={{ color: 'var(--text-primary)' }}>首席图像架构师</p>
-                <p className="text-[8px] font-medium tracking-tight truncate leading-tight opacity-60" style={{ color: 'var(--text-secondary)' }}>Chief Image Architect</p>
+                <p className="text-[10px] font-medium tracking-tight truncate leading-tight opacity-60" style={{ color: 'var(--text-secondary)' }}>Chief Image Architect</p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <p onClick={handleVersionClick} className={`text-[9px] font-mono cursor-pointer leading-tight ${isDeveloperMode ? 'text-emerald-400' : ''}`}
+                  <p onClick={handleVersionClick} className={`text-[10px] font-mono cursor-pointer leading-tight ${isDeveloperMode ? 'text-emerald-400' : ''}`}
                     style={{ color: isDeveloperMode ? undefined : 'var(--text-tertiary)' }}>
                     V2.00
                   </p>
@@ -438,9 +438,9 @@ const Layout: React.FC<LayoutProps> = ({
               <input ref={companyLogoInputRef} type="file" accept="image/*" className="hidden"
                 onChange={e => handleFileChange(e, setCompanyLogoUrl, COMPANY_LOGO_KEY)} />
               <div className="flex-1 min-w-0 space-y-0.5">
-                <p className="text-[9px] font-medium leading-tight" style={{ color: 'var(--text-tertiary)' }}>Author: 刘珂（Archilau）</p>
+                <p className="text-[10px] font-medium leading-tight" style={{ color: 'var(--text-tertiary)' }}>Author: 刘珂（Archilau）</p>
                 <p className="text-[12px] font-semibold tracking-tight leading-tight truncate" style={{ color: 'var(--text-secondary)' }}>匡形无界智能科技有限公司</p>
-                <p className="text-[8px] font-medium leading-tight uppercase tracking-tighter" style={{ color: 'var(--text-tertiary)' }}>Kuanform Boundless Intelligent Technology Co., Ltd.</p>
+                <p className="text-[10px] font-medium leading-tight uppercase tracking-tighter" style={{ color: 'var(--text-tertiary)' }}>Kuanform Boundless Intelligent Technology Co., Ltd.</p>
               </div>
             </div>
           </div>
@@ -486,20 +486,20 @@ const Layout: React.FC<LayoutProps> = ({
         {!collapsed && (
           <div className="px-3 pb-3 shrink-0 border-t pt-2" style={{ borderColor: 'var(--border-color)' }}>
             {/* 版权 */}
-            <p className="text-center text-[7px] mb-1.5 opacity-70" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-center text-[10px] mb-1.5 opacity-70" style={{ color: 'var(--text-tertiary)' }}>
               © 天津匡形无界智能科技有限公司
             </p>
             {/* ICP + 公安备案 */}
             <div className="flex items-center justify-between opacity-40 hover:opacity-70 transition-opacity">
               <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer"
-                className="text-[6px] transition-opacity"
+                className="text-[9px] transition-opacity"
                 style={{ color: 'var(--text-tertiary)' }}>
                 津ICP备2026002055号-1
               </a>
               <a href="https://beian.mps.gov.cn/#/query/webSearch?code=12010402002460" target="_blank" rel="noreferrer"
                 className="flex items-center gap-0.5 transition-opacity">
                 <img src="/architect/备案图标.png" className="w-2.5 h-2.5 shrink-0" alt="公安备案" />
-                <span className="text-[6px]" style={{ color: 'var(--text-tertiary)' }}>津公网安备12010402002460号</span>
+                <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>津公网安备12010402002460号</span>
               </a>
             </div>
           </div>
