@@ -4,6 +4,7 @@ import { ContentIdService } from './contentIdService';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
+let logoCache: Uint8Array | null = null;
 
 export const VideoWatermarkUtils = {
   generateContentId(): string {
@@ -22,10 +23,6 @@ export const VideoWatermarkUtils = {
         onProgress?.(5);
         ffmpeg = new FFmpeg();
         
-        ffmpeg.on('log', ({ message }) => {
-          console.log('[FFmpeg]', message);
-        });
-        
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         await ffmpeg.load({
           coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -34,12 +31,9 @@ export const VideoWatermarkUtils = {
         ffmpegLoaded = true;
       }
       
-      onProgress?.(10);
-      
-      console.log('[Video Watermark] 开始下载视频:', videoUrl.substring(0, 100) + '...');
+      onProgress?.(15);
       
       const videoData = await fetchFile(videoUrl);
-      console.log('[Video Watermark] 视频下载完成, 大小:', videoData.byteLength, 'bytes');
       
       if (videoData.byteLength === 0) {
         throw new Error('视频下载失败，文件为空');
@@ -51,67 +45,53 @@ export const VideoWatermarkUtils = {
       }
       
       await ffmpeg.writeFile('input.mp4', videoData);
-      onProgress?.(20);
-      console.log('[Video Watermark] 视频已写入 FFmpeg 文件系统');
+      onProgress?.(25);
       
-      try {
-        console.log('[Video Watermark] 尝试加载 Logo:', logoUrl);
+      if (!logoCache) {
         const logoData = await fetchFile(logoUrl);
-        console.log('[Video Watermark] Logo 下载完成, 大小:', logoData.byteLength, 'bytes');
-        
-        if (logoData.byteLength === 0) {
-          throw new Error('Logo 下载失败，文件为空');
+        if (logoData.byteLength > 0) {
+          logoCache = logoData as Uint8Array;
         }
-        
-        await ffmpeg.writeFile('logo.png', logoData);
-        console.log('[Video Watermark] Logo 已写入文件系统');
-        
-        onProgress?.(30);
-        
-        console.log('[Video Watermark] 开始执行 FFmpeg 命令 (带 Logo + 元数据)...');
+      }
+      
+      if (logoCache) {
+        await ffmpeg.writeFile('logo.png', logoCache);
+        onProgress?.(35);
         
         await ffmpeg.exec([
           '-i', 'input.mp4',
           '-i', 'logo.png',
           '-filter_complex',
-          '[1:v]scale=iw*0.40:-1,format=rgba,lutrgb=r=255:g=255:b=255,lut=a=val*0.7[logo];[0:v][logo]overlay=W-w-20:H-h-20',
+          '[1:v]scale=iw*0.40:-1,format=rgba,lutrgb=r=255:g=255:b=255,lut=a=val*0.5[logo];[0:v][logo]overlay=W-w-20:H-h-20',
           '-metadata', 'title=AI Generated Content',
           '-metadata', `comment=Platform:KBITAI|ID:${contentId}`,
           '-metadata', 'software=KBITAI AI Image Architect',
           '-c:v', 'libx264',
-          '-preset', 'fast',
+          '-preset', 'veryfast',
+          '-crf', '23',
           '-c:a', 'copy',
           '-y',
           'output.mp4'
         ]);
-        console.log('[Video Watermark] FFmpeg 命令执行完成');
-      } catch (logoError) {
-        console.log('[Video Watermark] Logo not found, adding text watermark instead');
-        
-        onProgress?.(30);
-        
-        console.log('[Video Watermark] 开始执行 FFmpeg 命令 (带文字水印 + 元数据)...');
-        
+      } else {
         await ffmpeg.exec([
           '-i', 'input.mp4',
-          '-vf', `drawtext=text='AI Generated | Chief Image Architect':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=W-tw-20:y=H-th-20`,
+          '-vf', `drawtext=text='AI Generated | KbitAI':fontcolor=white:fontsize=20:box=1:boxcolor=black@0.5:boxborderw=3:x=W-tw-15:y=H-th-15`,
           '-metadata', 'title=AI Generated Content',
           '-metadata', `comment=Platform:KBITAI|ID:${contentId}`,
           '-metadata', 'software=KBITAI AI Image Architect',
           '-c:v', 'libx264',
-          '-preset', 'fast',
+          '-preset', 'veryfast',
+          '-crf', '23',
           '-c:a', 'copy',
           '-y',
           'output.mp4'
         ]);
-        console.log('[Video Watermark] FFmpeg 命令执行完成');
       }
       
       onProgress?.(90);
       
-      console.log('[Video Watermark] 读取输出文件...');
       const data = await ffmpeg.readFile('output.mp4');
-      console.log('[Video Watermark] 输出文件大小:', (data as Uint8Array).byteLength, 'bytes');
       
       const blob = new Blob([data], { type: 'video/mp4' });
       const objectUrl = URL.createObjectURL(blob);
@@ -146,6 +126,18 @@ export const VideoWatermarkUtils = {
       });
       ffmpegLoaded = true;
       onProgress?.();
+    }
+  },
+  
+  async preloadLogo(logoUrl: string = '/LOGOkbitwater.png'): Promise<void> {
+    try {
+      const logoData = await fetchFile(logoUrl);
+      if (logoData.byteLength > 0) {
+        logoCache = logoData as Uint8Array;
+        console.log('[Logo] 预加载完成');
+      }
+    } catch (e) {
+      console.warn('[Logo] 预加载失败:', e);
     }
   }
 };

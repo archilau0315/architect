@@ -474,7 +474,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                     )}
                   </div>
                   <div className={`mt-3 flex items-center gap-5 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 opacity-0 group-hover:opacity-100 transition-all ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                     <span className="font-mono">{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                     <span className="font-mono">{new Date(msg.timestamp).toLocaleString('zh', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                      <button onClick={() => handleCopy(msg.text, i)} title={copyStatus === i ? '已复制' : '复制内容'}
                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${copyStatus === i ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-400 hover:text-theme hover:bg-white/5'}`}>
                        {copyStatus === i

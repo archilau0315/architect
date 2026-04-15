@@ -55,7 +55,7 @@ export interface ChatSession {
   timestamp: number;
 }
 
-export type AppTheme = 'indigo' | 'ocean' | 'forest' | 'sunset' | 'minimal' | 'dark' | 'light';
+export type AppTheme = 'dark' | 'indigo' | 'ocean' | 'forest' | 'sunset' | 'minimal';
 export type Language = 'zh-CN' | 'en-US' | 'ja-JP' | 'ko-KR' | 'es-ES' | 'fr-FR' | 'de-DE' | 'ru-RU';
 
 export interface UserPreferences {
@@ -72,6 +72,7 @@ export interface UserPreferences {
   autoSaveHistory: boolean;      // 自动保存历史
   compactSidebar: boolean;       // 紧凑侧边栏
   fontSize: 'small' | 'medium' | 'large';  // 全局字体大小
+  lightMode: boolean;  // 亮色模式（与主题色彩解耦）
 }
 
 export interface CustomModel {

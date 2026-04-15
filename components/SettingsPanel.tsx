@@ -310,19 +310,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     <div className="max-w-md mx-auto space-y-6 py-4 animate-in slide-in-from-bottom-4 duration-500">
       <div className="text-center space-y-2 mb-6">
         <h3 className="text-xl font-semibold text-white/90">{isLoginView ? '欢迎回归架构师' : '创建您的数字工坊'}</h3>
-        <p className="text-xs text-white/30 uppercase tracking-widest">{isLoginView ? 'Member Login' : 'Join the Collective'}</p>
+        <p className="text-xs text-white/60 uppercase tracking-widest">{isLoginView ? 'Member Login' : 'Join the Collective'}</p>
       </div>
 
       <div className="flex bg-white/[0.04] p-1 rounded-xl border border-white/[0.06]">
         <button
           onClick={() => setAuthType('email')}
-          className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition-all ${authType === 'email' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-white/30 hover:text-white/60'}`}
+          className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition-all ${authType === 'email' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-white/50 hover:text-white/80'}`}
         >
           邮箱验证
         </button>
         <button
           onClick={() => setAuthType('mobile')}
-          className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition-all ${authType === 'mobile' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-white/30 hover:text-white/60'}`}
+          className={`flex-1 py-2 text-[11px] font-medium rounded-lg transition-all ${authType === 'mobile' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-white/50 hover:text-white/80'}`}
         >
           手机快捷
         </button>
@@ -332,32 +332,32 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         {authType === 'email' ? (
           <>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest ml-1">Email Address</label>
-              <input type="email" placeholder="name@kbit-ai.com" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all" />
+              <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Email Address</label>
+              <input type="email" placeholder="name@kbit-ai.com" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest ml-1">Security Key</label>
-              <input type="password" placeholder="••••••••" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all" />
+              <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Security Key</label>
+              <input type="password" placeholder="••••••••" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" />
             </div>
             {!isLoginView && (
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest ml-1">邀请码 <span className="text-red-400">*</span></label>
-                <input type="text" placeholder="KBXXXXXXXX" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all font-mono uppercase tracking-wider" />
-                <p className="text-[9px] text-white/20 ml-1">内测期间需邀请码注册，可获得 1000 积分体验金</p>
+                <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">邀请码 <span className="text-red-400">*</span></label>
+                <input type="text" placeholder="KBXXXXXXXX" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all font-mono uppercase tracking-wider" />
+                <p className="text-[9px] text-white/50 ml-1">内测期间需邀请码注册，可获得 1000 积分体验金</p>
               </div>
             )}
           </>
         ) : (
           <>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest ml-1">Mobile Number</label>
-              <input type="tel" placeholder="+86 1XX XXXX XXXX" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all font-mono" />
+              <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Mobile Number</label>
+              <input type="tel" placeholder="+86 1XX XXXX XXXX" className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all font-mono" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest ml-1">Verification Code</label>
+              <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Verification Code</label>
               <div className="flex gap-2">
-                <input type="text" placeholder="6-digit code" className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all font-mono text-center tracking-[0.5em]" />
-                <button className="px-4 bg-white/[0.04] border border-white/[0.08] text-[11px] font-medium text-white/40 rounded-xl hover:bg-white/8 hover:text-white/70 transition-all whitespace-nowrap">获取验证码</button>
+                <input type="text" placeholder="6-digit code" className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all font-mono text-center tracking-[0.5em]" />
+                <button className="px-4 bg-white/[0.04] border border-white/[0.08] text-[11px] font-medium text-white/60 rounded-xl hover:bg-white/8 hover:text-white/80 transition-all whitespace-nowrap">获取验证码</button>
               </div>
             </div>
           </>
@@ -366,7 +366,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         {!isLoginView && (
           <div className="flex items-center gap-3 px-1">
             <input type="checkbox" id="agree" className="w-4 h-4 rounded accent-blue-500" />
-            <label htmlFor="agree" className="text-[11px] text-white/30">我已阅读并同意《隐私政策》与《用户服务协议》</label>
+            <label htmlFor="agree" className="text-[11px] text-white/60">我已阅读并同意《隐私政策》与《用户服务协议》</label>
           </div>
         )}
       </div>
@@ -378,7 +378,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       <div className="pt-6 border-t border-white/[0.06] space-y-4">
         <div className="flex items-center justify-center gap-4">
           <div className="h-px flex-1 bg-white/[0.06]" />
-          <span className="text-[9px] font-medium text-white/20 uppercase tracking-[0.3em]">第三方快捷登录</span>
+          <span className="text-[9px] font-medium text-white/50 uppercase tracking-[0.3em]">第三方快捷登录</span>
           <div className="h-px flex-1 bg-white/[0.06]" />
         </div>
         <div className="flex justify-center gap-6">
@@ -392,7 +392,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       </div>
 
       <div className="text-center">
-        <button onClick={() => setIsLoginView(!isLoginView)} className="text-[11px] font-medium text-white/30 hover:text-white/60 transition-all">
+        <button onClick={() => setIsLoginView(!isLoginView)} className="text-[11px] font-medium text-white/50 hover:text-white/80 transition-all">
           {isLoginView ? '没有账号？立即加入' : '已有账号？返回登录'}
         </button>
       </div>
@@ -788,10 +788,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">{t.settings.preferences.theme}</label>
                     <p className="text-[9px] text-white/20 mt-1">{t.settings.preferences.themeDesc}</p>
                   </div>
-                  <div className="grid grid-cols-7 gap-3">
+                  <div className="grid grid-cols-6 gap-3">
                     {[
-                      { id: 'dark', name: t.settings.themes.dark, color: '#1a1a1a', lightColor: '#2d2d2d', icon: '🌙' },
-                      { id: 'light', name: t.settings.themes.light, color: '#f5f5f5', lightColor: '#ffffff', icon: '☀️' },
+                      { id: 'dark', name: t.settings.themes.dark, color: '#6366F1', lightColor: '#818CF8', icon: '✦' },
                       { id: 'indigo', name: t.settings.themes.indigo, color: '#8B5CF6', lightColor: '#A78BFA', icon: '💜' },
                       { id: 'ocean', name: t.settings.themes.ocean, color: '#06B6D4', lightColor: '#22D3EE', icon: '🌊' },
                       { id: 'forest', name: t.settings.themes.forest, color: '#10B981', lightColor: '#34D399', icon: '🌲' },
@@ -800,7 +799,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     ].map(theme => (
                       <button
                         key={theme.id}
-                        onClick={() => onPreferencesChange({...preferences, theme: theme.id as AppTheme})}
+                        onClick={() => onPreferencesChange({...preferences, theme: theme.id as AppTheme, lightMode: false})}
                         className={`relative p-3 rounded-xl border-2 transition-all duration-300 hover:scale-110 hover:shadow-xl group ${
                           preferences.theme === theme.id
                             ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/30 scale-105'
@@ -834,6 +833,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* 亮/暗模式切换 */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.08] bg-white/[0.03]">
+                  <div>
+                    <p className="text-[10px] font-medium text-white/60">{preferences.lightMode ? '☀️ 亮色模式' : '🌙 暗色模式'}</p>
+                    <p className="text-[9px] text-white/30 mt-0.5">当前主题的背景亮度</p>
+                  </div>
+                  <button
+                    onClick={() => onPreferencesChange({...preferences, lightMode: !preferences.lightMode})}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${preferences.lightMode ? 'bg-blue-500' : 'bg-white/20'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-300 ${preferences.lightMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
                 </div>
 
                 {/* 字号调整 */}
@@ -918,7 +931,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           showWelcomeMessage: true,
                           autoSaveHistory: true,
                           compactSidebar: false,
-                          fontSize: 'medium'
+                          fontSize: 'medium',
+                          lightMode: false
                         });
                       }
                     }}

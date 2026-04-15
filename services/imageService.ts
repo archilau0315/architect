@@ -155,7 +155,7 @@ export const applyWatermark = async (base64: string): Promise<string> => {
       logo.onload = () => {
         const logoWidth = canvas.width * 0.15; // 占宽度的 15%
         const logoHeight = (logo.height / logo.width) * logoWidth;
-        ctx.globalAlpha = 0.3; // 半透明
+        ctx.globalAlpha = 0.5; // 50%透明度
         ctx.drawImage(logo, 20, canvas.height - logoHeight - 20, logoWidth, logoHeight);
         
         // 3. 绘制文字水印 (右下角)
@@ -180,7 +180,7 @@ export const applyWatermark = async (base64: string): Promise<string> => {
         ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
         resolve(canvas.toDataURL("image/png"));
       };
-      logo.src = "/logokbitwater.png";
+      logo.src = "/LOGOkbitwater.png";
     };
     img.src = base64;
   });

@@ -1,10 +1,10 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { UserPreferences } from '../../types';
+import { UserPreferences, AppTheme, Language } from '../../types';
 
 const initialState: UserPreferences = {
   promptFontSize: 18,
   chatFontSize: 15,
-  theme: 'indigo',
+  theme: 'dark',
   language: 'zh-CN',
   accentColor: '#3B82F6',
   borderRadius: 'normal',
@@ -13,14 +13,15 @@ const initialState: UserPreferences = {
   showWelcomeMessage: true,
   autoSaveHistory: true,
   compactSidebar: false,
-  fontSize: 'medium'
+  fontSize: 'medium',
+  lightMode: false
 };
 
 export const preferencesSlice = createSlice({
   name: 'preferences',
   initialState,
   reducers: {
-    setPreferences: (state, action: PayloadAction<UserPreferences>) => {
+    setPreferences: (_state, action: PayloadAction<UserPreferences>) => {
       return action.payload;
     },
     setPromptFontSize: (state, action: PayloadAction<number>) => {
@@ -29,19 +30,19 @@ export const preferencesSlice = createSlice({
     setChatFontSize: (state, action: PayloadAction<number>) => {
       state.chatFontSize = action.payload;
     },
-    setTheme: (state, action: PayloadAction<string>) => {
+    setTheme: (state, action: PayloadAction<AppTheme>) => {
       state.theme = action.payload;
     },
     setAccentColor: (state, action: PayloadAction<string>) => {
       state.accentColor = action.payload;
     },
-    setBorderRadius: (state, action: PayloadAction<string>) => {
+    setBorderRadius: (state, action: PayloadAction<UserPreferences['borderRadius']>) => {
       state.borderRadius = action.payload;
     },
-    setDensity: (state, action: PayloadAction<string>) => {
+    setDensity: (state, action: PayloadAction<UserPreferences['density']>) => {
       state.density = action.payload;
     },
-    setAnimationSpeed: (state, action: PayloadAction<string>) => {
+    setAnimationSpeed: (state, action: PayloadAction<UserPreferences['animationSpeed']>) => {
       state.animationSpeed = action.payload;
     },
     setShowWelcomeMessage: (state, action: PayloadAction<boolean>) => {
@@ -53,10 +54,10 @@ export const preferencesSlice = createSlice({
     setCompactSidebar: (state, action: PayloadAction<boolean>) => {
       state.compactSidebar = action.payload;
     },
-    setFontSize: (state, action: PayloadAction<string>) => {
+    setFontSize: (state, action: PayloadAction<UserPreferences['fontSize']>) => {
       state.fontSize = action.payload;
     },
-    setLanguage: (state, action: PayloadAction<string>) => {
+    setLanguage: (state, action: PayloadAction<Language>) => {
       state.language = action.payload;
     },
   },

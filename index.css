@@ -56,7 +56,7 @@
 }
 
 [data-theme="light"] {
-  /* 亮色主题：优雅的靛蓝色 - 专业感 */
+  /* 兼容旧数据：靛蓝色系（等同于 dark 主题色） */
   --theme-primary: #4F46E5;
   --theme-primary-light: #6366F1;
   --theme-primary-dark: #4338CA;
@@ -67,16 +67,6 @@
   --theme-shadow: rgba(79, 70, 229, 0.2);
   --theme-ring: rgba(79, 70, 229, 0.3);
   --glow-color: rgba(79, 70, 229, 0.3);
-
-  /* Light mode colors */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #e9ecef;
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a5568;
-  --text-tertiary: #718096;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --border-hover: rgba(0, 0, 0, 0.2);
 }
 
 [data-theme="dark"] {
@@ -244,14 +234,16 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
+  background: var(--theme-primary);
+  opacity: 0.3;
+  border-radius: 99px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  opacity: 0.6;
+  background: var(--theme-primary-light);
 }
 
 /* Glass effects */
@@ -329,6 +321,44 @@
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+/* Fade-in-up */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.25s var(--ease-out) both;
+}
+
+/* Subtle border glow on hover */
+.hover-glow {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.hover-glow:hover {
+  box-shadow: 0 0 0 1px var(--theme-primary), 0 0 16px var(--theme-shadow);
+  border-color: var(--theme-primary) !important;
+}
+
+/* Frosted sidebar surface */
+.sidebar-surface {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg-secondary) 95%, var(--theme-primary) 5%) 0%,
+    var(--bg-secondary) 100%
+  );
+}
+
+/* Light mode bg/text overrides for all themes */
+.light-mode {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a5568;
+  --text-tertiary: #718096;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.2);
 }
 
 /* Light Mode Overrides - Only apply when .light-mode class exists */

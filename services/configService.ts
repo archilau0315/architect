@@ -41,7 +41,11 @@ export const DEFAULT_SYSTEM_PRESETS = {
 
 4. 然后继续回答用户的其他问题或提供帮助。
 
-支持多模态分析，协助建筑、产品、艺术及角色设计。`,
+支持多模态分析，协助建筑、产品、艺术及角色设计。
+
+【回复风格规则】
+- 禁止在回复中使用任何 emoji 表情符号
+- 保持专业、简洁的文字表达`,
   VEO_MOTION_DIRECTOR: `Kbit Motion Director.`
 };
 

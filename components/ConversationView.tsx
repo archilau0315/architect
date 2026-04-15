@@ -67,6 +67,7 @@ interface ConversationViewProps {
   showPresetPanel?: boolean;
   onTogglePresetPanel?: () => void;
   language?: Language;
+  theme?: string;
 }
 
 const gemini = GeminiService;
@@ -199,8 +200,8 @@ const ImageBubble: React.FC<{
       {/* 全屏模式 */}
       {fullscreen && (
         <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-xl flex flex-col" onClick={() => setFullscreen(false)}>
-          <div className="flex-1 flex items-center justify-center p-6 min-h-0 cursor-zoom-out">
-            <img src={watermarkedImages[fsIdx] || images[fsIdx]} className="max-h-full max-w-full rounded-lg shadow-2xl object-contain" onClick={e => e.stopPropagation()} />
+          <div className="flex-1 min-h-0 cursor-zoom-out overflow-hidden">
+            <img src={watermarkedImages[fsIdx] || images[fsIdx]} className="w-full h-full object-cover" onClick={e => e.stopPropagation()} />
           </div>
           {images.length > 1 && (
             <>
@@ -235,7 +236,7 @@ const ImageBubble: React.FC<{
 };
 
 // ─── Bubble ───────────────────────────────────────────────────────────────────
-const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean }) => {
+const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false, theme = 'dark' }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean; theme?: string }) => {
   const isUser = msg.role === 'user';
   const [rerunCount, setRerunCount] = useState(1);
   const [aiLogoError, setAiLogoError] = useState(false);
@@ -292,18 +293,36 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
       </div>
 
       {/* bubble */}
-      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed transition-all duration-200
+      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed transition-all duration-200
         ${isUser
-          ? 'bg-[#1e1e2e] text-white/90 rounded-br-sm border border-white/10'
-          : 'bg-[#161616] text-white/80 rounded-bl-sm border border-white/[0.06]'}`}>
+          ? 'rounded-tr-sm shadow-lg'
+          : 'rounded-tl-sm shadow-md'}`}
+        style={isUser ? {
+          background: theme === 'dark'
+            ? 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 18%, #1a1a2e), #1a1a2e)'
+            : 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 15%, #ffffff), color-mix(in srgb, var(--theme-primary-light) 12%, #ffffff))',
+          color: theme === 'dark' ? 'rgba(255,255,255,0.92)' : 'var(--theme-primary-dark)',
+          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+          borderWidth: '1px',
+          borderStyle: 'solid'
+        } : {
+          backgroundColor: 'var(--bg-secondary)',
+          color: 'var(--text-primary)',
+          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)',
+          borderWidth: '1px',
+          borderStyle: 'solid'
+        }}>
 
         {/* thinking */}
         {msg.type === 'thinking' && (
-          <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+          <div className="flex items-center gap-2.5" style={{ color: 'var(--text-secondary)' }}>
             <span className="flex gap-1">
-              {[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />)}
+              {[0,1,2].map(i => (
+                <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
+                  style={{ backgroundColor: 'var(--theme-primary)', animationDelay: `${i*0.18}s`, opacity: 0.7 }} />
+              ))}
             </span>
-            <span className="text-[11px]">{msg.text || t.buttons.thinkingText}</span>
+            <span className="text-[11px] tracking-wide">{msg.text || t.buttons.thinkingText}</span>
           </div>
         )}
 
@@ -393,13 +412,13 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               <span className="text-[10px] text-white/30">人工智能KbitAI生成</span>
             </div>
             <span className="text-[10px] text-white/25">
-              {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(msg.timestamp).toLocaleString('zh', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
         )}
         {isUser && (
           <p className="text-[10px] opacity-20 mt-1 text-right">
-            {new Date(msg.timestamp).toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(msg.timestamp).toLocaleString('zh', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
           </p>
         )}
       </div>
@@ -419,7 +438,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const ConversationView: React.FC<ConversationViewProps> = ({
   modelConfig, domain, instructions, points, onConsumePoints, useThirdPartyGateway, isDeveloperMode,
-  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN'
+  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark'
 }) => {
   const t = getTranslation(language);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -434,6 +453,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const chatHistoryRef = useRef<any[]>([]);
+  const inputRef = useRef<{ setText: (text: string) => void }>(null);
 
   const domainStyles = MASTER_STYLES.filter(s => s.domain === domain);
   const domainPresets = t.presets[domain] || [];
@@ -718,7 +738,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map(msg => (
             <div key={msg.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
-              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloperMode} />
+              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloperMode} theme={theme} />
             </div>
           ))}
         </div>
@@ -775,7 +795,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
           </div>
         )}
-        <UnifiedInput mode={mode} onModeChange={setMode} onSubmit={handleSubmit} isLoading={isLoading} language={language} onUpscale={handleUpscaleDirect} />
+        <UnifiedInput ref={inputRef} mode={mode} onModeChange={setMode} onSubmit={handleSubmit} isLoading={isLoading} language={language} onUpscale={handleUpscaleDirect} />
       </div>
 
       {/* ── 预设风格面板（双击领域按钮触发） ── */}
@@ -808,10 +828,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                   {domainStyles.map(style => (
                     <button key={style.name}
                       onClick={() => setSelectedStyle(s => s === style.name ? '' : style.name)}
-                      className={`min-h-[44px] px-3 py-2 rounded-xl text-left text-[12px] transition-all duration-150 active:scale-95
+                      onDoubleClick={() => {
+                        inputRef.current?.appendText(style.logic);
+                      }}
+                      className={`min-h-[44px] px-3 py-2 rounded-xl text-left text-[12px] transition-all duration-150 active:scale-95 cursor-pointer
                         ${selectedStyle === style.name
                           ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-white/[0.03] border border-white/[0.06] text-white/50 hover:bg-white/[0.06] hover:text-white/70'}`}>
+                          : 'bg-white/[0.03] border border-white/[0.06] text-white/50 hover:bg-white/[0.06] hover:text-white/70'}`}
+                      title={t.presets.doubleClickToInsert}>
                       <div className="font-medium truncate">{language === 'zh-CN' ? style.name.split(' ')[0] : style.name.split(' ').slice(1).join(' ').split('(')[0].trim()}</div>
                       <div className="text-[10px] opacity-50 truncate">{language === 'zh-CN' ? style.name.split(' ').slice(1).join(' ') : style.name.split(' ')[0]}</div>
                     </button>
@@ -829,10 +853,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                       return (
                         <button key={tag}
                           onClick={() => setSelectedPresets(prev => isSelected ? prev.filter(t => t !== tag) : [...prev, tag])}
-                          className={`min-h-[36px] px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95
+                          onDoubleClick={() => {
+                            inputRef.current?.appendText(tag);
+                          }}
+                          className={`min-h-[36px] px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 cursor-pointer
                             ${isSelected
                               ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                              : 'bg-white/[0.03] border border-white/[0.06] text-white/40 hover:bg-white/[0.06] hover:text-white/70'}`}>
+                              : 'bg-white/[0.03] border border-white/[0.06] text-white/40 hover:bg-white/[0.06] hover:text-white/70'}`}
+                          title={t.presets.doubleClickToInsert}>
                           {tag}
                         </button>
                       );

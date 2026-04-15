@@ -211,6 +211,7 @@ export interface Translations {
     title: string;
     clearAll: string;
     masterStyles: string;
+    doubleClickToInsert: string;
     architecture: { label: string; tags: string[] }[];
     product: { label: string; tags: string[] }[];
     art: { label: string; tags: string[] }[];
@@ -395,6 +396,7 @@ export const translations: Record<Language, Translations> = {
       title: '预设风格',
       clearAll: '清除全部',
       masterStyles: '大师风格',
+      doubleClickToInsert: '双击插入文本',
       architecture: [
         { label: '时段环境', tags: ['晨曦 Dawn', '正午 Noon', '黄金时刻 Golden Hour', '蓝调时刻 Blue Hour', '暮色 Dusk', '深夜 Deep Night'] },
         { label: '建筑风格', tags: ['极简主义 Minimalism', '赛博朋克 Cyberpunk', '侘寂 Wabi-sabi', '包豪斯 Bauhaus', '参数化主义 Parametric', '野兽主义 Brutalism'] },

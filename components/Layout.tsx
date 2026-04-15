@@ -298,37 +298,37 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* ════════════════════════════════ SIDEBAR ════════════════════════════ */}
       <aside className={`${collapsed ? 'w-14' : 'w-64'} shrink-0 h-screen sticky top-0 flex flex-col
-        border-r
+        border-r sidebar-surface
         transition-all duration-300 ease-in-out z-50 overflow-hidden`}
-        style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+        style={{ borderColor: 'var(--border-color)' }}>
 
         {/* ── Brand header ── */}
-        <div className="flex items-center gap-2 px-2 py-3 border-b shrink-0 min-h-[56px]" style={{ borderColor: 'var(--border-color)' }}>
+        <div className="flex items-center gap-2.5 px-3 py-3 border-b shrink-0 min-h-[60px]" style={{ borderColor: 'var(--border-color)' }}>
           {!collapsed && (
             <>
-              <div className="relative shrink-0 mr-1">
+              <div className="relative shrink-0">
                 <div onClick={() => avatarInputRef.current?.click()}
-                  className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer overflow-hidden hover:border-white/20 transition-all
-                    ${isDeveloperMode ? 'ring-2 ring-rose-500/60' : userTier === 'plus' ? 'ring-2 ring-amber-400/60' : userTier === 'pro' ? 'ring-2 ring-blue-500/60' : ''}`}
-                  style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
+                  className={`w-10 h-10 rounded-2xl border flex items-center justify-center cursor-pointer overflow-hidden transition-all duration-200 hover:scale-105
+                    ${isDeveloperMode ? 'ring-2 ring-rose-500/70 shadow-[0_0_12px_rgba(225,29,72,0.3)]' : userTier === 'plus' ? 'ring-2 ring-amber-400/70 shadow-[0_0_12px_rgba(251,191,36,0.3)]' : userTier === 'pro' ? 'ring-2 ring-blue-500/70 shadow-[0_0_12px_rgba(59,130,246,0.3)]' : 'ring-1 ring-white/10'}`}
+                  style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'transparent' }}>
                   {avatarUrl
                     ? <img src={avatarUrl} className="w-full h-full object-cover" />
-                    : <span className="text-[11px] font-bold tracking-tight" style={{ color: 'var(--text-secondary)' }}>KB</span>}
+                    : <span className="text-[12px] font-black tracking-tight text-gradient-theme">KB</span>}
                 </div>
                 {(isDeveloperMode || userTier === 'plus' || userTier === 'pro') && (
-                  <div className="tier-badge" style={{
-                    position: 'absolute', bottom: '-7px', right: '-8px',
+                  <div style={{
+                    position: 'absolute', bottom: '-5px', right: '-6px',
                     background: isDeveloperMode
                       ? 'linear-gradient(135deg,#7f1d1d,#e11d48)'
                       : userTier === 'plus'
                       ? 'linear-gradient(135deg,#d97706,#f97316)'
                       : 'linear-gradient(135deg,#1d4ed8,#7c3aed)',
                     color: '#fff',
-                    fontSize: '6px', fontWeight: 800, letterSpacing: '0.06em',
-                    padding: '1.5px 4px', borderRadius: '4px',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                    zIndex: 30, lineHeight: 1.5,
-                    border: '1px solid rgba(255,255,255,0.2)'
+                    fontSize: '7px', fontWeight: 900, letterSpacing: '0.08em',
+                    padding: '2px 5px', borderRadius: '5px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                    zIndex: 30, lineHeight: 1.4,
+                    border: '1px solid rgba(255,255,255,0.25)'
                   }}>
                     {isDeveloperMode ? 'DEV' : userTier === 'plus' ? 'PLUS' : 'PRO'}
                   </div>
@@ -337,13 +337,13 @@ const Layout: React.FC<LayoutProps> = ({
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden"
                 onChange={e => handleFileChange(e, setAvatarUrl, AVATAR_KEY)} />
               <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-bold tracking-tight truncate leading-tight" style={{ color: 'var(--text-primary)' }}>首席图像架构师</p>
-                <p className="text-[10px] font-medium tracking-tight truncate leading-tight opacity-60" style={{ color: 'var(--text-secondary)' }}>Chief Image Architect</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <p onClick={handleVersionClick} className={`text-[10px] font-mono cursor-pointer leading-tight ${isDeveloperMode ? 'text-emerald-400' : ''}`}
+                <p className="text-[14px] font-black tracking-wide truncate leading-tight text-gradient-theme">首席图像架构师</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-mono tracking-widest uppercase opacity-40" style={{ color: 'var(--text-secondary)' }}>Chief Image Architect</span>
+                  <span onClick={handleVersionClick} className={`text-[9px] font-mono cursor-pointer px-1 py-0.5 rounded border leading-none ${isDeveloperMode ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-white/5'}`}
                     style={{ color: isDeveloperMode ? undefined : 'var(--text-tertiary)' }}>
-                    V2.00
-                  </p>
+                    v2.0
+                  </span>
                 </div>
               </div>
             </>
@@ -361,11 +361,12 @@ const Layout: React.FC<LayoutProps> = ({
         {!collapsed && (
           <div className="px-3 pt-3 pb-1 shrink-0">
             <button onClick={() => handleAddSession()}
-              className="w-full min-h-[44px] flex items-center justify-center gap-2 px-3 py-2 rounded-xl
-                bg-white/5 hover:bg-white/8 active:bg-white/10 border border-white/10
-                text-white/60 hover:text-white/80 text-[13px] font-medium tracking-wide transition-all duration-150
-                focus:outline-none focus:ring-2 focus:ring-blue-500/40 active:scale-[0.98]">
-              <Plus className="w-4 h-4" strokeWidth={1.5} />
+              className="w-full min-h-[40px] flex items-center justify-center gap-2 px-3 py-2 rounded-xl
+                border border-white/[0.08] bg-gradient-to-r from-white/[0.04] to-white/[0.02]
+                hover:from-white/[0.08] hover:to-white/[0.05] hover:border-white/[0.15]
+                text-white/50 hover:text-white/80 text-[12px] font-semibold tracking-widest uppercase
+                transition-all duration-200 active:scale-[0.97] group">
+              <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-90" strokeWidth={2} />
               {t.main.newConversation}
             </button>
           </div>
@@ -388,24 +389,31 @@ const Layout: React.FC<LayoutProps> = ({
 
         {/* ── Domain switcher (collapsed: hidden) ── */}
         {!collapsed && (
-          <div className="px-3 py-2 border-t border-white/[0.06] shrink-0">
-            <p className="text-[9px] font-black uppercase text-slate-600 tracking-widest mb-2 px-1">{preferences?.language === 'zh-CN' ? '创作领域' : 'Domains'}</p>
+          <div className="px-3 py-2.5 border-t shrink-0" style={{ borderColor: 'var(--border-color)' }}>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] mb-2 px-0.5" style={{ color: 'var(--text-tertiary)' }}>{preferences?.language === 'zh-CN' ? '创作领域' : 'Domains'}</p>
             <div className="grid grid-cols-4 gap-1">
               {(Object.keys(DOMAIN_CONFIG) as CreativeDomain[]).map(d => {
                 const Icon = DOMAIN_ICONS[d];
                 const domainLabel = t.domains[d] || DOMAIN_CONFIG[d].label;
+                const isActive = currentDomain === d;
                 return (
                   <button key={d}
                     onClick={() => onDomainChange(d)}
                     onDoubleClick={() => onDomainDoubleClick?.()}
-                    className={`flex flex-col items-center gap-1 py-2 rounded-xl text-[9px] font-semibold transition-all duration-150 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40
-                      ${currentDomain === d
-                        ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30'
-                        : 'text-slate-600 hover:bg-white/5 hover:text-slate-400'}`}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-xl text-[9px] font-bold tracking-wide transition-all duration-200 active:scale-90
+                      ${isActive
+                        ? 'text-white'
+                        : 'text-white/25 hover:text-white/50 hover:bg-white/[0.04]'}`}
+                    style={isActive ? {
+                      background: 'linear-gradient(135deg, var(--theme-gradient-from)/20, var(--theme-gradient-to)/10)',
+                      backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
+                      boxShadow: '0 0 0 1px color-mix(in srgb, var(--theme-primary) 30%, transparent)'
+                    } : {}}
                     title={preferences?.language === 'zh-CN' ? '单击切换领域，双击展开预设风格' : 'Click to switch, double-click for presets'}
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{domainLabel.slice(0, 2)}</span>
+                    {isActive && <span className="absolute inset-0 rounded-xl opacity-20 blur-sm" style={{ background: 'var(--theme-primary)' }} />}
+                    <Icon className={`w-3.5 h-3.5 relative z-10 ${isActive ? 'text-theme' : ''}`} />
+                    <span className="relative z-10">{domainLabel.slice(0, 2)}</span>
                   </button>
                 );
               })}
@@ -447,7 +455,7 @@ const Layout: React.FC<LayoutProps> = ({
         )}
 
         {/* ── Bottom status bar ── */}
-        <div className={`border-t shrink-0 ${collapsed ? 'px-2 py-3' : 'px-3 py-2.5'}`} style={{ borderColor: 'var(--border-color)' }}>
+        <div className={`border-t shrink-0 ${collapsed ? 'px-2 py-3' : 'px-3 py-2'}`} style={{ borderColor: 'var(--border-color)' }}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${statusDot}`} />
@@ -456,26 +464,22 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-              <span className="text-[9px] font-mono truncate flex-1" style={{ color: 'var(--text-tertiary)' }} title={currentModelName}>{currentModelName}</span>
-              <div className="flex flex-col items-start shrink-0 text-[9px] font-mono">
-                <div className="flex items-center gap-1">
-                  <span style={{ color: 'var(--text-tertiary)' }}>{t.account.balance}</span>
-                  <span className={`font-black ${balance < 10 ? 'text-rose-400' : 'text-blue-400'}`}>{balance.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span style={{ color: 'var(--text-tertiary)' }}>{t.account.consumed}</span>
-                  <span className="font-black text-amber-400">{dailyUsage.toLocaleString()}</span>
-                </div>
+            <div className="flex items-center gap-1.5">
+              {/* 状态指示 + 模型名 */}
+              <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
+                <span className="text-[9px] font-mono truncate" style={{ color: 'var(--text-tertiary)' }} title={currentModelName}>{currentModelName}</span>
               </div>
-              <button onClick={toggleTheme} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all" style={{ color: 'var(--text-tertiary)' }}>
-                {preferences?.theme === 'light'
-                  ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />
-                }
+              {/* 积分 */}
+              <div className="flex flex-col items-end shrink-0 text-[9px] font-mono leading-tight">
+                <span className={`font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>{balance.toLocaleString()}</span>
+                <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
+              </div>
+              {/* 主题 + 设置 */}
+              <button onClick={toggleTheme} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
+                {preferences?.theme === 'light' ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />}
               </button>
-              <button onClick={onOpenSettings} className="w-6 h-6 flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all">
+              <button onClick={onOpenSettings} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
                 <Settings className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
             </div>

@@ -70,7 +70,8 @@ const App: React.FC = () => {
     showWelcomeMessage: true,
     autoSaveHistory: true,
     compactSidebar: false,
-    fontSize: 'medium'
+    fontSize: 'medium',
+    lightMode: false
   });
   const [models, setModels] = useState<CustomModel[]>([
     { id: 'KbitAi-Pro', name: 'KbitAi-Pro-Core', modelId: 'KbitAi-Pro', isOfficial: true },
@@ -279,18 +280,16 @@ const App: React.FC = () => {
             // Apply saved theme
             if (mergedPrefs.theme && mergedPrefs.theme !== 'dark') {
               document.documentElement.setAttribute('data-theme', mergedPrefs.theme);
+            } else {
+              document.documentElement.removeAttribute('data-theme');
             }
 
-            // Add light-mode class for light theme
-            if (mergedPrefs.theme === 'light') {
+            // light-mode class controlled solely by lightMode flag
+            if (mergedPrefs.lightMode) {
               document.documentElement.classList.add('light-mode');
-              console.log('[Theme] Applied light mode');
             } else {
               document.documentElement.classList.remove('light-mode');
-              console.log('[Theme] Removed light mode, current theme:', mergedPrefs.theme);
             }
-
-            console.log('[Theme] Final classes after init:', document.documentElement.classList.toString());
 
             // Apply all CSS variables
             document.documentElement.style.setProperty('--accent-color', mergedPrefs.accentColor);
@@ -363,16 +362,12 @@ const App: React.FC = () => {
       document.documentElement.setAttribute('data-theme', newPrefs.theme);
     }
 
-    // Add light-mode class for light theme
-    if (newPrefs.theme === 'light') {
+    // Add light-mode class controlled solely by lightMode flag
+    if (newPrefs.lightMode) {
       document.documentElement.classList.add('light-mode');
-      console.log('[handlePreferencesChange] Added light-mode class');
     } else {
       document.documentElement.classList.remove('light-mode');
-      console.log('[handlePreferencesChange] Removed light-mode class');
     }
-
-    console.log('[handlePreferencesChange] Current classes:', document.documentElement.classList.toString());
 
     // Apply accent color as CSS variable
     document.documentElement.style.setProperty('--accent-color', newPrefs.accentColor);
@@ -637,6 +632,7 @@ const App: React.FC = () => {
         showPresetPanel={showPresetPanel}
         onTogglePresetPanel={() => setShowPresetPanel(p => !p)}
         language={preferences.language}
+        theme={preferences.theme}
       />
 
       <SettingsPanel 

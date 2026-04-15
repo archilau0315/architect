@@ -70,11 +70,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [lastVideoRef, setLastVideoRef] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('解算引擎运行中');
-  const [showMenu, setShowMenu] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // 组件卸载时释放 Blob URL
   useEffect(() => {
@@ -85,18 +85,23 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     };
   }, []);
 
-  // 点击外部关闭菜单
+  // 预加载 FFmpeg 和 Logo 以加快水印处理速度
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (showMenu && !target.closest('.video-menu-container')) {
-        setShowMenu(false);
+    const loadResourcesAsync = async () => {
+      try {
+        await Promise.all([
+          VideoWatermarkUtils.loadFFmpeg(),
+          VideoWatermarkUtils.preloadLogo('/LOGOkbitwater.png')
+        ]);
+        console.log('[资源预加载] FFmpeg 和 Logo 预加载完成');
+      } catch (e) {
+        console.warn('[资源预加载] 失败:', e);
       }
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMenu]);
+    // 延迟预加载，避免阻塞页面加载
+    const timer = setTimeout(loadResourcesAsync, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const capabilities = useMemo(() => GeminiService.getVideoModelCapabilities(assets.length, useThirdPartyGateway), [assets.length, useThirdPartyGateway]);
 
@@ -512,7 +517,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             {videoUrl ? (
              <div className="w-full flex flex-col items-center gap-4 animate-in fade-in duration-300">
                 <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'} shadow-2xl`}>
-                  <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />
+                  <video 
+  ref={videoRef}
+  src={videoUrl} 
+  controls 
+  autoPlay 
+  loop 
+  playsInline
+  className="w-full h-full object-cover" 
+  disablePictureInPicture={false}
+/>
                   <div className="absolute bottom-4 right-4 w-20 h-auto opacity-80 pointer-events-none z-10">
                     <img src="/LOGOkbitwater.png" className="w-full h-full object-contain" />
                   </div>
@@ -521,51 +535,36 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                   <div className="text-[9px] font-black uppercase tracking-widest text-blue-400">
                     {t.tabs.video} {t.buttons.generate}
                   </div>
-                  <div className="relative video-menu-container">
+                  <div className="flex items-center gap-2">
                     <button 
-                      onClick={() => setShowMenu(!showMenu)} 
-                      className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/[0.06] text-white/60 hover:text-white transition-all"
+                      onClick={handleGenerate}
+                      disabled={isGenerating}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${isGenerating ? 'bg-white/[0.04] text-white/30 cursor-not-allowed' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30'}`}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      <svg className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
+                      {isGenerating ? '生成中...' : t.buttons.regenerate}
                     </button>
-                    {showMenu && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in duration-150">
-                        <div className="py-1">
-                          <button 
-                            onClick={(e) => { handleDownload(e, false); setShowMenu(false); }} 
-                            className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            <span>{t.buttons.stdDownload}</span>
-                          </button>
-                          <button 
-                            onClick={(e) => { handleDownload(e, true); setShowMenu(false); }} 
-                            disabled={!isDeveloper}
-                            className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isDeveloper ? 'text-blue-400 hover:bg-blue-500/10' : 'text-white/30 cursor-not-allowed'}`}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="flex items-center gap-1">{!isDeveloper && <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>}{t.buttons.originalDownload}</span>
-                          </button>
-                          <div className="border-t border-white/[0.06] my-1" />
-                          <button 
-                            onClick={() => { handleGenerate(); setShowMenu(false); }} 
-                            disabled={isGenerating}
-                            className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isGenerating ? 'text-white/30 cursor-not-allowed' : 'text-white/70 hover:bg-white/[0.06] hover:text-white'}`}
-                          >
-                            <svg className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            <span>{isGenerating ? '生成中...' : t.buttons.regenerate}</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    <button 
+                      onClick={(e) => handleDownload(e, false)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white transition-all"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {t.buttons.stdDownload}
+                    </button>
+                    <button 
+                      onClick={(e) => handleDownload(e, true)}
+                      disabled={!isDeveloper}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${isDeveloper ? 'bg-white/[0.06] border border-white/[0.08] text-blue-400 hover:bg-blue-500/20 hover:text-blue-300' : 'bg-white/[0.03] border border-white/[0.05] text-white/25 cursor-not-allowed'}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      {isDeveloper ? t.buttons.originalDownload : '无水印下载'}
+                    </button>
                   </div>
                 </div>
                 {isWatermarkProcessing && (

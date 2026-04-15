@@ -274,8 +274,11 @@ export const DEFAULT_SYSTEM_PRESETS = {
 
 4. 然后继续回答用户的其他问题或提供帮助。
 
-支持多模态分析，协助建筑、产品、艺术及角色设计。`,
-  VEO_MOTION_DIRECTOR: `Kbit Motion Director.`
+支持多模态分析，协助建筑、产品、艺术及角色设计。
+
+【回复风格规则】
+- 禁止在回复中使用任何 emoji 表情符号
+- 保持专业、简洁的文字表达`,
 };
 
 export const MASTER_STYLES = [
@@ -577,7 +580,7 @@ export const GeminiService = {
         logo.onload = () => {
           const logoWidth = canvas.width * 0.15; // 占宽度的 15%
           const logoHeight = (logo.height / logo.width) * logoWidth;
-          ctx.globalAlpha = 0.3; // 半透明
+          ctx.globalAlpha = 0.5; // 50%透明度
           ctx.drawImage(logo, 20, canvas.height - logoHeight - 20, logoWidth, logoHeight);
           
           // 3. 绘制文字水印 (右下角)
@@ -602,7 +605,7 @@ export const GeminiService = {
           ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
           resolve(canvas.toDataURL("image/png"));
         };
-        logo.src = "/logokbitwater.png";
+        logo.src = "/LOGOkbitwater.png";
       };
       img.src = base64;
     });

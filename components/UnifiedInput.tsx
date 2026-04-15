@@ -54,7 +54,12 @@ const MODE_ICONS: Record<ConversationMode, React.FC> = {
   video:     () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
 };
 
-const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmit, isLoading = false, placeholder, language = 'zh-CN', onUpscale }) => {
+interface UnifiedInputRef {
+  setText: (text: string) => void;
+  appendText: (text: string) => void;
+}
+
+const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mode, onModeChange, onSubmit, isLoading = false, placeholder, language = 'zh-CN', onUpscale }, ref) => {
   const t = getTranslation(language);
 
   // 动态翻译模式配置
@@ -103,6 +108,21 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [text]);
+
+  // expose setText and appendText methods via ref
+  useEffect(() => {
+    if (ref) {
+      (ref as React.MutableRefObject<UnifiedInputRef | null>).current = {
+        setText: setText,
+        appendText: (textToAppend: string) => {
+          setText(prev => {
+            const separator = prev.trim() ? ', ' : '';
+            return prev + separator + textToAppend;
+          });
+        }
+      };
+    }
+  }, [ref]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
@@ -273,7 +293,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
         {/* 快捷动作：仅在 chat 模式且有图片时显示 */}
         {mode === 'chat' && images.some(img => img.fileCategory === 'image') && (
           <div className="flex items-center gap-2 px-4 pt-2 pb-1 flex-wrap">
-            <span className="text-[10px] text-white/20 uppercase tracking-wider">{language === 'zh-CN' ? '快捷操作:' : 'Quick Actions:'}</span>
+            <span className="text-[10px] text-white/40 uppercase tracking-wider">{language === 'zh-CN' ? '快捷操作:' : 'Quick Actions:'}</span>
             {[
               { action: 'analyze' as const,       label: language === 'zh-CN' ? '解析图片' : 'Analyze',   icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0" /></svg> },
               { action: 'reverse' as const,        label: language === 'zh-CN' ? '反推提示词' : 'Reverse Prompt', icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg> },
@@ -468,7 +488,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
 
           {/* char count */}
           {text.length > 0 && (
-            <span className="text-[10px] text-white/20 font-mono">{text.length}</span>
+            <span className="text-[10px] text-white/40 font-mono">{text.length}</span>
           )}
 
           {/* send button */}
@@ -490,7 +510,7 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
       </div>
 
       {/* hint */}
-      <p className="text-center text-[10px] text-white/20 mt-2">
+      <p className="text-center text-[10px] text-white/40 mt-2">
         {language === 'zh-CN'
           ? 'Enter 发送 · Shift+Enter 换行 · 拖拽图片上传'
           : 'Enter to send · Shift+Enter for new line · Drag to upload'}
@@ -511,6 +531,6 @@ const UnifiedInput: React.FC<UnifiedInputProps> = ({ mode, onModeChange, onSubmi
       )}
     </div>
   );
-};
+});
 
 export default UnifiedInput;

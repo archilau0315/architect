@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       base: '/architect/',
-      publicDir: 'public',
+      publicDir: '../public',
       server: {
         port: 3000,
         host: '0.0.0.0',
@@ -54,8 +54,8 @@ export default defineConfig(({ mode }) => {
               'Authorization': `Bearer ${env.PH8_GATEWAY_KEY}`
             },
             secure: true,
-            timeout: 120000,
-            proxyTimeout: 120000
+            timeout: 300000,
+            proxyTimeout: 300000
           },
           '/api/ph8-openai': {
             target: 'https://ph8.co',
@@ -65,8 +65,8 @@ export default defineConfig(({ mode }) => {
               'Authorization': `Bearer ${env.PH8_GATEWAY_KEY}`
             },
             secure: true,
-            timeout: 120000,
-            proxyTimeout: 120000
+            timeout: 300000,
+            proxyTimeout: 300000
           }
         }
       },
