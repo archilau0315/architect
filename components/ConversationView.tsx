@@ -144,12 +144,25 @@ const ImageBubble: React.FC<{
         {/* 原图下载（权限分级） */}
         <button
           onClick={() => {
-            if (!isDeveloper) { alert(t.buttons.unlockOriginal); return; }
-            const a = document.createElement('a'); a.href = images[safeIdx]; a.download = `image_PRO_${Date.now()}.png`; a.click();
+            if (!isDeveloper) { 
+              const upgradeMessage = `\u9700\u8981\u5347\u7EA7\u4E3a Developer \u7B49\u7EA7\u624D\u80FD\u4E0B\u8F7D\u539F\u56FE\uFF01\n\n\u539F\u56FE\u4E0B\u8F7D\u6743\u9650\u8BF4\u660E\uFF1A\n\u2022 Developer: \u2611\u200D\uFE0F \u65E0\u9650\u5EA6\u4E0B\u8F7D\n\u2022 Plus: \u2611\u200D\uFE0F \u65E0\u9650\u5EA6\u4E0B\u8F7D\n\u2022 Pro: \u2611\u200D\uFE0F 5\u6B21/\u5929\n\u2022 Standard: \u274C \u65E0\u6743\u9650`;
+              alert(upgradeMessage); 
+              return; 
+            }
+            const a = document.createElement('a'); 
+            a.href = images[safeIdx]; 
+            a.download = `image_PRO_${Date.now()}.png`; 
+            a.click();
           }}
           title={isDeveloper ? t.buttons.originalDownload : t.buttons.unlockOriginal}
-          className={`flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg border text-[11px] transition-all ${isDeveloper ? 'bg-white/[0.06] border-white/[0.08] text-white/60 hover:bg-white/[0.12] hover:text-white/80' : 'bg-white/[0.03] border-white/[0.05] text-white/25 cursor-not-allowed'}`}>
-          <Download className="w-3 h-3" strokeWidth={2} />{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownloadLocked}
+          className={`flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg border text-[11px] transition-all ${isDeveloper ? 'bg-white/[0.06] border-white/[0.08] text-white/60 hover:bg-white/[0.12] hover:text-white/80 active:scale-95' : 'bg-white/[0.03] border-white/[0.05] text-white/25 cursor-not-allowed'}`}>
+          {isDeveloper ? (
+            <Download className="w-3 h-3" strokeWidth={2} />
+          ) : (
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          )}{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownloadLocked}
         </button>
         <button onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}
           className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
@@ -298,17 +311,15 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
           ? 'rounded-tr-sm shadow-lg'
           : 'rounded-tl-sm shadow-md'}`}
         style={isUser ? {
-          background: theme === 'dark'
-            ? 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 18%, #1a1a2e), #1a1a2e)'
-            : 'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 15%, #ffffff), color-mix(in srgb, var(--theme-primary-light) 12%, #ffffff))',
-          color: theme === 'dark' ? 'rgba(255,255,255,0.92)' : 'var(--theme-primary-dark)',
-          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+          background: `linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 18%, var(--bg-secondary)), var(--bg-secondary))`,
+          color: 'var(--text-primary)',
+          borderColor: 'var(--border-color)',
           borderWidth: '1px',
           borderStyle: 'solid'
         } : {
           backgroundColor: 'var(--bg-secondary)',
           color: 'var(--text-primary)',
-          borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)',
+          borderColor: 'var(--border-color)',
           borderWidth: '1px',
           borderStyle: 'solid'
         }}>
@@ -768,7 +779,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       )}
 
       {/* ── unified input ── */}
-      <div className="shrink-0 border-t border-white/[0.06] bg-[#0a0a0a]/95 backdrop-blur-xl py-4">
+      <div className="shrink-0 border-t backdrop-blur-xl py-4" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
         {/* 选中的风格和预设标签 */}
         {mode === 'architect' && (selectedStyle || selectedPresets.length > 0) && (
           <div className="max-w-5xl mx-auto px-4 mb-3">

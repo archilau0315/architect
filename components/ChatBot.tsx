@@ -329,15 +329,15 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
           />
         )}
         
-        <div className={`absolute top-0 left-0 z-[60] h-full w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl transform transition-transform duration-500 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-           <div className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex flex-col gap-4">
+        <div className={`absolute top-0 left-0 z-[60] h-full w-72 border-r shadow-2xl transform transition-transform duration-500 ease-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+           <div className="p-6 border-b flex flex-col gap-4" style={{ borderColor: 'var(--border-color)' }}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest">历史对话</span>
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>历史对话</span>
                 <div className="flex gap-2">
                   <button onClick={createNewChat} className="w-8 h-8 rounded-lg bg-theme text-white flex items-center justify-center hover:bg-theme-light transition-all active:scale-95 shadow-lg shadow-theme" title="开启新对话">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                   </button>
-                  <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center hover:text-rose-500 transition-all">
+                  <button onClick={() => setIsSidebarOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:text-rose-500 transition-all" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
@@ -348,7 +348,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                   placeholder="搜索对话..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-[11px] font-medium outline-none focus:ring-2 focus:ring-theme/20 transition-all"
+                  className="w-full border rounded-xl px-4 py-2 text-[11px] font-medium outline-none focus:ring-2 focus:ring-theme/20 transition-all"
+                  style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
                 />
                 <svg xmlns="http://www.w3.org/2000/svg" className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </div>
@@ -358,10 +359,11 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                 <div 
                   key={s.id} 
                   onClick={() => { if(editingSessionId !== s.id) { setCurrentSessionId(s.id); setIsSidebarOpen(false); } }}
-                  className={`group flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all border ${currentSessionId === s.id ? 'bg-theme/5 dark:bg-theme/10 border border-theme/20' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800/40'}`}
+                  className={`group flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all border ${currentSessionId === s.id ? 'bg-theme/5 border border-theme/20' : 'border-transparent'}`}
+                  style={currentSessionId !== s.id ? { backgroundColor: 'transparent' } : undefined}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                     <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 shrink-0 ${currentSessionId === s.id ? 'text-theme' : 'text-slate-500 dark:text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                     <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 shrink-0 ${currentSessionId === s.id ? 'text-theme' : ''}`} style={{ color: currentSessionId === s.id ? undefined : 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                      {editingSessionId === s.id ? (
                         <input 
                           autoFocus
@@ -369,16 +371,17 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                           onChange={(e) => setEditTitle(e.target.value)}
                           onBlur={saveRename}
                           onKeyDown={(e) => e.key === 'Enter' && saveRename()}
-                          className="bg-transparent border-none outline-none text-[12px] font-bold text-slate-700 dark:text-slate-200 w-full"
+                          className="bg-transparent border-none outline-none text-[12px] font-bold w-full"
+                          style={{ color: 'var(--text-primary)' }}
                         />
                      ) : (
-                        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 truncate">{s.title}</span>
+                        <span className="text-[12px] font-bold truncate" style={{ color: 'var(--text-primary)' }}>{s.title}</span>
                      )}
                   </div>
                   {editingSessionId !== s.id && (
                     <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${currentSessionId === s.id ? 'opacity-100' : ''}`}>
-                       <button onClick={(e) => startRename(s.id, s.title, e)} className="p-1 hover:text-theme text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                       <button onClick={(e) => deleteChat(s.id, e)} className="p-1 hover:text-rose-500 text-slate-500 dark:text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                       <button onClick={(e) => startRename(s.id, s.title, e)} className="p-1 hover:text-theme transition-colors" style={{ color: 'var(--text-tertiary)' }}><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                       <button onClick={(e) => deleteChat(s.id, e)} className="p-1 hover:text-rose-500 transition-colors" style={{ color: 'var(--text-tertiary)' }}><svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                     </div>
                   )}
                 </div>
@@ -387,27 +390,28 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
         </div>
 
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-          <div className="px-8 py-6 border-b border-slate-200 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 flex items-center justify-between z-10">
+          <div className="px-8 py-6 border-b flex items-center justify-between z-10" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-500 hover:text-theme transition-all shadow-sm flex items-center gap-2 group"
+                className="p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 group"
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
                 title="查看历史对话"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">会话库</span>
               </button>
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-2" />
+              <div className="w-px h-6 mx-2" style={{ backgroundColor: 'var(--border-color)' }} />
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
               <div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-500 font-black uppercase tracking-widest italic">{currentSession?.title || 'Multi-Modal Consultation Engine'}</p>
+                <p className="text-[11px] font-black uppercase tracking-widest italic" style={{ color: 'var(--text-secondary)' }}>{currentSession?.title || 'Multi-Modal Consultation Engine'}</p>
               </div>
             </div>
             
             <div className="flex items-center gap-6">
-              <div className="flex bg-slate-100 dark:bg-slate-950/60 p-1.5 rounded-2xl gap-1 ring-1 ring-slate-200 dark:ring-white/5 shadow-inner">
+              <div className="flex p-1.5 rounded-2xl gap-1 ring-1 shadow-inner" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
                 {[{ id: 'FAST', label: '极速', desc: 'Precise' }, { id: 'ADVANCED', label: '逻辑', desc: 'Advanced' }, { id: 'DEEP', label: '深度', desc: 'Deep' }].map(mode => (
-                  <button key={mode.id} onClick={() => setThinkingMode(mode.id as any)} className={`px-4 py-2 rounded-xl transition-all duration-300 flex flex-col items-center min-w-[70px] ${thinkingMode === mode.id ? 'bg-theme text-white shadow-xl scale-105' : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+                  <button key={mode.id} onClick={() => setThinkingMode(mode.id as any)} className={`px-4 py-2 rounded-xl transition-all duration-300 flex flex-col items-center min-w-[70px] ${thinkingMode === mode.id ? 'bg-theme text-white shadow-xl scale-105' : ''}`} style={thinkingMode !== mode.id ? { color: 'var(--text-secondary)' } : undefined}>
                     <span className="text-[11px] font-black uppercase">{mode.label}</span>
                     <span className="text-[9px] font-bold opacity-60 uppercase">{mode.desc}</span>
                   </button>
@@ -502,45 +506,46 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
             )}
           </div>
 
-          <div className="p-8 bg-white/90 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 shadow-[0_-20px_60px_rgba(0,0,0,0.05)] relative transition-all z-10">
+          <div className="p-8 border-t shadow-[0_-20px_60px_rgba(0,0,0,0.05)] relative transition-all z-10" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
             {selectedFiles.length > 0 && (
               <div className="mb-6 flex flex-wrap gap-3 animate-in slide-in-from-bottom-2 duration-300">
                 {selectedFiles.map((file, idx) => (
-                  <div key={idx} className="flex items-center gap-3 px-4 py-2.5 bg-theme/5 dark:bg-theme/10 border border-theme/20 rounded-2xl shadow-sm group">
+                  <div key={idx} className="flex items-center gap-3 px-4 py-2.5 border border-theme/20 rounded-2xl shadow-sm group" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, var(--bg-secondary))' }}>
                     {file.type.startsWith('image/') ? (
-                      <img src={`data:${file.type};base64,${file.data}`} className="w-10 h-10 object-cover rounded-lg shadow-sm border border-white/10" />
+                      <img src={`data:${file.type};base64,${file.data}`} className="w-10 h-10 object-cover rounded-lg shadow-sm" style={{ borderColor: 'var(--border-color)' }} />
                     ) : (
-                      <span className="text-slate-400">{getFileIcon(file.type)}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>{getFileIcon(file.type)}</span>
                     )}
-                    <div className="flex flex-col"><span className="text-[11px] font-black text-theme dark:text-theme-light truncate max-w-[150px]">{file.name}</span><span className="text-[10px] font-bold text-slate-400 uppercase">Asset Prepared</span></div>
-                    <button onClick={() => removeFile(idx)} className="text-slate-300 hover:text-rose-500 p-1 bg-white dark:bg-slate-800 rounded-full shadow-sm ml-1 hover:rotate-90 transition-all"><svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <div className="flex flex-col"><span className="text-[11px] font-black text-theme truncate max-w-[150px]">{file.name}</span><span className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-tertiary)' }}>Asset Prepared</span></div>
+                    <button onClick={() => removeFile(idx)} className="p-1 rounded-full shadow-sm ml-1 hover:rotate-90 transition-all hover:text-rose-500" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}><svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
                   </div>
                 ))}
               </div>
             )}
             
             <div className="flex gap-5 items-end">
-              <div className="flex-1 relative flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] focus-within:ring-4 focus-within:ring-theme/10 transition-all group/input overflow-hidden">
+              <div className="flex-1 relative flex items-center rounded-[2.5rem] focus-within:ring-4 focus-within:ring-theme/10 transition-all group/input overflow-hidden" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
                 <div className="flex items-center gap-2 pl-4 py-4 shrink-0 self-end">
                   <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileUpload} accept="image/*,application/pdf,audio/*" />
-                  <button onClick={() => fileInputRef.current?.click()} aria-label="上传文档或图片" className="w-12 h-12 bg-white dark:bg-slate-800 hover:bg-theme hover:text-white rounded-[1.2rem] transition-all flex items-center justify-center text-slate-500 dark:text-slate-400 shadow-sm border border-slate-100 dark:border-slate-700" title="上传文档/图片"><svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg></button>
-                  <button onClick={isRecording ? stopRecording : startRecording} aria-label={isRecording ? "停止录音" : "开始语音咨询"} className={`w-12 h-12 rounded-[1.2rem] transition-all flex items-center justify-center shadow-sm border relative ${isRecording ? 'bg-rose-600 text-white animate-pulse border-rose-500 shadow-rose-500/20' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-emerald-600 hover:text-white border-slate-100 dark:border-slate-700'}`} title={isRecording ? "停止录音" : "开始语音咨询"}>
+                  <button onClick={() => fileInputRef.current?.click()} aria-label="上传文档或图片" className="w-12 h-12 rounded-[1.2rem] transition-all flex items-center justify-center shadow-sm border hover:bg-theme hover:text-white" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }} title="上传文档/图片"><svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg></button>
+                  <button onClick={isRecording ? stopRecording : startRecording} aria-label={isRecording ? "停止录音" : "开始语音咨询"} className={`w-12 h-12 rounded-[1.2rem] transition-all flex items-center justify-center shadow-sm border relative ${isRecording ? 'bg-rose-600 text-white animate-pulse border-rose-500 shadow-rose-500/20' : ''}`} style={!isRecording ? { backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' } : undefined} title={isRecording ? "停止录音" : "开始语音咨询"}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                    {isRecording && (<span className="absolute -top-1 -right-1 bg-white dark:bg-slate-900 text-rose-600 text-[10px] font-black px-1.5 py-0.5 rounded-full border border-rose-500">{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>)}
+                    {isRecording && (<span className="absolute -top-1 -right-1 text-rose-600 text-[10px] font-black px-1.5 py-0.5 rounded-full border border-rose-500" style={{ backgroundColor: 'var(--bg-secondary)' }}>{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>)}
                   </button>
                 </div>
                 <textarea 
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
                   onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} 
-                  style={{ fontSize: `${fontSize}px` }}
+                  style={{ fontSize: `${fontSize}px`, color: 'var(--text-primary)' }}
                   placeholder={isRecording ? "正在倾听您的设计意图..." : "输入逻辑方案、询问建议或进行文档分析..."} 
                   className="w-full bg-transparent pl-6 pr-12 py-7 min-h-[72px] max-h-[350px] resize-none outline-none font-medium leading-relaxed custom-scrollbar" 
                 />
                 {input && (
                   <button 
                     onClick={() => setInput('')}
-                    className="absolute top-4 right-5 w-6 h-6 flex items-center justify-center rounded-full bg-slate-200/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 hover:text-rose-500 transition-all z-20 group-hover/input:opacity-100 opacity-40 shadow-sm"
+                    className="absolute top-4 right-5 w-6 h-6 flex items-center justify-center rounded-full transition-all z-20 group-hover/input:opacity-100 opacity-40 shadow-sm hover:text-rose-500"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
                     title="清空输入内容"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -212,8 +212,11 @@ const Layout: React.FC<LayoutProps> = ({
       const av = localStorage.getItem(AVATAR_KEY); if (av) setAvatarUrl(av);
       const cl = localStorage.getItem(COMPANY_LOGO_KEY); if (cl) setCompanyLogoUrl(cl);
       const th = localStorage.getItem(THEME_KEY);
-      if (th === 'light') { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light'); }
-      else { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light'); }
+      if (th === 'light') { 
+        document.documentElement.classList.add('light-mode'); 
+      } else { 
+        document.documentElement.classList.remove('light-mode'); 
+      }
     } catch {}
     const onStorage = (e: StorageEvent) => {
       if (e.key === AVATAR_KEY && e.newValue) setAvatarUrl(e.newValue);
@@ -230,10 +233,9 @@ const Layout: React.FC<LayoutProps> = ({
     }
 
     // Toggle between light and dark themes
-    const newTheme = preferences.theme === 'light' ? 'dark' : 'light';
     onPreferencesChange({
       ...preferences,
-      theme: newTheme
+      lightMode: !preferences.lightMode
     });
   };
 
@@ -477,7 +479,7 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
               {/* 主题 + 设置 */}
               <button onClick={toggleTheme} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
-                {preferences?.theme === 'light' ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />}
+                {preferences?.lightMode ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />}
               </button>
               <button onClick={onOpenSettings} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
                 <Settings className="w-3.5 h-3.5" strokeWidth={1.5} />
