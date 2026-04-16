@@ -605,7 +605,7 @@ export const GeminiService = {
           ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
           resolve(canvas.toDataURL("image/png"));
         };
-        logo.src = "/LOGOkbitwater.png";
+        logo.src = "/architect/LOGOkbitwater.png";
       };
       img.src = base64;
     });
@@ -1798,6 +1798,9 @@ export const GeminiService = {
           } else if (modelId === 'KbitVeo-normal') {
             supportedRatios = ['16:9', '9:16'];
             duration = '5-30s';
+          } else if (modelId === 'KbitVeo-standard') {
+            supportedRatios = ['16:9', '9:16'];
+            duration = '5-30s';
           } else if (modelId === 'KbitVeo-pro') {
             supportedRatios = ['16:9', '9:16', '21:9'];
             duration = '5-45s';
@@ -1813,17 +1816,19 @@ export const GeminiService = {
           let formattedLabel = modelId;
           // 对于 KbitVeo 系列模型，设置显示标签
           if (modelId.startsWith('KbitVeo-')) {
-            // 提取模型类型（speed、normal、pro、master）
+            // 提取模型类型（speed、normal、pro、master、standard）
             const modelType = modelId.split('-').find(part => 
-              ['speed', 'normal', 'pro', 'master'].includes(part.toLowerCase())
+              ['speed', 'normal', 'pro', 'master', 'standard'].includes(part.toLowerCase())
             ) || 'speed';
             // 特殊处理模型标签
             if (modelType === 'speed') {
-              formattedLabel = 'Speed-SD1';
+              formattedLabel = 'SeeDance-1.0F';
             } else if (modelType === 'normal') {
-              formattedLabel = 'Normal-SD1.5';
+              formattedLabel = 'SeeDance-1.5';
+            } else if (modelType === 'standard') {
+              formattedLabel = 'SeeDance-2.0';
             } else if (modelType === 'pro') {
-              formattedLabel = 'Pro-SD2';
+              formattedLabel = 'SeeDance-2F';
             } else {
               // 其他模型保持原有格式
               formattedLabel = 'KbitVeo-' + modelType.toLowerCase();
@@ -1851,22 +1856,29 @@ export const GeminiService = {
       engines = [
         {
           id: 'KbitVeo-speed',
-          label: 'Speed-SD1',
-          desc: 'Speed-SD1 视频模型 - 快速生成',
+          label: 'SeeDance-1.0F',
+          desc: 'SeeDance-1.0F - 快速生成',
           supportedRatios: ['16:9'],
           duration: '5-15s'
         },
         {
           id: 'KbitVeo-normal',
-          label: 'Normal-SD1.5',
-          desc: 'Normal-SD1.5 视频模型 - 标准质量',
+          label: 'SeeDance-1.5',
+          desc: 'SeeDance-1.5 - 标准质量',
+          supportedRatios: ['16:9', '9:16'],
+          duration: '5-30s'
+        },
+        {
+          id: 'KbitVeo-standard',
+          label: 'SeeDance-2.0',
+          desc: 'SeeDance-2.0 - 进阶质量',
           supportedRatios: ['16:9', '9:16'],
           duration: '5-30s'
         },
         {
           id: 'KbitVeo-pro',
-          label: 'Pro-SD2',
-          desc: 'Pro-SD2 视频模型 - 高质量',
+          label: 'SeeDance-2F',
+          desc: 'SeeDance-2F - 高质量',
           supportedRatios: ['16:9', '9:16', '21:9'],
           duration: '5-45s'
         },

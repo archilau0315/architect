@@ -49,16 +49,20 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
     localStorage.setItem(ANALYZER_STORAGE_KEY, JSON.stringify(data));
   }, [image, analysis, reversePrompt]);
 
+  const cleanPromptText = (text: string) => {
+    if (!text) return "";
+    let cleaned = text;
+    cleaned = cleaned.replace(/###/g, '');
+    cleaned = cleaned.replace(/\*\*/g, '');
+    cleaned = cleaned.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    cleaned = cleaned.replace(/\n\n+/g, '\n\n').trim();
+    return cleaned;
+  };
+
   const renderFormattedContent = (text: string) => {
     if (!text) return "";
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        const content = part.slice(2, -2);
-        return `<span class="weighted-block"><span class="weight-marker">**</span>${content}<span class="weight-marker">**</span></span>`;
-      }
-      return part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
-    }).join('');
+    let cleaned = cleanPromptText(text);
+    return cleaned.replace(/\n/g, '<br/>');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,7 +237,8 @@ const ImageAnalyzer: React.FC<ImageAnalyzerProps> = ({ onImportToArchitect, inst
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+    const cleanedText = cleanPromptText(text);
+    navigator.clipboard.writeText(cleanedText);
   };
 
   const handleLocalReset = () => {

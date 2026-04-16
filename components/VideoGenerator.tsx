@@ -63,6 +63,13 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [assets, setAssets] = useState<string[]>([]);
   const [aspectRatio, setAspectRatio] = useState<string>('16:9');
   const [selectedEngine, setSelectedEngine] = useState<string>('KbitVeo-speed');
+  
+  const engineToModelId: Record<string, string> = {
+    'KbitVeo-speed': 'doubao-seedance-2-0-fast',
+    'KbitVeo-normal': 'doubao-seedance-1-5-normal',
+    'KbitVeo-pro': 'doubao-seedance-2-0-pro',
+    'KbitVeo-standard': 'doubao-seedance-2-0',
+  };
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [watermarkedVideoUrl, setWatermarkedVideoUrl] = useState<string | null>(null);
@@ -91,7 +98,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       try {
         await Promise.all([
           VideoWatermarkUtils.loadFFmpeg(),
-          VideoWatermarkUtils.preloadLogo('/LOGOkbitwater.png')
+          VideoWatermarkUtils.preloadLogo('/architect/LOGOkbitwater.png')
         ]);
         console.log('[资源预加载] FFmpeg 和 Logo 预加载完成');
       } catch (e) {
@@ -218,7 +225,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         instructions,
         controller.signal,
         lastVideoRef,
-        selectedEngine,
+        engineToModelId[selectedEngine] || selectedEngine,
         (p) => {
           setProgress(p);
           // 根据进度更新状态文本
@@ -242,33 +249,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       blobUrlRef.current = result.url.startsWith('blob:') ? result.url : null;
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
+      setProgress(100);
 
-      // 前端浏览器端加水印（使用 FFmpeg WebAssembly）
-      setIsWatermarkProcessing(true);
-      setStatusText('生成水印版本中...');
-      setProgress(70); // 水印处理开始，进度从70%开始
-      try {
-        console.log('[视频水印] 开始浏览器端水印处理...');
-        
-        const watermarkResult = await VideoWatermarkUtils.addWatermark(
-          result.url,
-          '/LOGOkbitwater.png',
-          (watermarkProgress: number) => {
-            console.log(`[视频水印] 进度: ${watermarkProgress}%`);
-            // 水印处理进度映射到 70%-100%
-            const mappedProgress = 70 + (watermarkProgress / 100) * 30;
-            setProgress(Math.round(mappedProgress));
-          }
-        );
-        
-        setWatermarkedVideoUrl(watermarkResult.objectUrl);
-        setProgress(100);
-        console.log('[视频水印] 浏览器端水印处理完成');
-      } catch (e) {
-        console.warn('[视频水印] 浏览器端水印失败，降级到原视频:', e);
-      } finally {
-        setIsWatermarkProcessing(false);
-      }
+      // 自动生成水印版本供普通下载使用
+      setTimeout(async () => {
+        try {
+          const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
+          const watermarkResult = await VideoWatermarkUtils.addWatermark(result.url);
+          setWatermarkedVideoUrl(watermarkResult.objectUrl);
+        } catch (error) {
+          console.error('自动添加水印失败:', error);
+        }
+      }, 1000);
 
       // 扣积分
       setTimeout(async () => {
@@ -376,20 +368,40 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       try {
         setIsWatermarkProcessing(true);
 
-        // 标准下载必须使用带水印的版本，如果没有则提示用户
+        // 标准下载必须使用带水印的版本
         if (watermarkedVideoUrl) {
+          // 使用预先生成的水印视频
           const link = document.createElement('a');
           link.href = watermarkedVideoUrl;
           link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
           link.click();
         } else {
-          // 如果没有水印版本，提示用户并下载原视频（带播放器上的文字水印）
-          window.alert(t.buttons.watermarkProcessingFailed || '水印处理暂不可用，将下载原视频');
+          // 动态生成水印视频
+          const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
+          const result = await VideoWatermarkUtils.addWatermark(
+            videoUrl,
+            '/architect/LOGOkbitwater.png',
+            (progress) => {
+              console.log('水印处理进度:', progress);
+            }
+          );
+          
+          // 保存水印视频URL供后续使用
+          setWatermarkedVideoUrl(result.objectUrl);
+          
+          // 下载带水印的视频
           const link = document.createElement('a');
-          link.href = videoUrl;
+          link.href = result.objectUrl;
           link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
           link.click();
         }
+      } catch (error) {
+        console.error('水印处理失败:', error);
+        window.alert('水印处理失败，将下载原视频');
+        const link = document.createElement('a');
+        link.href = videoUrl;
+        link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
+        link.click();
       } finally {
         setIsWatermarkProcessing(false);
       }
@@ -528,42 +540,44 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   disablePictureInPicture={false}
 />
                   <div className="absolute bottom-4 right-4 w-20 h-auto opacity-80 pointer-events-none z-10">
-                    <img src="/LOGOkbitwater.png" className="w-full h-full object-contain" />
+                    <img src="/architect/LOGOkbitwater.png" className="w-full h-full object-contain" />
                   </div>
                 </div>
                 <div className="flex items-center justify-between w-full">
                   <div className="text-[9px] font-black uppercase tracking-widest text-blue-400">
                     {t.tabs.video} {t.buttons.generate}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <button 
                       onClick={handleGenerate}
                       disabled={isGenerating}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${isGenerating ? 'bg-white/[0.04] text-white/30 cursor-not-allowed' : 'bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/30'}`}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold transition-all active:scale-95 ${isGenerating ? 'bg-white/8 text-white/40 cursor-not-allowed border border-white/10' : 'bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border border-blue-500/40 text-blue-300 hover:from-blue-500/40 hover:to-cyan-500/40 hover:text-blue-200'}`}
                     >
-                      <svg className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                       {isGenerating ? '生成中...' : t.buttons.regenerate}
                     </button>
                     <button 
                       onClick={(e) => handleDownload(e, false)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white transition-all"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold border border-white/20 text-white/70 hover:bg-white/10 hover:text-white hover:border-white/30 transition-all active:scale-95"
+                      title="带水印下载"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      {t.buttons.stdDownload}
+                      {t.buttons.stdDownload || '带水印'}
                     </button>
                     <button 
                       onClick={(e) => handleDownload(e, true)}
                       disabled={!isDeveloper}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${isDeveloper ? 'bg-white/[0.06] border border-white/[0.08] text-blue-400 hover:bg-blue-500/20 hover:text-blue-300' : 'bg-white/[0.03] border border-white/[0.05] text-white/25 cursor-not-allowed'}`}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-semibold transition-all active:scale-95 ${isDeveloper ? 'border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300' : 'border border-white/10 bg-white/5 text-white/40 cursor-not-allowed'}`}
+                      title={isDeveloper ? '无水印下载' : '升级 PRO/PLUS 解锁无水印下载'}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2-2z" />
                       </svg>
-                      {isDeveloper ? t.buttons.originalDownload : '无水印下载'}
+                      {isDeveloper ? (t.buttons.originalDownload || '无水印') : '无水印'}
                     </button>
                   </div>
                 </div>

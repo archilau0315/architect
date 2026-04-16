@@ -23,17 +23,17 @@
 
 :root {
   --base-font-size: 14px;
-  /* 默认深色主题：优雅的深蓝紫渐变 - 科技感 */
-  --theme-primary: #6366F1;
-  --theme-primary-light: #818CF8;
-  --theme-primary-dark: #4F46E5;
-  --theme-accent: #06B6D4;
-  --theme-accent-light: #22D3EE;
-  --theme-gradient-from: #6366F1;
-  --theme-gradient-to: #818CF8;
-  --theme-shadow: rgba(99, 102, 241, 0.4);
-  --theme-ring: rgba(99, 102, 241, 0.3);
-  --glow-color: rgba(99, 102, 241, 0.5);
+  /* 默认深色主题：专业稳重的天蓝色系 - 传达信任感、专业度与稳定性 */
+  --theme-primary: #3B82F6;
+  --theme-primary-light: #60A5FA;
+  --theme-primary-dark: #2563EB;
+  --theme-accent: #10B981;
+  --theme-accent-light: #34D399;
+  --theme-gradient-from: #2563EB;
+  --theme-gradient-to: #3B82F6;
+  --theme-shadow: rgba(59, 130, 246, 0.4);
+  --theme-ring: rgba(59, 130, 246, 0.3);
+  --glow-color: rgba(59, 130, 246, 0.5);
 
   /* Animation tokens */
   --duration-instant: 100ms;
@@ -47,12 +47,34 @@
   /* Dark mode colors (default) */
   --bg-primary: #0e0e0e;
   --bg-secondary: #1a1a1a;
-  --bg-tertiary: #2d2d2d;
-  --text-primary: rgba(255, 255, 255, 0.9);
+  --bg-tertiary: #252525;
+  --bg-card: #161616;
+  --text-primary: rgba(255, 255, 255, 0.95);
   --text-secondary: rgba(255, 255, 255, 0.6);
-  --text-tertiary: rgba(255, 255, 255, 0.3);
-  --border-color: rgba(255, 255, 255, 0.06);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --border-color: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.2);
+
+  /* Shadow tokens */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5), 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.5), 0 10px 10px rgba(0, 0, 0, 0.3);
+
+  /* Spacing tokens (8px base) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Border radius tokens */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
 }
 
 [data-theme="light"] {
@@ -234,16 +256,110 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-.custom-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--theme-primary);
-  opacity: 0.3;
+  background: var(--text-tertiary);
   border-radius: 99px;
+  transition: background-color var(--duration-fast) ease;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  opacity: 0.6;
-  background: var(--theme-primary-light);
+  background: var(--text-secondary);
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Micro-interaction utilities */
+.btn-scale {
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.btn-scale:hover {
+  transform: scale(1.02);
+}
+.btn-scale:active {
+  transform: scale(0.98);
+}
+
+.card-hover {
+  transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Subtle hover underline */
+.link-hover {
+  position: relative;
+}
+.link-hover::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--theme-primary);
+  transition: width var(--duration-fast) var(--ease-out);
+}
+.link-hover:hover::after {
+  width: 100%;
+}
+
+/* Input focus glow */
+.input-glow:focus {
+  box-shadow: 0 0 0 2px var(--theme-primary), 0 0 20px var(--theme-shadow);
+  border-color: var(--theme-primary) !important;
+}
+
+/* Smooth opacity transition */
+.fade-transition {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+/* Smooth visibility transition */
+.visible-transition {
+  transition: opacity var(--duration-normal) var(--ease-out), visibility var(--duration-normal) var(--ease-out);
+}
+
+/* Scale in animation */
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in {
+  animation: scale-in 0.25s var(--ease-out) both;
+}
+
+/* Slide in from right */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s var(--ease-out) both;
+}
+
+/* Gentle bounce */
+@keyframes gentle-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.animate-gentle-bounce {
+  animation: gentle-bounce 0.5s var(--ease-out);
+}
+
+/* Typing cursor blink */
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.animate-cursor-blink {
+  animation: cursor-blink 1s ease-in-out infinite;
 }
 
 /* Glass effects */
@@ -352,18 +468,18 @@
 /* Light mode - override ALL CSS variables */
 .light-mode {
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #e9ecef;
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a5568;
-  --text-tertiary: #718096;
-  --border-color: rgba(0, 0, 0, 0.1);
-  --border-hover: rgba(0, 0, 0, 0.2);
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --border-color: rgba(0, 0, 0, 0.15);
+  --border-hover: rgba(0, 0, 0, 0.3);
   
   /* Theme colors remain the same but adjust shadow for light mode */
-  --theme-shadow: rgba(99, 102, 241, 0.2);
-  --theme-ring: rgba(99, 102, 241, 0.3);
-  --glow-color: rgba(99, 102, 241, 0.3);
+  --theme-shadow: rgba(59, 130, 246, 0.25);
+  --theme-ring: rgba(59, 130, 246, 0.4);
+  --glow-color: rgba(59, 130, 246, 0.35);
 }
 
 /* Light Mode - Global background and text */
@@ -737,17 +853,147 @@ body { font-family: var(--font-family) !important; }
 
 /* Buttons in light mode */
 .light-mode button {
-  color: #1a1a1a !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+  background-color: #f8fafc !important;
 }
 
 .light-mode button:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.light-mode button:active {
+  background-color: #e2e8f0 !important;
+}
+
+.light-mode button:disabled,
+.light-mode button[disabled] {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  color: #94a3b8 !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Progress bars - dark mode */
+.progress-bar {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.progress-bar-fill {
+  background-color: var(--theme-primary) !important;
+}
+
+.seek-bar {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.seek-bar-fill {
+  background-color: var(--theme-primary) !important;
+}
+
+.slider-track {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.slider-thumb {
+  background-color: var(--theme-primary) !important;
+  border-color: #ffffff !important;
+}
+
+/* Progress bars in light mode */
+.light-mode .progress-bar {
+  background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent) !important;
+}
+
+.light-mode .progress-bar-fill {
+  background-color: var(--theme-primary) !important;
+}
+
+.light-mode .seek-bar {
+  background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent) !important;
+}
+
+.light-mode .seek-bar-fill {
+  background-color: var(--theme-primary) !important;
+}
+
+.light-mode .slider-track {
+  background-color: color-mix(in srgb, var(--theme-primary) 15%, transparent) !important;
+}
+
+.light-mode .slider-thumb {
+  background-color: #ffffff !important;
+  border-color: var(--theme-primary) !important;
+  box-shadow: 0 0 8px var(--theme-primary) !important;
 }
 
 /* SVG in light mode */
 .light-mode svg {
-  color: #1a1a1a !important;
+  color: #1e293b !important;
   stroke: currentColor !important;
+}
+
+/* Icon-only buttons in light mode */
+.light-mode .w-11.h-11 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.light-mode .w-11.h-11:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
+}
+
+/* Emerald buttons (watermark-free download) */
+.light-mode button[style*="16, 185, 129"] {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #059669 !important;
+}
+
+.light-mode button[style*="16, 185, 129"]:hover {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  color: #047857 !important;
+}
+
+/* Indigo buttons (rerender) */
+.light-mode button[style*="99, 102, 241"] {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  color: #4f46e5 !important;
+}
+
+.light-mode button[style*="99, 102, 241"]:hover {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: #4338ca !important;
+}
+
+/* Select dropdowns in light mode */
+.light-mode select {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+.light-mode select:hover {
+  border-color: #94a3b8 !important;
+}
+
+.light-mode select:focus {
+  outline: none !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
+}
+
+.light-mode option {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
 }
 
 /* Scrollbar in light mode */

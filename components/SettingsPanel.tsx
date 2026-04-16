@@ -790,7 +790,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   </div>
                   <div className="grid grid-cols-6 gap-3">
                     {[
-                      { id: 'dark', name: t.settings.themes.dark, color: '#6366F1', lightColor: '#818CF8', icon: '✦' },
+                      { id: 'dark', name: t.settings.themes.dark, color: '#3B82F6', lightColor: '#60A5FA', icon: '✦' },
                       { id: 'indigo', name: t.settings.themes.indigo, color: '#8B5CF6', lightColor: '#A78BFA', icon: '💜' },
                       { id: 'ocean', name: t.settings.themes.ocean, color: '#06B6D4', lightColor: '#22D3EE', icon: '🌊' },
                       { id: 'forest', name: t.settings.themes.forest, color: '#10B981', lightColor: '#34D399', icon: '🌲' },

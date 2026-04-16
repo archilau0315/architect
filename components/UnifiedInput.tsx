@@ -89,9 +89,10 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
 
   // 视频生成参数
   const VIDEO_MODELS = [
-    { id: 'KbitVeo-speed',  label: 'Speed-SD1',  ratios: ['16:9'],                   duration: '5-15s' },
-    { id: 'KbitVeo-normal', label: 'Normal-SD1.5', ratios: ['16:9', '9:16'],            duration: '5-30s' },
-    { id: 'KbitVeo-pro',    label: 'Pro-SD2',    ratios: ['16:9', '9:16', '21:9'],    duration: '5-45s' },
+    { id: 'KbitVeo-speed',  label: 'SeeDance-1.0F',  ratios: ['16:9'],                   duration: '5-15s', images: '1-4张', remoteModelId: 'doubao-seedance-2-0-fast' },
+    { id: 'KbitVeo-normal', label: 'SeeDance-1.5', ratios: ['16:9', '9:16'],            duration: '5-30s', images: '1-6张', remoteModelId: 'doubao-seedance-1-5-normal' },
+    { id: 'KbitVeo-pro',    label: 'SeeDance-2F',    ratios: ['16:9', '9:16', '21:9'],    duration: '5-45s', images: '1-8张', remoteModelId: 'doubao-seedance-2-0-pro' },
+    { id: 'KbitVeo-standard', label: 'SeeDance-2.0', ratios: ['16:9', '9:16'],          duration: '5-30s', images: '1-6张', remoteModelId: 'doubao-seedance-2-0' },
   ];
   const [videoModel, setVideoModel] = useState('KbitVeo-speed');
   const [videoRatio, setVideoRatio] = useState('16:9');
@@ -181,8 +182,8 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
   const handleQuickAction = (action: 'analyze' | 'reverse' | 'reverse_json') => {
     if (isLoading || images.filter(i => i.fileCategory === 'image').length === 0) return;
     const prompts = {
-      analyze: '请详细分析这张图片，从构图、光影、色彩、材质、风格等维度进行专业解读。',
-      reverse: '请根据这张图片反推生成其创意提示词，输出中文描述、英文提示词、风格特征、关键视觉元素和技术参数（光线、构图、情绪氛围）。',
+      analyze: '请详细分析这张图片，从构图、光影、色彩、材质、风格等维度进行专业解读。输出格式：纯文本，不要使用JSON格式。',
+      reverse: '请根据这张图片反推生成其创意提示词。输出内容：中文描述、英文提示词、风格特征、关键视觉元素和技术参数（光线、构图、情绪氛围）。输出格式：纯文本，清晰的分段描述，不要使用JSON格式，不要包含任何###或**符号。',
       reverse_json: '分析这张图片，直接输出一个JSON对象，不要有任何其他文字。JSON结构：{"subject":{"category":"","features":"","action":""},"details":{"color":"","texture":"","material":""},"environment":{"scene":"","time":"","weather":""},"lighting":{"quality":"","effect":"","tone":""},"style":{"genre":"","medium":"","reference":""},"composition":{"angle":"","shot":"","rule":""},"parameters":{"aspect_ratio":"","quality":"","detail":""},"prompt_en":"","prompt_zh":""}'
     };
     onSubmit({ text: prompts[action], images, mode: 'chat', silent: true });
@@ -300,7 +301,7 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
               { action: 'reverse_json' as const,   label: language === 'zh-CN' ? 'JSON提示词' : 'JSON Prompt', icon: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg> },
             ].map(({ action, label, icon }) => (
               <button key={action} onClick={() => handleQuickAction(action)} disabled={isLoading}
-                className="flex items-center gap-1.5 min-h-[30px] px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500/15 hover:border-indigo-500/30 hover:text-indigo-300" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+                className="flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-lg border text-[12px] font-medium transition-all duration-150 btn-scale disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-500/15 hover:border-indigo-500/30 hover:text-indigo-300" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
                 <span className="flex items-center justify-center">{icon}</span>
                 <span>{label}</span>
               </button>
@@ -358,16 +359,16 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
               {onUpscale && (
                 <button onClick={() => onUpscale(null, images.find(i => i.fileCategory === 'image')?.data)} disabled={isLoading}
                   aria-label="高清放大"
-                  className="h-8 px-2.5 rounded-lg border text-[12px] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 hover:bg-blue-500/10"
+                  className="min-h-[40px] px-3 rounded-lg border text-[12px] transition-all btn-scale disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 hover:bg-blue-500/10"
                   style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>HD
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>HD
                 </button>
               )}
 
               {/* 高级参数展开 */}
               <button onClick={() => setShowAdvanced(p => !p)}
-                className="h-8 px-2 rounded-lg text-[11px] transition-all flex items-center gap-1"
-                style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--bg-tertiary)' }}>
+                className="min-h-[40px] px-3 rounded-lg border text-[12px] transition-all btn-scale flex items-center gap-1.5"
+                style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)' }}>
                 <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 {t.parameters.advanced}
               </button>
@@ -397,10 +398,10 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
                     className="w-20 h-8 px-2 rounded-lg border text-[12px] focus:outline-none"
                     style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }} />
                   <button onClick={() => setSeedLocked(p => !p)} aria-label={seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 ${seedLocked ? 'bg-blue-500/20 text-blue-400' : ''}`} style={!seedLocked ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' } : undefined}>
+                    className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg transition-all btn-scale ${seedLocked ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : ''}`} style={!seedLocked ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' } : undefined}>
                     {seedLocked
-                      ? <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M8 11V7a4 4 0 0 1 8 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                      ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M8 11V7a4 4 0 0 1 8 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                     }
                   </button>
                 </div>
@@ -427,7 +428,9 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
               </select>
               <span className="text-[11px] ml-1" style={{ color: 'var(--text-tertiary)' }}>{currentVideoModel.duration}</span>
             </div>
-            <p className="mt-1.5 text-[10px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>{t.parameters.cameraMotionTip}</p>
+            <p className="mt-1.5 text-[10px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+              🎬 {currentVideoModel.label} | 支持{currentVideoModel.images}底图 · 比例: {currentVideoModel.ratios.join(' / ')} · 时长: {currentVideoModel.duration}
+            </p>
           </div>
         )}
 
@@ -444,7 +447,7 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
             className="w-full bg-transparent resize-none outline-none text-[15px] leading-relaxed px-4 pt-4 pb-2 min-h-[56px] max-h-[200px] custom-scrollbar"
           />
           {text && (
-            <button onClick={() => setText('')} style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }} className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-300/50 hover:text-slate-600 transition-all text-[11px]" title="清空">×</button>
+            <button onClick={() => setText('')} style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }} className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full transition-all btn-scale hover:bg-red-500/20 hover:text-red-400 text-[14px]" title="清空">×</button>
           )}
         </div>
 
@@ -488,8 +491,8 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
           <button
             onClick={() => fileInputRef.current?.click()}
             aria-label="上传图片或文件"
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 focus:outline-none"
-            style={{ color: 'var(--text-tertiary)' }}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150 btn-scale focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
             title="上传图片"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

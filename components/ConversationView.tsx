@@ -3,6 +3,7 @@ import { GeminiService, MASTER_STYLES } from '../services/geminiService.ts';
 import { ConversationMode, CustomModel, CreativeDomain } from '../types.ts';
 import UnifiedInput, { UnifiedPayload } from './UnifiedInput.tsx';
 import InpaintEditor from './InpaintEditor.tsx';
+import { VideoPlayer } from './VideoPlayer.tsx';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { getTranslation } from '../i18n/locales.ts';
@@ -118,15 +119,16 @@ const ImageBubble: React.FC<{
   const [activeIdx, setActiveIdx] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [fsIdx, setFsIdx] = useState(0);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   const safeIdx = Math.min(activeIdx, images.length - 1);
 
   return (
-    <div className="mt-2 flex flex-col gap-2">
+    <div className="mt-2 flex flex-col gap-3">
       {/* 层1：主图区 */}
       <div className="relative group cursor-zoom-in rounded-xl overflow-hidden border border-white/10 shadow-lg"
         onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}>
-        <img src={watermarkedImages[safeIdx] || images[safeIdx]} className="w-full rounded-xl object-contain transition-transform duration-200 group-hover:scale-[1.01]" />
+        <img src={images[safeIdx]} className="w-full rounded-xl object-contain transition-transform duration-200 group-hover:scale-[1.01]" />
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
           <div className="bg-black/50 backdrop-blur-sm rounded-full p-2.5">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
@@ -135,64 +137,128 @@ const ImageBubble: React.FC<{
       </div>
 
       {/* 层2：操作栏 */}
-      <div className="flex items-center gap-1 pt-1.5 border-t border-white/[0.06] flex-wrap">
-        <span className="text-[10px] text-white/25 mr-1">{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
-        <button onClick={() => { const a = document.createElement('a'); a.href = watermarkedImages[safeIdx] || images[safeIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
-          className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
-          <Download className="w-3 h-3" strokeWidth={2} />{t.buttons.stdDownload}
-        </button>
-        {/* 原图下载（权限分级） */}
-        <button
-          onClick={() => {
-            if (!isDeveloper) { 
-              const upgradeMessage = `\u9700\u8981\u5347\u7EA7\u4E3a Developer \u7B49\u7EA7\u624D\u80FD\u4E0B\u8F7D\u539F\u56FE\uFF01\n\n\u539F\u56FE\u4E0B\u8F7D\u6743\u9650\u8BF4\u660E\uFF1A\n\u2022 Developer: \u2611\u200D\uFE0F \u65E0\u9650\u5EA6\u4E0B\u8F7D\n\u2022 Plus: \u2611\u200D\uFE0F \u65E0\u9650\u5EA6\u4E0B\u8F7D\n\u2022 Pro: \u2611\u200D\uFE0F 5\u6B21/\u5929\n\u2022 Standard: \u274C \u65E0\u6743\u9650`;
-              alert(upgradeMessage); 
-              return; 
-            }
-            const a = document.createElement('a'); 
-            a.href = images[safeIdx]; 
-            a.download = `image_PRO_${Date.now()}.png`; 
-            a.click();
-          }}
-          title={isDeveloper ? t.buttons.originalDownload : t.buttons.unlockOriginal}
-          className={`flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg border text-[11px] transition-all ${isDeveloper ? 'bg-white/[0.06] border-white/[0.08] text-white/60 hover:bg-white/[0.12] hover:text-white/80 active:scale-95' : 'bg-white/[0.03] border-white/[0.05] text-white/25 cursor-not-allowed'}`}>
-          {isDeveloper ? (
-            <Download className="w-3 h-3" strokeWidth={2} />
-          ) : (
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          )}{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownloadLocked}
-        </button>
-        <button onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}
-          className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>{t.buttons.fullscreen}
-        </button>
-        {onInpaint && (
-          <button onClick={() => { if (window.confirm(t.buttons.inpaintConfirm.replace('{n}', String(safeIdx + 1)))) onInpaint(images[safeIdx]); }}
-            className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>{t.buttons.inpaintShort}
+      <div className="flex items-center gap-3 pt-3 pb-2 border-t flex-wrap" style={{ borderColor: 'var(--border-color)' }}>
+        {/* 左侧：图片计数 */}
+        <span className="text-[11px] mr-2 shrink-0" style={{ color: 'var(--text-tertiary)' }}>{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
+        
+        {/* 编辑按钮组 */}
+        <div className="flex items-center gap-2">
+          {/* 全屏查看 - 图标按钮 */}
+          <button 
+            onClick={() => { setFsIdx(safeIdx); setFullscreen(true); }}
+            title={t.buttons.fullscreen}
+            className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
+            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
           </button>
+          
+          {/* 图生图 - 图标按钮 */}
+          {onInpaint && (
+            <button 
+              onClick={() => { if (window.confirm(t.buttons.inpaintConfirm.replace('{n}', String(safeIdx + 1)))) onInpaint(images[safeIdx]); }}
+              title={t.buttons.inpaintShort}
+              className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
+              style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+            </button>
+          )}
+          
+          {/* HD放大 - 图标按钮 */}
+          {onUpscale && (
+            <button 
+              onClick={() => onUpscale(images[safeIdx])}
+              title={t.parameters.hdUpscale}
+              className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
+              style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>
+            </button>
+          )}
+        </div>
+        
+        {/* 分隔线 */}
+        {onRerun && rerunPayload && (
+          <>
+            <div className="w-px h-7 mx-1" style={{ backgroundColor: 'var(--border-color)' }} />
+            
+            {/* 重新生成组 */}
+            <div className="flex items-center gap-2">
+              <select 
+                value={rerunCount} 
+                onChange={e => setRerunCount(Number(e.target.value))}
+                title={t.buttons.imageCount}
+                className="min-h-[44px] w-14 px-2 py-2 rounded-lg border text-[12px] font-medium focus:outline-none cursor-pointer"
+                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+                {[1,2,3,4].map(n => <option key={n} value={n} style={{ backgroundColor: 'var(--bg-tertiary)' }}>x{n}</option>)}
+              </select>
+              
+              {/* 重新生成 - 图标按钮 */}
+              <button 
+                onClick={() => onRerun({ ...rerunPayload, imageConfig: rerunPayload.imageConfig ? { ...rerunPayload.imageConfig, imageCount: rerunCount } : undefined })}
+                title={t.buttons.rerender}
+                className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
+                style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.3)', color: 'rgb(99, 102, 241)' }}>
+                <RefreshCw className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+          </>
         )}
-        {/* 高清放大 */}
-        {onUpscale && (
-          <button onClick={() => onUpscale(images[safeIdx])}
-            title={t.parameters.hdUpscale}
-            className="flex items-center gap-1 min-h-[26px] px-2 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white/80 transition-all">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0m4 0h-4m2 2v-4" /></svg>{t.buttons.hdShort}
+        
+        {/* 下载按钮 - 下拉菜单（放在最右侧） */}
+        <div className="relative download-dropdown ml-auto" style={{ zIndex: 100 }}>
+          <button 
+            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+            title={t.buttons.stdDownload}
+            className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
+            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
+            <Download className="w-4 h-4" strokeWidth={2} />
           </button>
-        )}
-        {onRerun && rerunPayload && <>
-          <div className="w-px h-5 bg-white/10 mx-1" />
-          <select value={rerunCount} onChange={e => setRerunCount(Number(e.target.value))}
-            className="min-h-[26px] px-2 py-0.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-[11px] focus:outline-none focus:border-indigo-500/40 cursor-pointer">
-            {[1,2,3,4].map(n => <option key={n} value={n}>{n}张</option>)}
-          </select>
-          <button onClick={() => onRerun({ ...rerunPayload, imageConfig: rerunPayload.imageConfig ? { ...rerunPayload.imageConfig, imageCount: rerunCount } : undefined })}
-            className="ml-auto flex items-center gap-1 min-h-[26px] px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/60 text-[11px] hover:bg-indigo-500/20 hover:text-indigo-300 transition-all">
-            <RefreshCw className="w-3 h-3" strokeWidth={2} />{t.buttons.rerender}
-          </button>
-        </>}
+          
+          {/* 下拉菜单 - 向上展开 */}
+          {showDownloadMenu && (
+            <>
+              <div className="absolute bottom-full right-0 mb-1 w-44 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200" style={{ zIndex: 200 }}>
+                {/* 带水印下载 */}
+                <button
+                  onClick={() => { 
+                    const a = document.createElement('a'); 
+                    a.href = images[safeIdx]; 
+                    a.download = `image_${Date.now()}.png`; 
+                    a.click();
+                    setShowDownloadMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[var(--bg-tertiary)] transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}>
+                  <Download className="w-4 h-4" strokeWidth={2} />
+                  <span>{t.buttons.stdDownload}</span>
+                </button>
+                
+                {/* 无水印下载（根据权限显示） */}
+                {isDeveloper ? (
+                  <button
+                    onClick={() => { 
+                      const a = document.createElement('a'); 
+                      a.href = images[safeIdx]; 
+                      a.download = `image_PRO_${Date.now()}.png`; 
+                      a.click();
+                      setShowDownloadMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-[var(--bg-tertiary)] transition-colors"
+                    style={{ color: 'rgb(16, 185, 129)' }}>
+                    <Download className="w-4 h-4" strokeWidth={2} />
+                    <span>{t.buttons.originalDownload}</span>
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center gap-3 px-4 py-3 text-sm opacity-50 cursor-not-allowed" style={{ color: 'var(--text-tertiary)' }}>
+                    <Download className="w-4 h-4" strokeWidth={2} />
+                    <span>{t.buttons.unlockOriginal}</span>
+                  </div>
+                )}
+              </div>
+              {/* 点击外部关闭菜单 */}
+              <div className="fixed inset-0" onClick={() => setShowDownloadMenu(false)} style={{ zIndex: 150 }} />
+            </>
+          )}
+        </div>
       </div>
 
       {/* 层3：缩略图条（多图时） */}
@@ -201,7 +267,7 @@ const ImageBubble: React.FC<{
           {images.map((src, idx) => (
             <div key={idx} onClick={() => setActiveIdx(idx)}
               className={`relative cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${safeIdx === idx ? 'ring-2 ring-indigo-400 scale-110' : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
-              <img src={watermarkedImages[idx] || src} className="w-16 h-16 object-cover" />
+              <img src={src} className="w-16 h-16 object-cover" />
               <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[10px] font-bold ${safeIdx === idx ? 'bg-indigo-600 text-white' : 'bg-black/60 text-white/60'}`}>
                 {safeIdx === idx ? `▶ ${idx+1}` : idx+1}
               </div>
@@ -210,35 +276,40 @@ const ImageBubble: React.FC<{
         </div>
       )}
 
-      {/* 全屏模式 */}
+      {/* 全屏模式 - 覆盖整个屏幕，图片保持完整 */}
       {fullscreen && (
-        <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-xl flex flex-col" onClick={() => setFullscreen(false)}>
-          <div className="flex-1 min-h-0 cursor-zoom-out overflow-hidden">
-            <img src={watermarkedImages[fsIdx] || images[fsIdx]} className="w-full h-full object-cover" onClick={e => e.stopPropagation()} />
+        <div className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-xl flex items-center justify-center cursor-zoom-out" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => setFullscreen(false)}>
+          <img src={images[fsIdx]} className="max-w-full max-h-full object-contain shadow-2xl" onClick={e => e.stopPropagation()} />
+          
+          {/* 全屏水印 */}
+          <div className="absolute bottom-8 right-8 w-32 h-auto opacity-60 pointer-events-none z-10">
+            <img src="/architect/LOGOkbitwater.png" className="w-full h-full object-contain" />
           </div>
+          
           {images.length > 1 && (
             <>
               <button onClick={e => { e.stopPropagation(); setFsIdx(p => p > 0 ? p-1 : images.length-1); }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
               </button>
               <button onClick={e => { e.stopPropagation(); setFsIdx(p => p < images.length-1 ? p+1 : 0); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
               </button>
             </>
           )}
-          <div className="flex-shrink-0 flex justify-center pb-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2">
-              <span className="text-[10px] text-white/40">{fsIdx+1} / {images.length}</span>
-              <div className="w-px h-5 bg-white/10" />
+          
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl px-5 py-3">
+              <span className="text-[12px] text-white/50">{fsIdx+1} / {images.length}</span>
+              <div className="w-px h-6 bg-white/10" />
               <button onClick={() => { const a = document.createElement('a'); a.href = images[fsIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white transition-all">
-                <Download className="w-3 h-3" strokeWidth={2} />下载
+                className="flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-white/[0.06] text-white/70 text-[12px] hover:bg-white/[0.12] hover:text-white transition-all btn-scale">
+                <Download className="w-4 h-4" strokeWidth={2} />下载
               </button>
               <button onClick={() => setFullscreen(false)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] text-white/60 text-[11px] hover:bg-white/[0.12] hover:text-white transition-all">
-                <X className="w-3 h-3" />关闭
+                className="flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-white/[0.06] text-white/70 text-[12px] hover:bg-white/[0.12] hover:text-white transition-all btn-scale">
+                <X className="w-4 h-4" />关闭
               </button>
             </div>
           </div>
@@ -306,22 +377,24 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
       </div>
 
       {/* bubble */}
-      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed transition-all duration-200
+      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed transition-all duration-200 card-hover
         ${isUser
-          ? 'rounded-tr-sm shadow-lg'
-          : 'rounded-tl-sm shadow-md'}`}
+          ? 'rounded-tr-sm'
+          : 'rounded-tl-sm'}`}
         style={isUser ? {
           background: `linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 18%, var(--bg-secondary)), var(--bg-secondary))`,
           color: 'var(--text-primary)',
           borderColor: 'var(--border-color)',
           borderWidth: '1px',
-          borderStyle: 'solid'
+          borderStyle: 'solid',
+          boxShadow: 'var(--shadow-md)'
         } : {
-          backgroundColor: 'var(--bg-secondary)',
+          backgroundColor: 'var(--bg-card)',
           color: 'var(--text-primary)',
           borderColor: 'var(--border-color)',
           borderWidth: '1px',
-          borderStyle: 'solid'
+          borderStyle: 'solid',
+          boxShadow: 'var(--shadow-sm)'
         }}>
 
         {/* thinking */}
@@ -358,60 +431,26 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 
         {/* video */}
         {msg.type === 'video' && msg.videoUrl && (
-          <div className="mt-2 flex flex-col gap-2">
-            <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-lg">
-              <video src={msg.videoUrl} controls className="w-full object-cover" />
-              <div className="absolute bottom-2 right-2 w-24 h-auto opacity-80 pointer-events-none">
-                <img src="/LOGOkbitwater.png" className="w-full h-full object-contain" />
-              </div>
-            </div>
-            <div className="flex items-center justify-end pt-1.5 border-t border-white/[0.06]">
-              <div className="relative video-menu-container">
-                <button onClick={() => setVideoMenuOpen(!videoMenuOpen)} className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-all">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </button>
-                {videoMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in duration-150">
-                    <div className="py-1">
-                      <button onClick={() => {
-                        const url = msg.watermarkedVideoUrl || msg.videoUrl;
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `video_${Date.now()}.mp4`;
-                        a.click();
-                        setVideoMenuOpen(false);
-                      }} className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3">
-                        <Download className="w-4 h-4" strokeWidth={2} />
-                        <span>{t.buttons.stdDownload}</span>
-                      </button>
-                      <button onClick={() => {
-                        if (!isDeveloper) { alert(t.buttons.unlockOriginal); return; }
-                        const a = document.createElement('a');
-                        a.href = msg.videoUrl;
-                        a.download = `video_PRO_${Date.now()}.mp4`;
-                        a.click();
-                        setVideoMenuOpen(false);
-                      }} className={`w-full px-4 py-2.5 text-left text-sm transition-all flex items-center gap-3 ${isDeveloper ? 'text-blue-400 hover:bg-blue-500/10' : 'text-white/30 cursor-not-allowed'}`}>
-                        <Download className="w-4 h-4" strokeWidth={2} />
-                        {!isDeveloper && <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>}
-                        <span>{isDeveloper ? t.buttons.originalDownload : t.buttons.originalDownload}</span>
-                      </button>
-                      {onRerun && msg.rerunPayload && (
-                        <>
-                          <div className="border-t border-white/[0.06] my-1" />
-                          <button onClick={() => { onRerun(msg.rerunPayload); setVideoMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-all flex items-center gap-3">
-                            <RefreshCw className="w-4 h-4" strokeWidth={2} />
-                            <span>{t.buttons.rerender}</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="mt-2">
+            <VideoPlayer
+              videoUrl={msg.videoUrl}
+              watermarkedVideoUrl={msg.watermarkedVideoUrl}
+              isDeveloper={isDeveloper}
+              onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload) : undefined}
+              t={{
+                buttons: {
+                  stdDownload: t.buttons.stdDownload,
+                  originalDownload: t.buttons.originalDownload,
+                  unlockOriginal: t.buttons.unlockOriginal,
+                  rerender: t.buttons.rerender,
+                  pictureInPicture: '画中画',
+                  fullscreen: '全屏',
+                  normalSpeed: '正常速度',
+                  slowSpeed: '慢速',
+                  fastSpeed: '快速',
+                },
+              }}
+            />
           </div>
         )}
 
@@ -578,15 +617,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         const assets = payload.images.map(f => f.data);
         const res: any = await gemini.generateVideo(finalText, assets, '16:9', instructions, signal);
         if (res?.url) {
-          let watermarkedVideoUrl: string | undefined;
-          try {
-            const videoWatermark = await import('../services/videoWatermarkService.ts');
-            const wmResult = await videoWatermark.VideoWatermarkUtils.addWatermark(res.url, '/LOGOkbitwater.png');
-            watermarkedVideoUrl = wmResult.objectUrl;
-          } catch (e) {
-            console.warn('[视频水印] 浏览器端水印失败:', e);
-          }
-          updateLast({ type: 'video', videoUrl: res.url, watermarkedVideoUrl, text: undefined, rerunPayload: payload });
+          // 立即显示原始视频
+          updateLast({ type: 'video', videoUrl: res.url, text: undefined, rerunPayload: payload });
+          
+          // 异步生成水印版本供普通下载使用
+          setTimeout(async () => {
+            try {
+              const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
+              const watermarkResult = await VideoWatermarkUtils.addWatermark(res.url);
+              // 更新消息对象，添加水印视频URL
+              updateLast({ watermarkedVideoUrl: watermarkResult.objectUrl });
+            } catch (error) {
+              console.error('视频水印生成失败:', error);
+            }
+          }, 500);
         }
         else updateLast({ type: 'error', text: t.buttons.videoGenerationFailed });
 
@@ -816,19 +860,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           <div className="w-full max-w-3xl bg-[#111111] border border-white/[0.08] rounded-2xl shadow-2xl overflow-y-auto max-h-[80vh] custom-scrollbar">
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] sticky top-0 bg-[#111111]">
               <p className="text-base font-semibold text-white/90">{t.presets.title}</p>
-              <div className="flex items-center gap-3">
-                {(selectedStyle || selectedPresets.length > 0) && (
-                  <button onClick={() => { setSelectedStyle(''); setSelectedPresets([]); }}
-                    className="text-[11px] text-red-400 hover:text-red-300 transition-all flex items-center gap-1">
-                    <X className="w-3 h-3" strokeWidth={2} />
-                    {t.presets.clearAll}
-                  </button>
-                )}
-                <button onClick={onTogglePresetPanel}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all">
-                  <X className="w-5 h-5" strokeWidth={2} />
-                </button>
-              </div>
+              <button onClick={onTogglePresetPanel}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all">
+                <X className="w-5 h-5" strokeWidth={2} />
+              </button>
             </div>
 
             <div className="px-6 py-4 space-y-6">
@@ -838,15 +873,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {domainStyles.map(style => (
                     <button key={style.name}
-                      onClick={() => setSelectedStyle(s => s === style.name ? '' : style.name)}
-                      onDoubleClick={() => {
+                      onClick={() => {
                         inputRef.current?.appendText(style.logic);
+                        onTogglePresetPanel?.();
                       }}
-                      className={`min-h-[44px] px-3 py-2 rounded-xl text-left text-[12px] transition-all duration-150 active:scale-95 cursor-pointer
-                        ${selectedStyle === style.name
-                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-white/[0.03] border border-white/[0.06] text-white/50 hover:bg-white/[0.06] hover:text-white/70'}`}
-                      title={t.presets.doubleClickToInsert}>
+                      className="min-h-[44px] px-3 py-2 rounded-xl text-left text-[12px] transition-all duration-150 active:scale-95 cursor-pointer bg-white/[0.03] border border-white/[0.06] text-white/50 hover:bg-white/[0.06] hover:text-white/70 hover:border-blue-500/30"
+                      title="单击插入到输入框">
                       <div className="font-medium truncate">{language === 'zh-CN' ? style.name.split(' ')[0] : style.name.split(' ').slice(1).join(' ').split('(')[0].trim()}</div>
                       <div className="text-[10px] opacity-50 truncate">{language === 'zh-CN' ? style.name.split(' ').slice(1).join(' ') : style.name.split(' ')[0]}</div>
                     </button>
@@ -859,23 +891,17 @@ const ConversationView: React.FC<ConversationViewProps> = ({
                 <div key={category.label}>
                   <p className="text-[11px] font-medium uppercase text-white/30 tracking-widest mb-3">{category.label}</p>
                   <div className="flex flex-wrap gap-2">
-                    {category.tags.map(tag => {
-                      const isSelected = selectedPresets.includes(tag);
-                      return (
-                        <button key={tag}
-                          onClick={() => setSelectedPresets(prev => isSelected ? prev.filter(t => t !== tag) : [...prev, tag])}
-                          onDoubleClick={() => {
-                            inputRef.current?.appendText(tag);
-                          }}
-                          className={`min-h-[36px] px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 cursor-pointer
-                            ${isSelected
-                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                              : 'bg-white/[0.03] border border-white/[0.06] text-white/40 hover:bg-white/[0.06] hover:text-white/70'}`}
-                          title={t.presets.doubleClickToInsert}>
-                          {tag}
-                        </button>
-                      );
-                    })}
+                    {category.tags.map(tag => (
+                      <button key={tag}
+                        onClick={() => {
+                          inputRef.current?.appendText(tag);
+                          onTogglePresetPanel?.();
+                        }}
+                        className="min-h-[36px] px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-150 active:scale-95 cursor-pointer bg-white/[0.03] border border-white/[0.06] text-white/40 hover:bg-white/[0.06] hover:text-white/70 hover:border-blue-500/30"
+                        title="单击插入到输入框">
+                        {tag}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}

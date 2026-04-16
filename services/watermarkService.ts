@@ -91,17 +91,21 @@ export const WatermarkUtils = {
     }
   },
 
-  async addWatermark(imageSrc: string, logoSrc: string = '/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
+  async addWatermark(imageSrc: string, logoSrc: string = '/architect/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
     const generatedAt = new Date().toISOString();
+    
+    console.log(`[水印服务] 开始添加水印, logo路径: ${logoSrc}`);
     
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
+        console.log(`[水印服务] 原图加载成功, 尺寸: ${img.width}x${img.height}`);
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) {
+          console.error("[水印服务] 获取canvas上下文失败");
           reject(new Error("Failed to get canvas context"));
           return;
         }
@@ -117,28 +121,19 @@ export const WatermarkUtils = {
         const logo = new Image();
         logo.crossOrigin = "anonymous";
         logo.onload = () => {
+          console.log(`[水印服务] 水印logo加载成功, 尺寸: ${logo.width}x${logo.height}`);
           const logoWidth = watermarkWidth;
           const logoHeight = (logo.height / logo.width) * logoWidth;
           
           const watermarkX = canvas.width - watermarkWidth - margin;
           const watermarkY = canvas.height - logoHeight - margin;
           
-          ctx.globalAlpha = 0.5;
+          console.log(`[水印服务] 水印位置: (${watermarkX}, ${watermarkY}), 尺寸: ${logoWidth}x${logoHeight}`);
           
-          const tempCanvas = document.createElement('canvas');
-          const tempCtx = tempCanvas.getContext('2d');
-          if (tempCtx) {
-            tempCanvas.width = logo.width;
-            tempCanvas.height = logo.height;
-            tempCtx.drawImage(logo, 0, 0);
-            tempCtx.globalCompositeOperation = 'source-in';
-            tempCtx.fillStyle = '#FFFFFF';
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-          }
+          ctx.globalAlpha = 0.7;
           
-          if (tempCtx) {
-            ctx.drawImage(tempCanvas, watermarkX, watermarkY, logoWidth, logoHeight);
-          }
+          ctx.drawImage(logo, watermarkX, watermarkY, logoWidth, logoHeight);
+          console.log("[水印服务] 水印添加成功（使用原图颜色，70%透明度）");
 
           // 隐式标识：LSB 隐写
           ctx.globalAlpha = 1.0;
@@ -155,8 +150,18 @@ export const WatermarkUtils = {
           }).catch(() => {});
         };
         logo.onerror = () => {
-          // 严格禁止文字水印，仅使用图片水印
-          // 如果logo加载失败，不添加任何可见水印（仅保留LSB隐写标识）
+          console.error(`[水印服务] 水印logo加载失败: ${logoSrc}`);
+          // 如果logo加载失败，添加白色文字水印作为备用
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = `${Math.max(12, canvas.width * 0.03)}px sans-serif`;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+          const watermarkText = 'KbitAI';
+          const margin = canvas.width * 0.03;
+          ctx.fillText(watermarkText, canvas.width - margin, canvas.height - margin);
+          console.log("[水印服务] 使用文字水印作为备用");
+          
           ctx.globalAlpha = 1.0;
           const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
           embedLSB(ctx, canvas.width, canvas.height, payload);
@@ -171,7 +176,10 @@ export const WatermarkUtils = {
         };
         logo.src = logoSrc;
       };
-      img.onerror = reject;
+      img.onerror = (e) => {
+        console.error("[水印服务] 原图加载失败:", e);
+        reject(e);
+      };
       img.src = imageSrc;
     });
   },

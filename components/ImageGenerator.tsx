@@ -317,6 +317,11 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     // 强制重置为白色，确保资产重构模式下初始状态正确
     setActiveColor('#FFFFFF');
     setIsMarkingMode(true);
+    // 自动切换到全屏显示，确保本地修改模式下全屏状态持续
+    if (!isPreviewFullscreen && generatedImages.length > 0) {
+      setFullscreenImageIndex(activeIdx);
+      setIsPreviewFullscreen(true);
+    }
   };
 
   const discardMarking = () => {
@@ -966,7 +971,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                      </button>
                      <button onClick={(e) => handleDownload(e, true)} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${isDeveloper ? `hover:bg-${themeColor}-50 dark:hover:bg-${themeColor}-900/30 text-${themeColor}-600 dark:text-${themeColor}-400` : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'}`} title={isDeveloper ? '无水印原图下载' : '升级 PRO/PLUS 解锁无水印下载'}>
                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                       <span className="text-[9px] font-medium flex items-center gap-0.5">{!isDeveloper && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>}原图</span>
+                       <span className="text-[9px] font-medium">原图</span>
                      </button>
                      <div className="w-px h-8 bg-slate-200 dark:bg-slate-700" />
                      <button onClick={(e) => { e.stopPropagation(); if (!window.confirm(`将对图 ${activeIdx + 1} 进行局部修改，确认继续？`)) return; openMarkingMode('INPAINT'); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all" title="局部修改">
@@ -1011,7 +1016,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       </div>
 
       {isPreviewFullscreen && fullscreenImageIndex !== null && generatedImages[fullscreenImageIndex] && (
-        <div className="fixed inset-0 z-[400] bg-slate-950 flex flex-col animate-in fade-in duration-300" onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); }}>
+        <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-in fade-in duration-300" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}>
           {/* 层1：主图区 */}
           <div className="flex-1 flex items-center justify-center p-6 min-h-0 cursor-zoom-out">
             <img
@@ -1028,7 +1033,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                 当前操作：图 {fullscreenImageIndex + 1}{generatedImages.length > 1 ? ` / 共 ${generatedImages.length} 张` : ''}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="退出全屏">
+                <button onClick={() => { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); if (isMarkingMode) { discardMarking(); } }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="退出全屏">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   <span className="text-[9px] font-medium">关闭</span>
                 </button>
@@ -1039,7 +1044,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); if (!isDeveloper) { alert('升级 PRO/PLUS 解锁无水印下载'); return; } const a = document.createElement('a'); a.href = generatedImages[fullscreenImageIndex]; a.download = `Creative_PRO_${Date.now()}.png`; a.click(); }} className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${isDeveloper ? `hover:bg-${themeColor}-900/40 text-${themeColor}-400 hover:text-${themeColor}-300` : 'text-white/30 hover:bg-white/5'}`} title={isDeveloper ? '无水印原图' : '升级解锁'}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  <span className="text-[9px] font-medium flex items-center gap-0.5">{!isDeveloper && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>}原图</span>
+                  <span className="text-[9px] font-medium">原图</span>
                 </button>
                 <div className="w-px h-8 bg-white/10" />
                 <button onClick={(e) => { e.stopPropagation(); setHoveredImageIndex(fullscreenImageIndex); setIsPreviewFullscreen(false); setFullscreenImageIndex(null); setTimeout(() => openMarkingMode('INPAINT'), 100); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="局部修改">

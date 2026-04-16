@@ -478,11 +478,11 @@ const Layout: React.FC<LayoutProps> = ({
                 <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
               </div>
               {/* 主题 + 设置 */}
-              <button onClick={toggleTheme} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
-                {preferences?.lightMode ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />}
+              <button onClick={toggleTheme} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title={preferences?.lightMode ? '切换深色模式' : '切换亮色模式'}>
+                {preferences?.lightMode ? <Moon className="w-4 h-4" strokeWidth={1.5} /> : <Sun className="w-4 h-4" strokeWidth={1.5} />}
               </button>
-              <button onClick={onOpenSettings} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150" style={{ color: 'var(--text-tertiary)' }}>
-                <Settings className="w-3.5 h-3.5" strokeWidth={1.5} />
+              <button onClick={onOpenSettings} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title="设置">
+                <Settings className="w-4 h-4" strokeWidth={1.5} />
               </button>
             </div>
           )}
@@ -496,14 +496,14 @@ const Layout: React.FC<LayoutProps> = ({
               © 天津匡形无界智能科技有限公司
             </p>
             {/* ICP + 公安备案 */}
-            <div className="flex items-center justify-between opacity-40 hover:opacity-70 transition-opacity">
+            <div className="flex flex-col items-center gap-1 opacity-40 hover:opacity-70 transition-opacity">
               <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer"
-                className="text-[9px] transition-opacity"
+                className="text-[9px] transition-opacity whitespace-nowrap"
                 style={{ color: 'var(--text-tertiary)' }}>
                 津ICP备2026002055号-1
               </a>
               <a href="https://beian.mps.gov.cn/#/query/webSearch?code=12010402002460" target="_blank" rel="noreferrer"
-                className="flex items-center gap-0.5 transition-opacity">
+                className="flex items-center gap-0.5 transition-opacity whitespace-nowrap">
                 <img src="/architect/备案图标.png" className="w-2.5 h-2.5 shrink-0" alt="公安备案" />
                 <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>津公网安备12010402002460号</span>
               </a>

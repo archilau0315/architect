@@ -24,6 +24,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,7 +43,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       setUserAvatar(savedAvatar);
     }
     
-    // 检查URL中是否有重置令牌
     const urlParams = new URLSearchParams(window.location.search);
     const resetToken = urlParams.get('reset');
     if (resetToken) {
@@ -94,7 +94,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     setIsVerifying(true);
     setError('');
 
-    // 演示模式：允许特定邀请码
     const demoCodes = ['KBITDEMO1', 'KBITAI2026', 'KBITTEST'];
     const code = inviteCode.trim().toUpperCase();
     
@@ -114,7 +113,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         setError(data.message || '邀请码无效');
       }
     } catch (err) {
-      // 后端连接失败时，显示错误信息
       console.error('邀请码验证失败:', err);
       setError('网络错误，请检查后端服务是否运行');
     } finally {
@@ -125,6 +123,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const handleLogin = async () => {
     if (!registerData.email || !registerData.password) {
       setError('请填写邮箱和密码');
+      return;
+    }
+
+    if (!registerData.email.includes('@')) {
+      setError('请输入有效的邮箱地址');
       return;
     }
 
@@ -162,7 +165,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         setError(data.error || '登录失败');
       }
     } catch (err) {
-      // 后端连接失败时，显示错误信息
       console.error('登录失败:', err);
       setError('网络错误，请检查后端服务是否运行');
     } finally {
@@ -176,10 +178,19 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       return;
     }
 
+    if (!registerData.email.includes('@')) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
+
+    if (registerData.password.length < 6) {
+      setError('密码长度至少需要6位');
+      return;
+    }
+
     setIsRegistering(true);
     setError('');
 
-    // 演示模式：允许特定邀请码直接注册
     const demoCodes = ['KBITDEMO1', 'KBITAI2026', 'KBITTEST'];
     const code = inviteCode.trim().toUpperCase();
     
@@ -242,7 +253,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         }
       }
     } catch (err) {
-      // 后端连接失败时，显示错误信息
       console.error('注册失败:', err);
       setError('网络错误，请检查后端服务是否运行');
     } finally {
@@ -250,16 +260,93 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
   };
 
+  const InputField = ({ 
+    label, 
+    type, 
+    value, 
+    onChange, 
+    placeholder, 
+    id,
+    showToggle = false,
+    toggleState,
+    onToggle 
+  }: { 
+    label: string; 
+    type: string; 
+    value: string; 
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
+    placeholder: string;
+    id: string;
+    showToggle?: boolean;
+    toggleState?: boolean;
+    onToggle?: () => void;
+  }) => (
+    <div className="relative">
+      <input
+        id={id}
+        type={showToggle ? (toggleState ? 'text' : type) : type}
+        value={value}
+        onChange={onChange}
+        placeholder=" "
+        className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none transition-all duration-300 peer"
+        style={{
+          borderColor: focusedField === id ? 'rgba(99, 102, 241, 0.5)' : 'rgba(255, 255, 255, 0.1)',
+          boxShadow: focusedField === id ? '0 0 0 2px rgba(99, 102, 241, 0.15)' : 'none'
+        }}
+        onFocus={() => setFocusedField(id)}
+        onBlur={() => setFocusedField(null)}
+      />
+      <label 
+        htmlFor={id}
+        className="absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-300 uppercase tracking-widest pointer-events-none transition-all duration-300"
+        style={{
+          transform: focusedField === id || value ? 'translate(-10px, -28px) scale(0.85)' : 'translateY(-50%)',
+          opacity: focusedField === id || value ? 1 : 0.6
+        }}
+      >
+        {label}
+      </label>
+      <span 
+        className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none transition-all duration-300"
+        style={{
+          opacity: focusedField === id || value ? 0 : 1
+        }}
+      >
+        {placeholder}
+      </span>
+      {showToggle && onToggle && (
+        <button 
+          type="button" 
+          onClick={onToggle}
+          className="absolute right-6 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+        >
+          {toggleState
+            ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+            : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+          }
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-[pulse_4s_ease-in-out_infinite]" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-[pulse_4s_ease-in-out_infinite_1s]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-20 right-20 w-2 h-2 bg-white/20 rounded-full animate-ping" />
+        <div className="absolute bottom-32 left-24 w-1.5 h-1.5 bg-indigo-400/30 rounded-full animate-ping delay-500" />
       </div>
 
       <div className="relative w-full max-w-md">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden">
+        <div className="text-center mb-10 animate-[fadeInUp_0.6s_ease-out]">
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden transition-transform duration-300 hover:scale-105">
             <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white italic tracking-wide mb-2 px-1">
@@ -270,7 +357,12 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
           </p>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-xl rounded-[3rem] p-10 border border-white/10 shadow-2xl">
+        <div 
+          className="bg-white/5 backdrop-blur-xl rounded-[3rem] p-10 border border-white/10 shadow-2xl transition-all duration-500 hover:shadow-indigo-500/10 hover:border-white/15"
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+          }}
+        >
           {!showRegister && !showLoginForm ? (
             <>
               <div className="text-center mb-8">
@@ -280,21 +372,18 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
 
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-2">
-                    邀请码
-                  </label>
-                  <input
+                  <InputField
+                    label="邀请码"
                     type="text"
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                     placeholder="KBXXXXXXXX"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-mono text-lg tracking-[0.3em] outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all text-center placeholder:text-slate-600"
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                    id="invite-code"
                   />
                 </div>
 
                 {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
                     <p className="text-red-400 text-sm text-center">{error}</p>
                   </div>
                 )}
@@ -302,9 +391,19 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleVerify}
                   disabled={isVerifying}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:from-indigo-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  {isVerifying ? '验证中...' : '验证邀请码'}
+                  {isVerifying ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      验证中...
+                    </span>
+                  ) : (
+                    '验证邀请码'
+                  )}
                 </button>
               </div>
 
@@ -314,7 +413,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                     还没有邀请码？
                     <button 
                       onClick={() => setShowApplication(true)}
-                      className="text-indigo-400 hover:text-indigo-300 ml-1 underline"
+                      className="text-indigo-400 hover:text-indigo-300 ml-1 underline transition-colors"
                     >
                       申请内测
                     </button>
@@ -323,7 +422,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <div className="pt-4 border-t border-white/10">
                   <button
                     onClick={() => setShowLoginForm(true)}
-                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-colors"
+                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-all duration-300 hover:border-white/20 hover:scale-[1.01] active:scale-[0.99]"
                   >
                     已有账号？直接登录
                   </button>
@@ -338,24 +437,20 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-2">
-                    邮箱地址
-                  </label>
-                  <input
-                    type="email"
-                    value={registerData.email}
-                    onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
-                    placeholder="your@email.com"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
-                  />
-                </div>
+                <InputField
+                  label="邮箱地址"
+                  type="email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                  placeholder="your@email.com"
+                  id="login-email"
+                />
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-2">
-                    <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
                       登录密码
-                    </label>
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowPasswordReset(true)}
@@ -364,26 +459,21 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       忘记密码？
                     </button>
                   </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={registerData.password}
-                      onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                      placeholder="••••••••"
-                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all pr-14"
-                    />
-                    <button type="button" onClick={() => setShowPassword(p => !p)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
-                      {showPassword
-                        ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                        : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                      }
-                    </button>
-                  </div>
+                  <InputField
+                    label="登录密码"
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                    placeholder="••••••••"
+                    id="login-password"
+                    showToggle={true}
+                    toggleState={showPassword}
+                    onToggle={() => setShowPassword(p => !p)}
+                  />
                 </div>
 
                 {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
                     <p className="text-red-400 text-sm text-center">{error}</p>
                   </div>
                 )}
@@ -391,16 +481,26 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:from-indigo-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  {isLoggingIn ? '登录中...' : '登录账号'}
+                  {isLoggingIn ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      登录中...
+                    </span>
+                  ) : (
+                    '登录账号'
+                  )}
                 </button>
               </div>
 
               <div className="mt-4 space-y-3">
                 <button
                   onClick={() => setShowLoginForm(false)}
-                  className="w-full text-slate-500 text-sm hover:text-white transition-colors"
+                  className="w-full text-slate-500 text-sm hover:text-white transition-colors duration-200"
                 >
                   ← 返回邀请码验证
                 </button>
@@ -414,24 +514,20 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-2">
-                    邮箱地址
-                  </label>
-                  <input
-                    type="email"
-                    value={registerData.email}
-                    onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
-                    placeholder="your@email.com"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
-                  />
-                </div>
+                <InputField
+                  label="邮箱地址"
+                  type="email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                  placeholder="your@email.com"
+                  id="register-email"
+                />
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-2">
-                    <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
                       登录密码
-                    </label>
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowPasswordReset(true)}
@@ -440,44 +536,35 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       忘记密码？
                     </button>
                   </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={registerData.password}
-                      onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                      placeholder="••••••••"
-                      className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all pr-14"
-                    />
-                    <button type="button" onClick={() => setShowPassword(p => !p)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
-                      {showPassword
-                        ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                        : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                      }
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-2">
-                    昵称 <span className="text-slate-500">(选填)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={registerData.nickname}
-                    onChange={(e) => setRegisterData({...registerData, nickname: e.target.value})}
-                    placeholder="您的昵称"
-                    className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all"
+                  <InputField
+                    label="登录密码"
+                    type="password"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                    placeholder="••••••••"
+                    id="register-password"
+                    showToggle={true}
+                    toggleState={showPassword}
+                    onToggle={() => setShowPassword(p => !p)}
                   />
                 </div>
 
+                <InputField
+                  label="昵称 (选填)"
+                  type="text"
+                  value={registerData.nickname}
+                  onChange={(e) => setRegisterData({...registerData, nickname: e.target.value})}
+                  placeholder="您的昵称"
+                  id="register-nickname"
+                />
+
                 {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
                     <p className="text-red-400 text-sm text-center">{error}</p>
                   </div>
                 )}
 
-                <div className="flex items-start gap-3 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl">
+                <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/20 rounded-2xl">
                   <span className="text-2xl">🎁</span>
                   <div>
                     <p className="text-indigo-300 text-sm font-bold">内测专属福利</p>
@@ -488,9 +575,19 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleRegister}
                   disabled={isRegistering}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:from-indigo-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  {isRegistering ? '注册中...' : '创建账号开始体验'}
+                  {isRegistering ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      注册中...
+                    </span>
+                  ) : (
+                    '创建账号开始体验'
+                  )}
                 </button>
               </div>
 
@@ -498,14 +595,14 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 {error === '该邮箱已注册' && (
                   <button
                     onClick={() => setShowLoginForm(true)}
-                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-colors"
+                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-all duration-300 hover:border-white/20"
                   >
                     已有账号？点击登录
                   </button>
                 )}
                 <button
                   onClick={() => setShowRegister(false)}
-                  className="w-full text-slate-500 text-sm hover:text-white transition-colors"
+                  className="w-full text-slate-500 text-sm hover:text-white transition-colors duration-200"
                 >
                   ← 返回修改邀请码
                 </button>
