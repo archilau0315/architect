@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import BetaApplicationBanner from './BetaApplicationBanner.tsx';
 import PasswordReset from './PasswordReset.tsx';
+import InputField from './InputField.tsx';
 import { AVATAR_KEY } from '../constants.ts';
 
 interface InviteVerifyProps {
@@ -11,6 +12,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [inviteCode, setInviteCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
+  const [codeStatus, setCodeStatus] = useState<'empty' | 'valid' | 'invalid'>('empty');
   const [showRegister, setShowRegister] = useState(false);
   const [showApplication, setShowApplication] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
@@ -25,7 +27,12 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState<0 | 1 | 2 | 3>(0);
+  const [currentView, setCurrentView] = useState<'verify' | 'login' | 'register'>('verify');
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   useEffect(() => {
     const savedUser = localStorage.getItem('architect-invite-session');
@@ -260,79 +267,56 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
   };
 
-  const InputField = ({ 
-    label, 
-    type, 
-    value, 
-    onChange, 
-    placeholder, 
-    id,
-    showToggle = false,
-    toggleState,
-    onToggle 
-  }: { 
-    label: string; 
-    type: string; 
-    value: string; 
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
-    placeholder: string;
-    id: string;
-    showToggle?: boolean;
-    toggleState?: boolean;
-    onToggle?: () => void;
-  }) => (
-    <div className="relative">
-      <input
-        id={id}
-        type={showToggle ? (toggleState ? 'text' : type) : type}
-        value={value}
-        onChange={onChange}
-        placeholder=" "
-        className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none transition-all duration-300 peer"
-        style={{
-          borderColor: focusedField === id ? 'rgba(99, 102, 241, 0.5)' : 'rgba(255, 255, 255, 0.1)',
-          boxShadow: focusedField === id ? '0 0 0 2px rgba(99, 102, 241, 0.15)' : 'none'
-        }}
-        onFocus={() => setFocusedField(id)}
-        onBlur={() => setFocusedField(null)}
-      />
-      <label 
-        htmlFor={id}
-        className="absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-300 uppercase tracking-widest pointer-events-none transition-all duration-300"
-        style={{
-          transform: focusedField === id || value ? 'translate(-10px, -28px) scale(0.85)' : 'translateY(-50%)',
-          opacity: focusedField === id || value ? 1 : 0.6
-        }}
-      >
-        {label}
-      </label>
-      <span 
-        className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none transition-all duration-300"
-        style={{
-          opacity: focusedField === id || value ? 0 : 1
-        }}
-      >
-        {placeholder}
-      </span>
-      {showToggle && onToggle && (
-        <button 
-          type="button" 
-          onClick={onToggle}
-          className="absolute right-6 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-        >
-          {toggleState
-            ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
-            : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-          }
-        </button>
-      )}
-    </div>
-  );
+  const handleFocus = useCallback((id: string) => {
+    setFocusedField(id);
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    setFocusedField(null);
+  }, []);
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('');
+      return false;
+    }
+    if (!email.includes('@')) {
+      setEmailError('请输入包含@的邮箱地址');
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError('请输入有效的邮箱格式');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) {
+      setPasswordError('');
+      setPasswordStrength(0);
+      return false;
+    }
+    
+    let strength = 0;
+    if (password.length >= 6) strength++;
+    if (password.length >= 10) strength++;
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    
+    const finalStrength = Math.min(strength, 3) as 0 | 1 | 2 | 3;
+    setPasswordStrength(finalStrength);
+    
+    if (password.length < 6) {
+      setPasswordError('密码长度至少需要6位');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
@@ -371,16 +355,36 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
               </div>
 
               <div className="space-y-5">
-                <div className="space-y-2">
-                  <InputField
-                    label="邀请码"
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    placeholder="KBXXXXXXXX"
-                    id="invite-code"
-                  />
-                </div>
+                <InputField
+                  label="邀请码"
+                  type="text"
+                  value={inviteCode}
+                  onChange={(value) => {
+                    const filtered = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    setInviteCode(filtered);
+                    setError('');
+                  }}
+                  placeholder="KBXXXXXX"
+                  id="invite-code"
+                  maxLength={12}
+                  isFocused={focusedField === 'invite-code'}
+                  hasError={inviteCode && codeStatus === 'invalid'}
+                  hasSuccess={inviteCode && codeStatus === 'valid'}
+                  errorMessage="邀请码格式不正确（6-12位字母或数字）"
+                  onFocus={() => handleFocus('invite-code')}
+                  onBlur={() => {
+                    handleBlur();
+                    if (inviteCode) {
+                      if (/^[A-Z0-9]{6,12}$/.test(inviteCode)) {
+                        setCodeStatus('valid');
+                      } else {
+                        setCodeStatus('invalid');
+                      }
+                    } else {
+                      setCodeStatus('empty');
+                    }
+                  }}
+                />
 
                 {error && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
@@ -441,36 +445,44 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   label="邮箱地址"
                   type="email"
                   value={registerData.email}
-                  onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
-                  placeholder="your@email.com"
+                  onChange={(value) => {
+                    setRegisterData({...registerData, email: value});
+                    setError('');
+                  }}
+                  placeholder="xxx@email.com"
                   id="login-email"
+                  isFocused={focusedField === 'login-email'}
+                  hasError={!!emailError}
+                  hasSuccess={registerData.email && validateEmail(registerData.email)}
+                  errorMessage={emailError}
+                  onFocus={() => handleFocus('login-email')}
+                  onBlur={() => {
+                    handleBlur();
+                    validateEmail(registerData.email);
+                  }}
                 />
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-2">
-                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                      登录密码
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordReset(true)}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      忘记密码？
-                    </button>
-                  </div>
-                  <InputField
-                    label="登录密码"
-                    type="password"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                    placeholder="••••••••"
-                    id="login-password"
-                    showToggle={true}
-                    toggleState={showPassword}
-                    onToggle={() => setShowPassword(p => !p)}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordReset(true)}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors text-right w-full"
+                >
+                  忘记密码？
+                </button>
+                <InputField
+                  label="登录密码"
+                  type="password"
+                  value={registerData.password}
+                  onChange={(value) => setRegisterData({...registerData, password: value})}
+                  placeholder="请输入密码"
+                  id="login-password"
+                  showToggle={true}
+                  toggleState={showPassword}
+                  onToggle={() => setShowPassword(p => !p)}
+                  isFocused={focusedField === 'login-password'}
+                  onFocus={() => handleFocus('login-password')}
+                  onBlur={handleBlur}
+                />
 
                 {error && (
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
@@ -518,44 +530,83 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   label="邮箱地址"
                   type="email"
                   value={registerData.email}
-                  onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
-                  placeholder="your@email.com"
+                  onChange={(value) => {
+                    setRegisterData({...registerData, email: value});
+                    setError('');
+                  }}
+                  placeholder="xxx@email.com"
                   id="register-email"
+                  isFocused={focusedField === 'register-email'}
+                  hasError={!!emailError}
+                  hasSuccess={registerData.email && validateEmail(registerData.email)}
+                  errorMessage={emailError}
+                  onFocus={() => handleFocus('register-email')}
+                  onBlur={() => {
+                    handleBlur();
+                    validateEmail(registerData.email);
+                  }}
                 />
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-2">
-                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                      登录密码
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordReset(true)}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      忘记密码？
-                    </button>
+                <InputField
+                  label="登录密码"
+                  type="password"
+                  value={registerData.password}
+                  onChange={(value) => {
+                    setRegisterData({...registerData, password: value});
+                    validatePassword(value);
+                    setError('');
+                  }}
+                  placeholder="设置登录密码"
+                  id="register-password"
+                  showToggle={true}
+                  toggleState={showPassword}
+                  onToggle={() => setShowPassword(p => !p)}
+                  isFocused={focusedField === 'register-password'}
+                  hasError={!!passwordError}
+                  errorMessage={passwordError}
+                  onFocus={() => handleFocus('register-password')}
+                  onBlur={handleBlur}
+                />
+                {registerData.password && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                        密码强度
+                      </span>
+                      <span className={`text-[10px] font-medium ${
+                        passwordStrength === 1 ? 'text-red-400' :
+                        passwordStrength === 2 ? 'text-amber-400' :
+                        passwordStrength === 3 ? 'text-green-400' : 'text-slate-500'
+                      }`}>
+                        {passwordStrength === 1 ? '弱' : passwordStrength === 2 ? '中等' : passwordStrength === 3 ? '强' : '-'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {[1, 2, 3].map((level) => (
+                        <div
+                          key={level}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                            level <= passwordStrength
+                              ? passwordStrength === 1 ? 'bg-red-500' :
+                                passwordStrength === 2 ? 'bg-amber-500' : 'bg-green-500'
+                              : 'bg-white/10'
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <InputField
-                    label="登录密码"
-                    type="password"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
-                    placeholder="••••••••"
-                    id="register-password"
-                    showToggle={true}
-                    toggleState={showPassword}
-                    onToggle={() => setShowPassword(p => !p)}
-                  />
-                </div>
+                )}
 
                 <InputField
                   label="昵称 (选填)"
                   type="text"
                   value={registerData.nickname}
-                  onChange={(e) => setRegisterData({...registerData, nickname: e.target.value})}
-                  placeholder="您的昵称"
+                  onChange={(value) => setRegisterData({...registerData, nickname: value})}
+                  placeholder="为自己取个昵称"
                   id="register-nickname"
+                  isFocused={focusedField === 'register-nickname'}
+                  onFocus={() => handleFocus('register-nickname')}
+                  onBlur={handleBlur}
                 />
 
                 {error && (

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import InputField from './InputField.tsx';
 
 interface PasswordResetProps {
   onBack: () => void;
@@ -15,6 +16,74 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmError, setConfirmError] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState<0 | 1 | 2 | 3>(0);
+
+  const handleFocus = useCallback((id: string) => {
+    setFocusedField(id);
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    setFocusedField(null);
+  }, []);
+
+  const validateEmail = (emailVal: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailVal) {
+      setEmailError('');
+      return false;
+    }
+    if (!emailVal.includes('@')) {
+      setEmailError('请输入包含@的邮箱地址');
+      return false;
+    }
+    if (!emailRegex.test(emailVal)) {
+      setEmailError('请输入有效的邮箱格式');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validateNewPassword = (password: string) => {
+    if (!password) {
+      setPasswordError('');
+      setPasswordStrength(0);
+      return false;
+    }
+    
+    let strength = 0;
+    if (password.length >= 6) strength++;
+    if (password.length >= 10) strength++;
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    
+    const finalStrength = Math.min(strength, 3) as 0 | 1 | 2 | 3;
+    setPasswordStrength(finalStrength);
+    
+    if (password.length < 6) {
+      setPasswordError('密码长度至少需要6位');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
+
+  const validateConfirmPassword = (confirm: string) => {
+    if (!confirm) {
+      setConfirmError('');
+      return false;
+    }
+    if (confirm !== newPassword) {
+      setConfirmError('两次输入的密码不一致');
+      return false;
+    }
+    setConfirmError('');
+    return true;
+  };
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -125,80 +194,6 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     }
   };
 
-  const InputField = ({ 
-    label, 
-    type, 
-    value, 
-    onChange, 
-    placeholder, 
-    id,
-    showToggle = false,
-    toggleState,
-    onToggle 
-  }: { 
-    label: string; 
-    type: string; 
-    value: string; 
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
-    placeholder: string;
-    id: string;
-    showToggle?: boolean;
-    toggleState?: boolean;
-    onToggle?: () => void;
-  }) => (
-    <div className="relative">
-      <input
-        id={id}
-        type={showToggle ? (toggleState ? 'text' : type) : type}
-        value={value}
-        onChange={onChange}
-        placeholder=" "
-        className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none transition-all duration-300"
-        style={{
-          borderColor: focusedField === id ? 'rgba(99, 102, 241, 0.5)' : 'rgba(255, 255, 255, 0.1)',
-          boxShadow: focusedField === id ? '0 0 0 2px rgba(99, 102, 241, 0.15)' : 'none'
-        }}
-        onFocus={() => setFocusedField(id)}
-        onBlur={() => setFocusedField(null)}
-      />
-      <label 
-        htmlFor={id}
-        className="absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-300 uppercase tracking-widest pointer-events-none transition-all duration-300"
-        style={{
-          transform: focusedField === id || value ? 'translate(-10px, -28px) scale(0.85)' : 'translateY(-50%)',
-          opacity: focusedField === id || value ? 1 : 0.6
-        }}
-      >
-        {label}
-      </label>
-      <span 
-        className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none transition-all duration-300"
-        style={{
-          opacity: focusedField === id || value ? 0 : 1
-        }}
-      >
-        {placeholder}
-      </span>
-      {showToggle && onToggle && (
-        <button 
-          type="button" 
-          onClick={onToggle}
-          className="absolute right-6 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-        >
-          {toggleState
-            ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
-            : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-          }
-        </button>
-      )}
-    </div>
-  );
-
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -243,9 +238,21 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
                   label="邮箱地址"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  onChange={(value) => {
+                    setEmail(value);
+                    setError('');
+                  }}
+                  placeholder="xxx@email.com"
                   id="reset-email"
+                  isFocused={focusedField === 'reset-email'}
+                  hasError={!!emailError}
+                  hasSuccess={email && validateEmail(email)}
+                  errorMessage={emailError}
+                  onFocus={() => handleFocus('reset-email')}
+                  onBlur={() => {
+                    handleBlur();
+                    validateEmail(email);
+                  }}
                 />
 
                 {error && (
@@ -341,21 +348,68 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
                   label="新密码"
                   type="password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
+                  onChange={(value) => {
+                    setNewPassword(value);
+                    validateNewPassword(value);
+                    setError('');
+                  }}
+                  placeholder="设置新密码"
                   id="reset-new-password"
                   showToggle={true}
                   toggleState={showPassword}
                   onToggle={() => setShowPassword(p => !p)}
+                  isFocused={focusedField === 'reset-new-password'}
+                  hasError={!!passwordError}
+                  errorMessage={passwordError}
+                  onFocus={() => handleFocus('reset-new-password')}
+                  onBlur={handleBlur}
                 />
+                {newPassword && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                        密码强度
+                      </span>
+                      <span className={`text-[10px] font-medium ${
+                        passwordStrength === 1 ? 'text-red-400' :
+                        passwordStrength === 2 ? 'text-amber-400' :
+                        passwordStrength === 3 ? 'text-green-400' : 'text-slate-500'
+                      }`}>
+                        {passwordStrength === 1 ? '弱' : passwordStrength === 2 ? '中等' : passwordStrength === 3 ? '强' : '-'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {[1, 2, 3].map((level) => (
+                        <div
+                          key={level}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                            level <= passwordStrength
+                              ? passwordStrength === 1 ? 'bg-red-500' :
+                                passwordStrength === 2 ? 'bg-amber-500' : 'bg-green-500'
+                              : 'bg-white/10'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <InputField
                   label="确认密码"
                   type="password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
+                  onChange={(value) => {
+                    setConfirmPassword(value);
+                    validateConfirmPassword(value);
+                    setError('');
+                  }}
+                  placeholder="再次输入密码"
                   id="reset-confirm-password"
+                  isFocused={focusedField === 'reset-confirm-password'}
+                  hasError={!!confirmError}
+                  errorMessage={confirmError}
+                  onFocus={() => handleFocus('reset-confirm-password')}
+                  onBlur={handleBlur}
                 />
 
                 {error && (
