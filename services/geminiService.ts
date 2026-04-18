@@ -1793,17 +1793,17 @@ export const GeminiService = {
           let duration: string = '5-15s';
           
           if (modelId === 'KbitVeo-speed') {
-            supportedRatios = ['16:9'];
-            duration = '5-15s';
+            supportedRatios = ['16:9', '9:16', '1:1', '4:3', '3:4'];
+            duration = '5s / 10s';
           } else if (modelId === 'KbitVeo-normal') {
-            supportedRatios = ['16:9', '9:16'];
-            duration = '5-30s';
+            supportedRatios = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+            duration = '4s / 6s / 8s / 12s';
           } else if (modelId === 'KbitVeo-standard') {
-            supportedRatios = ['16:9', '9:16'];
-            duration = '5-30s';
+            supportedRatios = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+            duration = '4s / 8s / 12s / 15s';
           } else if (modelId === 'KbitVeo-pro') {
-            supportedRatios = ['16:9', '9:16', '21:9'];
-            duration = '5-45s';
+            supportedRatios = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+            duration = '4s / 8s / 12s / 15s';
           } else if (modelId === 'KbitVeo-master') {
             supportedRatios = ['16:9', '9:16', '21:9', '4:3', '1:1'];
             duration = '5-60s';
@@ -1835,13 +1835,20 @@ export const GeminiService = {
             }
           }
           
+          const descMap: Record<string, string> = {
+            'KbitVeo-speed': '单图·最长10s',
+            'KbitVeo-normal': '双图·最长12s',
+            'KbitVeo-standard': '9图+视频·最长15s',
+            'KbitVeo-pro': '9图+视频·最长15s·快速',
+          };
           dynamicEngines.push({
             id: modelId,
-            label: formattedLabel, // 使用格式化后的标签
-            desc: node?.description || `Gateway: ${node?.provider || 'ph8.co'}`,
+            label: formattedLabel,
+            desc: descMap[modelId] || node?.description || `Gateway: ${node?.provider || 'ph8.co'}`,
             supportedRatios: assetCount >= 2 ? ['16:9'] : supportedRatios,
             duration: duration,
-            isFrozen: modelId === 'KbitVeo-master' // 总是将 KbitVeo-master 标记为冻结状态，表示正在开发
+            supportsVideoUpload: modelId === 'KbitVeo-standard' || modelId === 'KbitVeo-pro',
+            isFrozen: modelId === 'KbitVeo-master'
           });
         }
       });
@@ -1857,30 +1864,32 @@ export const GeminiService = {
         {
           id: 'KbitVeo-speed',
           label: 'SeeDance-1.0F',
-          desc: 'SeeDance-1.0F - 快速生成',
-          supportedRatios: ['16:9'],
-          duration: '5-15s'
+          desc: '单图·最长10s',
+          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+          duration: '5s / 10s'
         },
         {
           id: 'KbitVeo-normal',
           label: 'SeeDance-1.5',
-          desc: 'SeeDance-1.5 - 标准质量',
-          supportedRatios: ['16:9', '9:16'],
-          duration: '5-30s'
+          desc: '双图·最长12s',
+          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          duration: '4s / 6s / 8s / 12s'
         },
         {
           id: 'KbitVeo-standard',
           label: 'SeeDance-2.0',
-          desc: 'SeeDance-2.0 - 进阶质量',
-          supportedRatios: ['16:9', '9:16'],
-          duration: '5-30s'
+          desc: '9图+视频·最长15s',
+          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          duration: '4s / 8s / 12s / 15s',
+          supportsVideoUpload: true
         },
         {
           id: 'KbitVeo-pro',
           label: 'SeeDance-2F',
-          desc: 'SeeDance-2F - 高质量',
-          supportedRatios: ['16:9', '9:16', '21:9'],
-          duration: '5-45s'
+          desc: '9图+视频·最长15s·快速',
+          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          duration: '4s / 8s / 12s / 15s',
+          supportsVideoUpload: true
         },
       ];
     }

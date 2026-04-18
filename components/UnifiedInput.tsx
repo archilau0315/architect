@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ConversationMode } from '../types.ts';
 import InpaintEditor from './InpaintEditor.tsx';
+import ScreenshotCropper from './ScreenshotCropper.tsx';
 import { getTranslation } from '../i18n/locales.ts';
 import type { Language } from '../i18n/locales.ts';
 
@@ -86,13 +87,14 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
   const [seedLocked, setSeedLocked] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [inpaintIdx, setInpaintIdx] = useState<number | null>(null);
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
 
   // 视频生成参数
   const VIDEO_MODELS = [
-    { id: 'KbitVeo-speed',  label: 'SeeDance-1.0F',  ratios: ['16:9'],                   duration: '5-15s', images: '1-4张', remoteModelId: 'doubao-seedance-2-0-fast' },
-    { id: 'KbitVeo-normal', label: 'SeeDance-1.5', ratios: ['16:9', '9:16'],            duration: '5-30s', images: '1-6张', remoteModelId: 'doubao-seedance-1-5-normal' },
-    { id: 'KbitVeo-pro',    label: 'SeeDance-2F',    ratios: ['16:9', '9:16', '21:9'],    duration: '5-45s', images: '1-8张', remoteModelId: 'doubao-seedance-2-0-pro' },
-    { id: 'KbitVeo-standard', label: 'SeeDance-2.0', ratios: ['16:9', '9:16'],          duration: '5-30s', images: '1-6张', remoteModelId: 'doubao-seedance-2-0' },
+    { id: 'KbitVeo-speed',    label: 'SeeDance-1.0F', ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],         duration: '5s / 10s',          images: '最多1张',  remoteModelId: 'doubao-seedance-1-0-pro-fast-251015' },
+    { id: 'KbitVeo-normal',   label: 'SeeDance-1.5',  ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/6s/8s/12s',      images: '最多2张',  remoteModelId: 'doubao-seedance-1-5-pro-251215' },
+    { id: 'KbitVeo-standard', label: 'SeeDance-2.0',  ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0', supportsVideo: true },
+    { id: 'KbitVeo-pro',      label: 'SeeDance-2F',   ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0-fast', supportsVideo: true },
   ];
   const [videoModel, setVideoModel] = useState('KbitVeo-speed');
   const [videoRatio, setVideoRatio] = useState('16:9');
@@ -172,6 +174,23 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     handleFiles(e.dataTransfer.files);
+  };
+
+  const handleScreenshot = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d')!.drawImage(video, 0, 0);
+      stream.getTracks().forEach(t => t.stop());
+      setScreenshotDataUrl(canvas.toDataURL('image/png'));
+    } catch {
+      // user cancelled
+    }
   };
 
   const effectiveRatio = lockRatio
@@ -412,25 +431,20 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
 
         {/* 视频生成参数 */}
         {mode === 'video' && (
-          <div className="px-4 pt-2.5 pb-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* 模型 */}
-              <select value={videoModel} onChange={e => { const m = VIDEO_MODELS.find(x => x.id === e.target.value)!; setVideoModel(m.id); if (!m.ratios.includes(videoRatio)) setVideoRatio(m.ratios[0]); }}
-                className="h-8 px-2 rounded-lg border text-[12px] cursor-pointer focus:outline-none transition-colors"
-                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>
-                {VIDEO_MODELS.map(m => <option key={m.id} value={m.id} style={{ backgroundColor: 'var(--bg-tertiary)' }}>{m.label}</option>)}
-              </select>
-              {/* 比例 */}
-              <select value={videoRatio} onChange={e => setVideoRatio(e.target.value)}
-                className="h-8 px-2 rounded-lg border text-[12px] cursor-pointer focus:outline-none transition-colors"
-                style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>
-                {currentVideoModel.ratios.map(r => <option key={r} value={r} style={{ backgroundColor: 'var(--bg-tertiary)' }}>{r}</option>)}
-              </select>
-              <span className="text-[11px] ml-1" style={{ color: 'var(--text-tertiary)' }}>{currentVideoModel.duration}</span>
-            </div>
-            <p className="mt-1.5 text-[10px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-              🎬 {currentVideoModel.label} | 支持{currentVideoModel.images}底图 · 比例: {currentVideoModel.ratios.join(' / ')} · 时长: {currentVideoModel.duration}
-            </p>
+          <div className="px-4 pt-2 pb-2 border-b flex items-center gap-2 flex-wrap" style={{ borderColor: 'var(--border-color)' }}>
+            <select value={videoModel} onChange={e => { const m = VIDEO_MODELS.find(x => x.id === e.target.value)!; setVideoModel(m.id); if (!m.ratios.includes(videoRatio)) setVideoRatio(m.ratios[0]); }}
+              className="h-8 px-2 rounded-lg border text-[12px] cursor-pointer focus:outline-none transition-colors"
+              style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>
+              {VIDEO_MODELS.map(m => <option key={m.id} value={m.id} style={{ backgroundColor: 'var(--bg-tertiary)' }}>{m.label}</option>)}
+            </select>
+            <select value={videoRatio} onChange={e => setVideoRatio(e.target.value)}
+              className="h-8 px-2 rounded-lg border text-[12px] cursor-pointer focus:outline-none transition-colors"
+              style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>
+              {currentVideoModel.ratios.map(r => <option key={r} value={r} style={{ backgroundColor: 'var(--bg-tertiary)' }}>{r}</option>)}
+            </select>
+            <span className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+              {currentVideoModel.images}底图 · 时长: {currentVideoModel.duration}{currentVideoModel.supportsVideo ? ' · 支持参考视频' : ''}
+            </span>
           </div>
         )}
 
@@ -501,6 +515,20 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
           </button>
           <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.ppt,.pptx,.txt,.md,.json,.csv" multiple className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
 
+          {/* screenshot */}
+          <button
+            onClick={handleScreenshot}
+            aria-label="截图"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150 btn-scale focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
+            title="截图"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+
           <div className="flex-1" />
 
           {/* char count */}
@@ -533,6 +561,17 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
           ? 'Enter 发送 · Shift+Enter 换行 · 拖拽图片上传'
           : 'Enter to send · Shift+Enter for new line · Drag to upload'}
       </p>
+
+      {screenshotDataUrl && (
+        <ScreenshotCropper
+          imageDataUrl={screenshotDataUrl}
+          onCrop={(dataUrl) => {
+            setImages(prev => [...prev, { name: 'screenshot.png', type: 'image/png', data: dataUrl, fileCategory: 'image' }]);
+            setScreenshotDataUrl(null);
+          }}
+          onCancel={() => setScreenshotDataUrl(null)}
+        />
+      )}
 
       {inpaintIdx !== null && (
         <InpaintEditor

@@ -39,7 +39,7 @@ const App: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [currentDomain, setCurrentDomain] = useState<CreativeDomain>('architecture');
   const [userTier, setUserTier] = useState<UserTier>('pro');
-  const [needsInviteVerify, setNeedsInviteVerify] = useState(false);
+  const [needsInviteVerify, setNeedsInviteVerify] = useState<boolean | null>(null);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
@@ -201,6 +201,8 @@ const App: React.FC = () => {
         const savedInviteSession = localStorage.getItem('architect-invite-session');
         if (!savedInviteSession) {
           setNeedsInviteVerify(true);
+        } else {
+          setNeedsInviteVerify(false);
         }
         
         // Beta Banner initialization
@@ -328,7 +330,11 @@ const App: React.FC = () => {
         if (savedVersionLog) {
           try { setVersionHistory(JSON.parse(savedVersionLog)); } catch(e) { console.error("Bad version log data"); }
         }
-      } catch (err) { console.error("Initialization error", err); }
+      } catch (err) {
+        console.error("Initialization error", err);
+        const savedInviteSession = localStorage.getItem('architect-invite-session');
+        setNeedsInviteVerify(!savedInviteSession);
+      }
     };
 
     initApp();
@@ -348,25 +354,30 @@ const App: React.FC = () => {
 
   // Handler for updating user preferences
   const handlePreferencesChange = (newPrefs: UserPreferences) => {
-    console.log('[handlePreferencesChange] New theme:', newPrefs.theme);
+    console.log('[handlePreferencesChange] New theme:', newPrefs.theme, 'lightMode:', newPrefs.lightMode);
     setPreferences(newPrefs);
     localStorage.setItem(PREFS_KEY, JSON.stringify(newPrefs));
 
     // Clean up old theme classes
     document.documentElement.classList.remove('light', 'dark');
 
-    // Apply theme to document
-    if (newPrefs.theme === 'dark') {
-      document.documentElement.removeAttribute('data-theme');
-    } else {
-      document.documentElement.setAttribute('data-theme', newPrefs.theme);
-    }
-
     // Add light-mode class controlled solely by lightMode flag
     if (newPrefs.lightMode) {
       document.documentElement.classList.add('light-mode');
+      // 亮模式下也应用 data-theme，使主题色 CSS 变量生效
+      if (newPrefs.theme && newPrefs.theme !== 'dark') {
+        document.documentElement.setAttribute('data-theme', newPrefs.theme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
     } else {
       document.documentElement.classList.remove('light-mode');
+      // Apply theme to document only in dark mode
+      if (newPrefs.theme === 'dark') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', newPrefs.theme);
+      }
     }
 
     // Apply accent color as CSS variable
@@ -585,6 +596,10 @@ const App: React.FC = () => {
     setPurchasedPoints(userData.points || 1000);
     savePoints(200, userData.points || 1000, new Date().toDateString());
   };
+
+  if (needsInviteVerify === null) {
+    return <div className="fixed inset-0 bg-slate-900" />;
+  }
 
   if (needsInviteVerify) {
     return <InviteVerify onVerified={handleInviteVerified} />;

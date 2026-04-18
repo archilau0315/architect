@@ -16,6 +16,7 @@ interface InputFieldProps {
   hasSuccess?: boolean;
   onFocus?: () => void;
   onBlur?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   errorMessage?: string;
 }
 
@@ -35,6 +36,7 @@ const InputField: React.FC<InputFieldProps> = ({
   hasSuccess = false,
   onFocus,
   onBlur,
+  onKeyDown,
   errorMessage
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +81,7 @@ const InputField: React.FC<InputFieldProps> = ({
           style={{ lineHeight: '1.5' }}
           onFocus={onFocus}
           onBlur={onBlur}
+          onKeyDown={onKeyDown}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"

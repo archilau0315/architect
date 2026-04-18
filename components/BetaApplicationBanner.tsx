@@ -243,12 +243,14 @@ const BetaApplicationBanner: React.FC<BetaApplicationBannerProps> = ({ onClose }
 
             <p className="text-center text-[10px] text-slate-500">
               提交即表示同意我们的 
-              <button 
+              <button
+                type="button"
                 onClick={() => setShowAgreement('terms')}
                 className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors duration-200 cursor-pointer"
-              >服务条款</button> 
-              和 
-              <button 
+              >服务条款</button>
+              和
+              <button
+                type="button"
                 onClick={() => setShowAgreement('privacy')}
                 className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors duration-200 cursor-pointer"
               >隐私政策</button>

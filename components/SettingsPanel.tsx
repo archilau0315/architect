@@ -62,6 +62,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
   const [customTopup, setCustomTopup] = useState<string>('');
   const [showAuthInput, setShowAuthInput] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [inputPassword, setInputPassword] = useState('');
   const [isPassVisible, setIsPassVisible] = useState(false);
 
@@ -694,18 +695,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const renderAbout = () => (
     <div className="space-y-8 animate-in slide-in-from-left-4 duration-500">
       <div className="flex flex-col md:flex-row gap-8 items-start">
-        <div className="w-24 h-24 rounded-full shrink-0 overflow-hidden border border-white/[0.08]">
+        <div className="w-24 h-24 rounded-full shrink-0 overflow-hidden border" style={{ borderColor: 'var(--border-color)' }}>
           <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
         </div>
         <div className="space-y-5 flex-1">
-          <h3 className="text-xl font-semibold text-white/90">关于我们 <span className="text-white/30 font-normal text-base">About Us</span></h3>
-          <div className="space-y-4 text-sm text-white/50 leading-relaxed">
-            <p>由 <span className="text-white/80 font-medium">匡形无界智能科技开发团队（KBITAI）</span> 研发。</p>
+          <h3 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>关于我们 <span className="font-normal text-base" style={{ color: 'var(--text-tertiary)' }}>About Us</span></h3>
+          <div className="space-y-4 text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            <p>由 <span className="font-medium" style={{ color: 'var(--text-primary)' }}>匡形无界智能科技开发团队（KBITAI）</span> 研发。</p>
             <p>作为新一代专业级 AI 图像架构中枢，我们通过底层逻辑内核，为建筑空间、工业设计、视觉艺术及角色概念提供高保真全域渲染与动态演化支持。</p>
-            <p className="text-blue-400/80 border-l-2 border-blue-500/30 pl-4">核心价值观：设计有形，科技无界。</p>
+            <p className="border-l-2 border-blue-500/30 pl-4" style={{ color: 'var(--theme-primary)' }}>核心价值观：设计有形，科技无界。</p>
           </div>
-          <div className="pt-4 border-t border-white/[0.06]">
-            <p className="text-sm text-white/40">官方联系邮箱：<span className="text-white/70 font-mono">kbit_ai@126.com</span></p>
+          <div className="pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>官方联系邮箱：<span className="font-mono" style={{ color: 'var(--text-secondary)' }}>kbit_ai@126.com</span></p>
           </div>
         </div>
       </div>
@@ -715,24 +716,49 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:p-10 animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={onClose} />
-      <div className="relative w-full max-w-6xl h-full max-h-[90vh] bg-[#0e0e0e] rounded-2xl shadow-2xl border border-white/[0.08] flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+      <div className="relative w-full max-w-6xl h-full max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden" style={{ 
+        backgroundColor: 'var(--bg-primary)',
+        borderColor: 'var(--border-color)',
+        borderWidth: '1px',
+        borderStyle: 'solid'
+      }}>
+        <div className="px-6 py-4 flex items-center justify-between" style={{ 
+          borderBottomWidth: '1px', 
+          borderBottomStyle: 'solid', 
+          borderBottomColor: 'var(--border-color)'
+        }}>
           <div className="flex items-center gap-4">
-             <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 shrink-0">
+             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ 
+               backgroundColor: 'var(--bg-secondary)',
+               borderColor: 'var(--border-color)',
+               borderWidth: '1px',
+               borderStyle: 'solid',
+               color: 'var(--text-secondary)'
+             }}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <circle cx="12" cy="12" r="3" strokeWidth={2} />
                 </svg>
              </div>
-             <h2 className="text-xl font-semibold text-white/90 tracking-tight">{t.settings.title} <span className="text-white/30 font-normal text-base">{t.settings.subtitle}</span></h2>
+             <h2 className="text-xl font-semibold tracking-tight" style={{ 
+               color: 'var(--text-primary)'
+             }}>{t.settings.title} <span style={{ 
+               color: 'var(--text-tertiary)'
+             }} className="font-normal text-base">{t.settings.subtitle}</span></h2>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl hover:bg-white/5 flex items-center justify-center text-white/30 hover:text-white/60 transition-all">
+          <button onClick={onClose} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all" style={{ 
+            color: 'var(--text-tertiary)',
+            '&:hover': {
+              backgroundColor: 'var(--bg-secondary)',
+              color: 'var(--text-secondary)'
+            }
+          }}>
              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         <div className="flex-1 flex min-h-0">
-          <div className="w-56 border-r border-white/[0.06] p-4 flex flex-col gap-1 shrink-0">
+          <div className="w-56 p-4 flex flex-col gap-1 shrink-0" style={{ borderRight: '1px solid var(--border-color)' }}>
             {[
               { id: 'prefs',     label: t.settings.tabs.preferences, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" /></svg> },
               { id: 'account',   label: t.settings.tabs.account, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg> },
@@ -742,7 +768,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               { id: 'system',    label: t.settings.tabs.system, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" /></svg>, hidden: !isSystemVisible }
             ].filter(tabItem => !tabItem.hidden).map(tab => (
               <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setIsCheckout(false); }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' : 'text-white/40 hover:bg-white/5 hover:text-white/70'}`}>
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'bg-theme/10 ring-1 ring-theme/30' : ''}`}
+                style={{ 
+                  color: activeTab === tab.id ? 'var(--theme-primary)' : 'var(--text-secondary)',
+                  '&:hover': {
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)'
+                  }
+                }}>
                 {tab.icon}
                 <span>{tab.label}</span>
               </button>
@@ -753,40 +786,43 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             {activeTab === 'prefs' && (
               <div className="space-y-8">
                 <div>
-                  <h3 className="text-base font-semibold text-white/80 mb-1">{t.settings.preferences.title}</h3>
-                  <p className="text-[10px] text-white/30 uppercase tracking-widest">{t.settings.preferences.subtitle}</p>
+                  <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{t.settings.preferences.title}</h3>
+                  <p className="text-[10px] uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.subtitle}</p>
                 </div>
 
                 {/* 主题效果演示区 */}
-                <div className="p-6 rounded-xl border-2 border-white/10 bg-white/[0.02] space-y-4">
+                <div className="p-6 rounded-xl space-y-4" style={{ 
+                  border: '2px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)'
+                }}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-semibold text-white/90">{t.settings.preferences.themePreview}</h4>
-                      <p className="text-[10px] text-white/40 mt-1">{t.settings.preferences.themePreviewDesc}</p>
+                      <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{t.settings.preferences.themePreview}</h4>
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--text-secondary)' }}>{t.settings.preferences.themePreviewDesc}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-12 h-12 rounded-lg bg-theme shadow-lg shadow-theme"></div>
-                      <div className="w-12 h-12 rounded-lg bg-theme-light shadow-lg shadow-theme"></div>
+                      <div className="w-12 h-12 rounded-lg" style={{ backgroundColor: 'var(--theme-primary)', boxShadow: '0 4px 12px var(--theme-shadow)' }}></div>
+                      <div className="w-12 h-12 rounded-lg" style={{ backgroundColor: 'var(--theme-primary-light)', boxShadow: '0 4px 12px var(--theme-shadow)' }}></div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-theme text-white rounded-lg hover:bg-theme-light transition-all">
+                    <button className="px-4 py-2 rounded-lg transition-all" style={{ backgroundColor: 'var(--theme-primary)', color: '#ffffff' }}>
                       {t.buttons.themeButton}
                     </button>
-                    <button className="px-4 py-2 border-2 border-theme text-theme rounded-lg hover:bg-theme hover:text-white transition-all">
+                    <button className="px-4 py-2 border-2 rounded-lg transition-all" style={{ borderColor: 'var(--theme-primary)', color: 'var(--theme-primary)' }}>
                       {t.buttons.borderButton}
                     </button>
                   </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full w-2/3 bg-theme shadow-lg shadow-theme"></div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                    <div className="h-full rounded-full" style={{ width: '66%', backgroundColor: 'var(--theme-primary)', boxShadow: '0 0 8px var(--theme-shadow)' }}></div>
                   </div>
                 </div>
 
                 {/* 主题风格 */}
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">{t.settings.preferences.theme}</label>
-                    <p className="text-[9px] text-white/20 mt-1">{t.settings.preferences.themeDesc}</p>
+                    <label className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.theme}</label>
+                    <p className="text-[9px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.themeDesc}</p>
                   </div>
                   <div className="grid grid-cols-6 gap-3">
                     {[
@@ -799,17 +835,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     ].map(theme => (
                       <button
                         key={theme.id}
-                        onClick={() => onPreferencesChange({...preferences, theme: theme.id as AppTheme, lightMode: false})}
+                        onClick={() => onPreferencesChange({...preferences, theme: theme.id as AppTheme})}
                         className={`relative p-3 rounded-xl border-2 transition-all duration-300 hover:scale-110 hover:shadow-xl group ${
                           preferences.theme === theme.id
-                            ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/30 scale-105'
-                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/30'
+                            ? 'shadow-lg shadow-blue-500/30 scale-105'
+                            : 'hover:border-border-hover'
                         }`}
                         style={preferences.theme === theme.id ? {
                           borderColor: theme.color,
                           backgroundColor: `${theme.color}20`,
                           boxShadow: `0 0 20px ${theme.color}40`
-                        } : {}}
+                        } : {
+                          borderColor: 'var(--border-color)',
+                          backgroundColor: 'var(--bg-secondary)'
+                        }}
                       >
                         <div className="relative">
                           <div
@@ -823,7 +862,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             {theme.icon}
                           </div>
                         </div>
-                        <p className="text-[9px] font-medium text-center text-white/60 group-hover:text-white/90 transition-colors">{theme.name}</p>
+                        <p className="text-[9px] font-medium text-center transition-colors" style={{ 
+                          color: 'var(--text-secondary)',
+                          '&:hover': {
+                            color: 'var(--text-primary)'
+                          }
+                        }}>{theme.name}</p>
                         {preferences.theme === theme.id && (
                           <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center animate-pulse"
                             style={{ backgroundColor: theme.color }}>
@@ -836,24 +880,33 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
 
                 {/* 亮/暗模式切换 */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-white/[0.08] bg-white/[0.03]">
+                <div className="flex items-center justify-between p-3 rounded-xl" style={{ 
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)'
+                }}>
                   <div>
-                    <p className="text-[10px] font-medium text-white/60">{preferences.lightMode ? '☀️ 亮色模式' : '🌙 暗色模式'}</p>
-                    <p className="text-[9px] text-white/30 mt-0.5">当前主题的背景亮度</p>
+                    <p className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>{preferences.lightMode ? '☀️ 亮色模式' : '🌙 暗色模式'}</p>
+                    <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>当前主题的背景亮度</p>
                   </div>
                   <button
                     onClick={() => onPreferencesChange({...preferences, lightMode: !preferences.lightMode})}
-                    className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${preferences.lightMode ? 'bg-blue-500' : 'bg-white/20'}`}
+                    className="relative w-11 h-6 rounded-full transition-colors duration-300"
+                    style={{ 
+                      backgroundColor: preferences.lightMode ? 'var(--theme-primary)' : 'var(--bg-tertiary)',
+                      boxShadow: preferences.lightMode ? '0 0 8px var(--theme-shadow)' : 'none'
+                    }}
                   >
-                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-300 ${preferences.lightMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                    <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300" style={{ 
+                      left: preferences.lightMode ? '20px' : '2px'
+                    }} />
                   </button>
                 </div>
 
                 {/* 字号调整 */}
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">{t.settings.preferences.fontSize}</label>
-                    <p className="text-[9px] text-white/20 mt-1">{t.settings.preferences.fontSizeDesc}</p>
+                    <label className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.fontSize}</label>
+                    <p className="text-[9px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.fontSizeDesc}</p>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {[
@@ -866,13 +919,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         onClick={() => onPreferencesChange({...preferences, fontSize: size.id as any})}
                         className={`p-4 border-2 rounded-xl transition-all duration-300 hover:scale-105 ${
                           preferences.fontSize === size.id
-                            ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/30'
-                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/30'
+                            ? 'shadow-lg shadow-blue-500/30'
+                            : 'hover:border-border-hover'
                         }`}
+                        style={preferences.fontSize === size.id ? {
+                          borderColor: 'var(--theme-primary)',
+                          backgroundColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)'
+                        } : {
+                          borderColor: 'var(--border-color)',
+                          backgroundColor: 'var(--bg-secondary)'
+                        }}
                       >
-                        <p className="text-sm font-medium text-white/80 mb-2">{size.name}</p>
-                        <p className="text-white/40 mb-1" style={{ fontSize: size.size }}>{size.demo}</p>
-                        <p className="text-[9px] text-white/30">{size.size}</p>
+                        <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>{size.name}</p>
+                        <p className="mb-1" style={{ fontSize: size.size, color: 'var(--text-secondary)' }}>{size.demo}</p>
+                        <p className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>{size.size}</p>
                       </button>
                     ))}
                   </div>
@@ -884,38 +944,53 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 {/* 语言选择 */}
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">{t.settings.preferences.language}</label>
-                    <p className="text-[9px] text-white/20 mt-1">{t.settings.preferences.languageDesc}</p>
+                    <label className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.language}</label>
+                    <p className="text-[9px] mt-1" style={{ color: 'var(--text-tertiary)' }}>{t.settings.preferences.languageDesc}</p>
                   </div>
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { id: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
-                      { id: 'en-US', name: 'English', flag: '🇺🇸' },
-                      { id: 'ja-JP', name: '日本語', flag: '🇯🇵' },
-                      { id: 'ko-KR', name: '한국어', flag: '🇰🇷' },
-                      { id: 'es-ES', name: 'Español', flag: '🇪🇸' },
-                      { id: 'fr-FR', name: 'Français', flag: '🇫🇷' },
-                      { id: 'de-DE', name: 'Deutsch', flag: '🇩🇪' },
-                      { id: 'ru-RU', name: 'Русский', flag: '🇷🇺' }
-                    ].map(lang => (
-                      <button
-                        key={lang.id}
-                        onClick={() => onPreferencesChange({...preferences, language: lang.id as Language})}
-                        className={`p-3 border-2 rounded-xl transition-all duration-300 hover:scale-105 ${
-                          preferences.language === lang.id
-                            ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/30'
-                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/30'
-                        }`}
-                      >
-                        <div className="text-2xl mb-1">{lang.flag}</div>
-                        <p className="text-[10px] font-medium text-white/70">{lang.name}</p>
-                      </button>
-                    ))}
-                  </div>
+                  {(() => {
+                    const langs = [
+                      { id: 'zh-CN', label: 'CN 简体中文' },
+                      { id: 'en-US', label: 'EN English' },
+                      { id: 'ja-JP', label: 'JP 日本語' },
+                      { id: 'ko-KR', label: 'KR 한국어' },
+                      { id: 'es-ES', label: 'ES Español' },
+                      { id: 'fr-FR', label: 'FR Français' },
+                      { id: 'de-DE', label: 'DE Deutsch' },
+                      { id: 'ru-RU', label: 'RU Русский' },
+                    ];
+                    const current = langs.find(l => l.id === (preferences.language || 'zh-CN'));
+                    return (
+                      <div className="relative">
+                        <button
+                          onClick={() => setLangDropdownOpen(o => !o)}
+                          className="w-full px-3 py-2 rounded-xl text-sm border-2 outline-none flex items-center justify-between"
+                          style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                        >
+                          <span>{current?.label}</span>
+                          <span style={{ color: 'var(--text-tertiary)' }}>▾</span>
+                        </button>
+                        {langDropdownOpen && (
+                          <div className="absolute z-50 w-full mt-1 rounded-xl border overflow-hidden shadow-lg"
+                            style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                            {langs.map(lang => (
+                              <button key={lang.id}
+                                onClick={() => { onPreferencesChange({...preferences, language: lang.id as Language}); setLangDropdownOpen(false); }}
+                                className="w-full px-3 py-2 text-sm text-left hover:opacity-80 transition-opacity"
+                                style={{
+                                  backgroundColor: preferences.language === lang.id ? 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' : 'transparent',
+                                  color: 'var(--text-primary)'
+                                }}
+                              >{lang.label}</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 重置按钮 */}
-                <div className="pt-4 border-t border-white/[0.06]">
+                <div className="pt-4" style={{ borderTop: '1px solid var(--border-color)' }}>
                   <button
                     onClick={() => {
                       if (window.confirm(t.settings.preferences.resetConfirm)) {
@@ -936,7 +1011,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         });
                       }
                     }}
-                    className="w-full py-3 bg-white/[0.04] border border-white/[0.06] text-white/40 rounded-xl font-medium text-sm hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all"
+                    className="w-full py-3 rounded-xl font-medium text-sm hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400 transition-all"
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)'
+                    }}
                   >
                     {t.settings.preferences.resetToDefault}
                   </button>

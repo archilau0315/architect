@@ -117,12 +117,26 @@ const TreeNode: React.FC<{
   return (
     <div>
       <div
-        style={{ paddingLeft: 8 + depth * 14 }}
-        className={`flex items-center gap-1.5 pr-2 py-2 rounded-lg cursor-pointer transition-all duration-150 select-none min-h-[44px]
-          ${isActive ? 'bg-white/8 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white/70'}
-          focus-within:ring-2 focus-within:ring-indigo-500/40`}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+        style={{ 
+          paddingLeft: 8 + depth * 14,
+          color: isActive ? 'var(--theme-primary)' : 'var(--text-secondary)',
+          transition: 'all 0.15s ease'
+        }}
+        className={`flex items-center gap-1.5 pr-2 py-2 rounded-lg cursor-pointer select-none min-h-[44px]
+          ${isActive ? 'bg-theme/10' : ''}
+          focus-within:ring-2 focus-within:ring-theme`}
+        onMouseEnter={(event) => {
+          setHover(true);
+          // 添加悬停效果
+          (event.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-tertiary)';
+          (event.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
+        }}
+        onMouseLeave={(event) => {
+          setHover(false);
+          // 恢复原始效果
+          (event.currentTarget as HTMLElement).style.backgroundColor = isActive ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : '';
+          (event.currentTarget as HTMLElement).style.color = isActive ? 'var(--theme-primary)' : 'var(--text-secondary)';
+        }}
         onClick={() => isGroup ? onToggle(node.id) : onSelect(node.id, node.mode)}
       >
         {/* chevron / mode icon */}
@@ -296,13 +310,18 @@ const Layout: React.FC<LayoutProps> = ({
   const domain = DOMAIN_CONFIG[currentDomain];
 
   return (
-    <div className="flex min-h-screen w-full text-slate-100 font-sans" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <div className="flex min-h-screen w-full font-sans" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
 
       {/* ════════════════════════════════ SIDEBAR ════════════════════════════ */}
       <aside className={`${collapsed ? 'w-14' : 'w-64'} shrink-0 h-screen sticky top-0 flex flex-col
-        border-r sidebar-surface
-        transition-all duration-300 ease-in-out z-50 overflow-hidden`}
-        style={{ borderColor: 'var(--border-color)' }}>
+          border-r
+          transition-all duration-300 ease-in-out z-50 overflow-hidden`}
+          style={{ 
+            borderColor: 'var(--border-color)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: '0 0 20px rgba(0, 0, 0, 0.08)',
+            backdropFilter: 'blur(8px)'
+          }}>
 
         {/* ── Brand header ── */}
         <div className="flex items-center gap-2.5 px-3 py-3 border-b shrink-0 min-h-[60px]" style={{ borderColor: 'var(--border-color)' }}>
@@ -364,10 +383,18 @@ const Layout: React.FC<LayoutProps> = ({
           <div className="px-3 pt-3 pb-1 shrink-0">
             <button onClick={() => handleAddSession()}
               className="w-full min-h-[40px] flex items-center justify-center gap-2 px-3 py-2 rounded-xl
-                border border-white/[0.08] bg-gradient-to-r from-white/[0.04] to-white/[0.02]
-                hover:from-white/[0.08] hover:to-white/[0.05] hover:border-white/[0.15]
-                text-white/50 hover:text-white/80 text-[12px] font-semibold tracking-widest uppercase
-                transition-all duration-200 active:scale-[0.97] group">
+                text-[12px] font-semibold tracking-widest uppercase
+                transition-all duration-200 active:scale-[0.97] group"
+              style={{ 
+                border: '1px solid var(--border-color)',
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-tertiary) 50%, transparent), color-mix(in srgb, var(--bg-tertiary) 30%, transparent))',
+                color: 'var(--text-secondary)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-tertiary) 80%, transparent), color-mix(in srgb, var(--bg-tertiary) 60%, transparent))',
+                  borderColor: 'var(--border-hover)',
+                  color: 'var(--text-primary)'
+                }
+              }}>
               <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-90" strokeWidth={2} />
               {t.main.newConversation}
             </button>

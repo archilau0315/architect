@@ -30,7 +30,6 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordStrength, setPasswordStrength] = useState<0 | 1 | 2 | 3>(0);
-  const [currentView, setCurrentView] = useState<'verify' | 'login' | 'register'>('verify');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -360,8 +359,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   type="text"
                   value={inviteCode}
                   onChange={(value) => {
-                    const filtered = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                    setInviteCode(filtered);
+                    setInviteCode(value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
                     setError('');
                   }}
                   placeholder="KBXXXXXX"
@@ -384,6 +382,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       setCodeStatus('empty');
                     }
                   }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleVerify(); }}
                 />
 
                 {error && (
@@ -425,7 +424,10 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 </div>
                 <div className="pt-4 border-t border-white/10">
                   <button
-                    onClick={() => setShowLoginForm(true)}
+                    onClick={() => {
+                      setShowLoginForm(true);
+                      setShowRegister(false);
+                    }}
                     className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-all duration-300 hover:border-white/20 hover:scale-[1.01] active:scale-[0.99]"
                   >
                     已有账号？直接登录
@@ -453,7 +455,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   id="login-email"
                   isFocused={focusedField === 'login-email'}
                   hasError={!!emailError}
-                  hasSuccess={registerData.email && validateEmail(registerData.email)}
+                  hasSuccess={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerData.email)}
                   errorMessage={emailError}
                   onFocus={() => handleFocus('login-email')}
                   onBlur={() => {
@@ -465,7 +467,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   type="button"
                   onClick={() => setShowPasswordReset(true)}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors text-right w-full"
+                  className="text-[10px] transition-colors text-right w-full text-indigo-400 hover:text-indigo-300"
                 >
                   忘记密码？
                 </button>
@@ -511,8 +513,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
 
               <div className="mt-4 space-y-3">
                 <button
-                  onClick={() => setShowLoginForm(false)}
-                  className="w-full text-slate-500 text-sm hover:text-white transition-colors duration-200"
+                  onClick={() => {
+                    setShowLoginForm(false);
+                    setShowRegister(false);
+                  }}
+                  className="w-full text-sm transition-colors duration-200 text-slate-500 hover:text-white"
                 >
                   ← 返回邀请码验证
                 </button>
@@ -538,7 +543,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   id="register-email"
                   isFocused={focusedField === 'register-email'}
                   hasError={!!emailError}
-                  hasSuccess={registerData.email && validateEmail(registerData.email)}
+                  hasSuccess={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerData.email)}
                   errorMessage={emailError}
                   onFocus={() => handleFocus('register-email')}
                   onBlur={() => {
@@ -616,7 +621,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 )}
 
                 <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/20 rounded-2xl">
-                  <span className="text-2xl">🎁</span>
+                  <svg className="w-7 h-7 flex-shrink-0 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5H3.75A.75.75 0 003 8.25v1.5c0 .414.336.75.75.75h16.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V21M3.75 10.5v9.75c0 .414.336.75.75.75h15c.414 0 .75-.336.75-.75V10.5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5c0-1.657-1.343-3-3-3S6 5.843 6 7.5M12 7.5c0-1.657 1.343-3 3-3s3 1.343 3 3" />
+                  </svg>
                   <div>
                     <p className="text-indigo-300 text-sm font-bold">内测专属福利</p>
                     <p className="text-slate-400 text-xs">注册即送 <span className="text-green-400 font-bold">1000 积分</span> 体验金</p>

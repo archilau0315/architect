@@ -469,10 +469,12 @@ html {
 .light-mode {
   --bg-primary: #ffffff;
   --bg-secondary: #f1f5f9;
-  --bg-tertiary: #e2e8f0;
+  --bg-tertiary: #cbd5e1;
   --text-primary: #0f172a;
   --text-secondary: #334155;
   --text-tertiary: #64748b;
+  --text-error: #EF4444;
+  --text-success: #10B981;
   --border-color: rgba(0, 0, 0, 0.15);
   --border-hover: rgba(0, 0, 0, 0.3);
   
@@ -482,6 +484,33 @@ html {
   --glow-color: rgba(59, 130, 246, 0.35);
 }
 
+/* 亮模式下各主题色保持生效（优先级高于 .light-mode 默认值） */
+.light-mode[data-theme="indigo"] {
+  --theme-primary: #8B5CF6;
+  --theme-primary-light: #A78BFA;
+  --theme-shadow: rgba(139, 92, 246, 0.25);
+}
+.light-mode[data-theme="ocean"] {
+  --theme-primary: #06B6D4;
+  --theme-primary-light: #22D3EE;
+  --theme-shadow: rgba(6, 182, 212, 0.25);
+}
+.light-mode[data-theme="forest"] {
+  --theme-primary: #10B981;
+  --theme-primary-light: #34D399;
+  --theme-shadow: rgba(16, 185, 129, 0.25);
+}
+.light-mode[data-theme="sunset"] {
+  --theme-primary: #F59E0B;
+  --theme-primary-light: #FBBF24;
+  --theme-shadow: rgba(245, 158, 11, 0.25);
+}
+.light-mode[data-theme="minimal"] {
+  --theme-primary: #6B7280;
+  --theme-primary-light: #9CA3AF;
+  --theme-shadow: rgba(107, 114, 128, 0.25);
+}
+
 /* Light Mode - Global background and text */
 .light-mode html,
 .light-mode body {
@@ -489,14 +518,7 @@ html {
   color: var(--text-primary) !important;
 }
 
-/* Light Mode - All elements should inherit from CSS variables */
-.light-mode [style*="background-color"] {
-  background-color: var(--bg-secondary) !important;
-}
 
-.light-mode [style*="color"] {
-  color: var(--text-primary) !important;
-}
 
 /* Light Mode - Tailwind dark mode overrides */
 .light-mode .dark\:bg-slate-900,

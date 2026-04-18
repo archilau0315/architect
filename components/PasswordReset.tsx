@@ -246,13 +246,14 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
                   id="reset-email"
                   isFocused={focusedField === 'reset-email'}
                   hasError={!!emailError}
-                  hasSuccess={email && validateEmail(email)}
+                  hasSuccess={!!(email && !emailError && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))}
                   errorMessage={emailError}
                   onFocus={() => handleFocus('reset-email')}
                   onBlur={() => {
                     handleBlur();
                     validateEmail(email);
                   }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRequestReset(); }}
                 />
 
                 {error && (
@@ -315,7 +316,7 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
                 </p>
 
                 <button
-                  onClick={() => setStep('email')}
+                  onClick={() => { setStep('email'); setSuccess(''); }}
                   className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-wider hover:bg-white/10 transition-all duration-300"
                 >
                   重新发送
@@ -405,6 +406,9 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
                   }}
                   placeholder="再次输入密码"
                   id="reset-confirm-password"
+                  showToggle={true}
+                  toggleState={showPassword}
+                  onToggle={() => setShowPassword(p => !p)}
                   isFocused={focusedField === 'reset-confirm-password'}
                   hasError={!!confirmError}
                   errorMessage={confirmError}

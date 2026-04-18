@@ -78,7 +78,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('解算引擎运行中');
 
+  const [showEngineDropdown, setShowEngineDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -172,6 +174,28 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
     e.target.value = '';
   };
+
+  const [referenceVideos, setReferenceVideos] = useState<string[]>([]);
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length > 0) {
+      const newVideos = [...referenceVideos];
+      for (const file of files) {
+        if (newVideos.length >= 3) break;
+        const dataUrl = await new Promise<string>((res) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.readAsDataURL(file);
+        });
+        newVideos.push(dataUrl);
+      }
+      setReferenceVideos(newVideos);
+    }
+    e.target.value = '';
+  };
+
+  const removeVideo = (index: number) => setReferenceVideos(prev => prev.filter((_, i) => i !== index));
 
   const removeAsset = (index: number) => {
     setAssets(prev => prev.filter((_, i) => i !== index));
@@ -470,24 +494,63 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             </div>
             
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
+            <input type="file" ref={videoInputRef} onChange={handleVideoUpload} accept="video/mp4,video/quicktime" multiple className="hidden" />
+
+            {(selectedEngine === 'KbitVeo-standard' || selectedEngine === 'KbitVeo-pro') && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">参考视频 / Ref Video (Max 3 · MP4/MOV · 2–15s)</label>
+                <div className="flex flex-wrap gap-2">
+                  {referenceVideos.map((v, i) => (
+                    <div key={i} className="relative w-20 h-14 rounded-lg overflow-hidden border border-white/10 bg-white/[0.03]">
+                      <video src={v} className="w-full h-full object-cover" muted />
+                      <button onClick={() => removeVideo(i)} className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded bg-black/60 text-white/70 hover:text-white">
+                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  {referenceVideos.length < 3 && (
+                    <button onClick={() => videoInputRef.current?.click()} className="w-20 h-14 rounded-lg border border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-1 hover:border-white/20 hover:bg-white/[0.04] transition-all">
+                      <svg className="w-4 h-4 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                      <span className="text-[8px] text-white/20">添加视频</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">算力引擎 / Engine</label>
               <div className="relative w-full">
-                <select
-                  value={selectedEngine}
-                  onChange={(e) => setSelectedEngine(e.target.value)}
-                  className="w-full appearance-none bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-medium text-white/70 outline-none focus:border-white/20 transition-all cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setShowEngineDropdown(v => !v)}
+                  className="w-full flex items-center justify-between bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm font-medium text-white/70 outline-none hover:border-white/20 transition-all cursor-pointer"
                 >
-                  {capabilities.engines.map((eng) => (
-                    <option key={eng.id} value={eng.id} disabled={eng.isFrozen} className="bg-[#1a1a1a] text-white/70">
-                      {eng.label}{eng.isFrozen ? ' (开发中)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
-                  <ChevronDown size={14} />
-                </div>
+                  <span className="flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                    <span>{capabilities.engines.find(e => e.id === selectedEngine)?.label}</span>
+                    <span className="text-white/30 text-[11px]">{capabilities.engines.find(e => e.id === selectedEngine)?.desc}</span>
+                  </span>
+                  <ChevronDown size={14} className="text-white/30 shrink-0" />
+                </button>
+                {showEngineDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-[#1a1a2e] border border-white/[0.1] rounded-xl overflow-hidden shadow-2xl">
+                    {capabilities.engines.map((eng) => (
+                      <button
+                        key={eng.id}
+                        type="button"
+                        disabled={eng.isFrozen}
+                        onClick={() => { setSelectedEngine(eng.id); setShowEngineDropdown(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${eng.isFrozen ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/[0.06] cursor-pointer'} ${selectedEngine === eng.id ? 'bg-blue-500/10' : ''}`}
+                      >
+                        <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        <span className="text-sm font-medium text-white/80">{eng.label}</span>
+                        <span className="text-[11px] text-white/30">{eng.desc}</span>
+                        {eng.isFrozen && <span className="ml-auto text-[10px] text-white/30">开发中</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-[10px] font-medium text-white/30 uppercase tracking-widest">预计时长</span>
