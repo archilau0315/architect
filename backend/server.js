@@ -12,6 +12,7 @@ const ph8Routes = require('./routes/ph8');
 const planRoutes = require('./routes/plan');
 const ph8BalanceRoutes = require('./routes/ph8Balance');
 const gatewayRoutes = require('./routes/gateway');
+const uploadRoutes = require('./routes/upload');
 const ph8TokenService = require('./services/ph8TokenService');
 const mailService = require('./services/mailService');
 const cacheService = require('./services/cacheService');
@@ -66,6 +67,7 @@ app.use('/api/ph8', ph8Routes);
 // 新格式: /api/gateway/:gatewayKey/*
 // 示例: /api/gateway/ph8/chat/completions
 app.use('/api/gateway', gatewayRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // 兼容旧路由：/api/ph8/* 仍然可用
 // 后续可以逐步迁移到 /api/gateway/ph8/*

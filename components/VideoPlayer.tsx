@@ -259,7 +259,7 @@ export const VideoPlayer = ({
         <div 
           className="absolute bottom-4 right-4 w-28 h-auto opacity-60 pointer-events-none z-10"
         >
-          <img src="/architect/LOGOkbitwater.png" className="w-full h-full object-contain" />
+          <img src="/public/LOGOkbitwater.png" className="w-full h-full object-contain" />
         </div>
       )}
 

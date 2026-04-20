@@ -16,7 +16,7 @@ const GATEWAY_CONFIG = {
   ph8: {
     name: 'PH8.co',
     url: process.env.PH8_GATEWAY_URL || 'https://ph8.co',
-    api_key: process.env.PH8_API_KEY || 'sk-2f6ff8aba4d541d591d17e8eae60e75c',
+    api_key: process.env.PH8_API_KEY,
     enabled: process.env.PH8_ENABLED !== 'false',
     proxy_path: '/v1'
   },

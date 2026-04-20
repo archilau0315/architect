@@ -469,7 +469,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {companyLogoUrl
                   ? <img src={companyLogoUrl} onError={() => { setCompanyLogoUrl(null); localStorage.removeItem(COMPANY_LOGO_KEY); }} className="w-full h-full object-contain" />
                   : !logoLoadError
-                    ? <img src="/architect/Com_Logo.png" onError={() => setLogoLoadError(true)} className="w-full h-full object-contain" alt="Logo" />
+                    ? <img src="/public/Com_Logo.png" onError={() => setLogoLoadError(true)} className="w-full h-full object-contain" alt="Logo" />
                     : <span className="text-[11px] font-black text-indigo-400">KF</span>}
               </div>
               <input ref={companyLogoInputRef} type="file" accept="image/*" className="hidden"
@@ -531,7 +531,7 @@ const Layout: React.FC<LayoutProps> = ({
               </a>
               <a href="https://beian.mps.gov.cn/#/query/webSearch?code=12010402002460" target="_blank" rel="noreferrer"
                 className="flex items-center gap-0.5 transition-opacity whitespace-nowrap">
-                <img src="/architect/备案图标.png" className="w-2.5 h-2.5 shrink-0" alt="公安备案" />
+                <img src="/public/备案图标.png" className="w-2.5 h-2.5 shrink-0" alt="公安备案" />
                 <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>津公网安备12010402002460号</span>
               </a>
             </div>

@@ -91,7 +91,7 @@ export const WatermarkUtils = {
     }
   },
 
-  async addWatermark(imageSrc: string, logoSrc: string = '/architect/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
+  async addWatermark(imageSrc: string, logoSrc: string = '/public/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
     const generatedAt = new Date().toISOString();
     

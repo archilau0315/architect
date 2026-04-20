@@ -208,10 +208,10 @@ const fetchWithRetry = async (
       }
       
       // 对于可重试的错误状态码，进行重试
-      const isRetryable = [502, 503, 504].includes(response.status);
-      
+      const isRetryable = [429, 502, 503, 504].includes(response.status);
+
       if (isRetryable && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 1000; // 指数退避：1s, 2s, 4s
+        const delay = response.status === 429 ? Math.pow(2, attempt) * 3000 : Math.pow(2, attempt) * 1000; // 429 用更长延迟
         console.warn(`[重试机制] HTTP ${response.status}，第 ${attempt + 1} 次重试，等待 ${delay/1000} 秒...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -605,7 +605,7 @@ export const GeminiService = {
           ctx.fillText("AI Generated | Chief Image Architect", canvas.width - 20, canvas.height - 20);
           resolve(canvas.toDataURL("image/png"));
         };
-        logo.src = "/architect/LOGOkbitwater.png";
+        logo.src = "/public/LOGOkbitwater.png";
       };
       img.src = base64;
     });
@@ -1652,12 +1652,8 @@ export const GeminiService = {
         for (const f of files) {
           const mimeType = f.mimeType || f.type;
           if (f.data && mimeType && mimeType.startsWith('image/')) {
-            // f.data 可能是完整 data URL 或纯 base64，统一处理
             const dataUrl = f.data.startsWith('data:') ? f.data : `data:${mimeType};base64,${f.data}`;
-            userContent.push({
-              type: "image_url",
-              image_url: { url: dataUrl }
-            });
+            userContent.push({ type: "image_url", image_url: { url: dataUrl } });
           }
         }
 
@@ -1749,9 +1745,21 @@ export const GeminiService = {
     for (const f of files) {
       const mimeType = f.mimeType || f.type;
       if (f.data && mimeType) {
-        // 从 data URL 中提取纯 base64（Gemini inlineData 不接受 data URL 前缀）
-        const base64 = f.data.includes(',') ? f.data.split(',')[1] : f.data;
-        parts.push({ inlineData: { mimeType, data: base64 } });
+        const dataUrl = f.data.startsWith('data:') ? f.data : `data:${mimeType};base64,${f.data}`;
+        // 通过 canvas 重绘剥离 C2PA 等元数据，避免 Gemini base64 解码失败
+        const stripped = await new Promise<string>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext('2d')!.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        });
+        parts.push({ inlineData: { mimeType: 'image/jpeg', data: stripped.split(',')[1] } });
       }
     }
 

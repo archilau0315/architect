@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -70,7 +71,22 @@ export default defineConfig(({ mode }) => {
           }
         }
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        {
+          name: 'serve-public-dir',
+          configureServer(server) {
+            server.middlewares.use('/public', (req, res, next) => {
+              const filePath = path.resolve(__dirname, '../public', req.url!.slice(1));
+              if (fs.existsSync(filePath)) {
+                res.end(fs.readFileSync(filePath));
+              } else {
+                next();
+              }
+            });
+          }
+        }
+      ],
       define: {
         // API Key 不再注入前端，改由后端管理
         'process.env.API_KEY': JSON.stringify(''),

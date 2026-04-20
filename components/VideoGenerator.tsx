@@ -94,13 +94,17 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     };
   }, []);
 
+  useEffect(() => {
+    return () => { referenceVideos.forEach(url => URL.revokeObjectURL(url)); };
+  }, []);
+
   // 预加载 FFmpeg 和 Logo 以加快水印处理速度
   useEffect(() => {
     const loadResourcesAsync = async () => {
       try {
         await Promise.all([
           VideoWatermarkUtils.loadFFmpeg(),
-          VideoWatermarkUtils.preloadLogo('/architect/LOGOkbitwater.png')
+          VideoWatermarkUtils.preloadLogo('/public/LOGOkbitwater.png')
         ]);
         console.log('[资源预加载] FFmpeg 和 Logo 预加载完成');
       } catch (e) {
@@ -177,25 +181,25 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
 
   const [referenceVideos, setReferenceVideos] = useState<string[]>([]);
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
     if (files.length > 0) {
-      const newVideos = [...referenceVideos];
-      for (const file of files) {
-        if (newVideos.length >= 3) break;
-        const dataUrl = await new Promise<string>((res) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result as string);
-          r.readAsDataURL(file);
-        });
-        newVideos.push(dataUrl);
-      }
-      setReferenceVideos(newVideos);
+      setReferenceVideos(prev => {
+        const urls = [...prev];
+        for (const file of files) {
+          if (urls.length >= 3) break;
+          urls.push(URL.createObjectURL(file));
+        }
+        return urls;
+      });
     }
     e.target.value = '';
   };
 
-  const removeVideo = (index: number) => setReferenceVideos(prev => prev.filter((_, i) => i !== index));
+  const removeVideo = (index: number) => setReferenceVideos(prev => {
+    URL.revokeObjectURL(prev[index]);
+    return prev.filter((_, i) => i !== index);
+  });
 
   const removeAsset = (index: number) => {
     setAssets(prev => prev.filter((_, i) => i !== index));
@@ -404,7 +408,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
           const result = await VideoWatermarkUtils.addWatermark(
             videoUrl,
-            '/architect/LOGOkbitwater.png',
+            '/public/LOGOkbitwater.png',
             (progress) => {
               console.log('水印处理进度:', progress);
             }
@@ -603,7 +607,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   disablePictureInPicture={false}
 />
                   <div className="absolute bottom-4 right-4 w-20 h-auto opacity-80 pointer-events-none z-10">
-                    <img src="/architect/LOGOkbitwater.png" className="w-full h-full object-contain" />
+                    <img src="/public/LOGOkbitwater.png" className="w-full h-full object-contain" />
                   </div>
                 </div>
                 <div className="flex items-center justify-between w-full">

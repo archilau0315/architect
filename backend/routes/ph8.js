@@ -189,6 +189,8 @@ router.all('/*', async (req, res) => {
   // 处理 openai/v1 路径
   if (targetPath.startsWith('openai/v1/')) {
     fullPath = '/' + targetPath;
+  } else if (targetPath.startsWith('v1/')) {
+    fullPath = '/' + targetPath;
   } else {
     fullPath = '/v1/' + targetPath;
   }

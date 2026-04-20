@@ -197,7 +197,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               {userAvatar ? (
                 <img src={userAvatar} alt="用户头像" className="w-full h-full object-cover" />
               ) : (
-                <img src="/architect/archi01.png" alt="默认头像" className="w-full h-full object-cover" />
+                <img src="/public/archi01.png" alt="默认头像" className="w-full h-full object-cover" />
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <span className="text-white text-[10px] font-medium uppercase tracking-wider">更换头像</span>
@@ -696,7 +696,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     <div className="space-y-8 animate-in slide-in-from-left-4 duration-500">
       <div className="flex flex-col md:flex-row gap-8 items-start">
         <div className="w-24 h-24 rounded-full shrink-0 overflow-hidden border" style={{ borderColor: 'var(--border-color)' }}>
-          <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
+          <img src="/public/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
         </div>
         <div className="space-y-5 flex-1">
           <h3 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>关于我们 <span className="font-normal text-base" style={{ color: 'var(--text-tertiary)' }}>About Us</span></h3>
@@ -746,13 +746,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                color: 'var(--text-tertiary)'
              }} className="font-normal text-base">{t.settings.subtitle}</span></h2>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all" style={{ 
-            color: 'var(--text-tertiary)',
-            '&:hover': {
-              backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-secondary)'
-            }
-          }}>
+          <button onClick={onClose} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/5" style={{ color: 'var(--text-tertiary)' }}>
              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -768,14 +762,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               { id: 'system',    label: t.settings.tabs.system, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" /></svg>, hidden: !isSystemVisible }
             ].filter(tabItem => !tabItem.hidden).map(tab => (
               <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setIsCheckout(false); }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'bg-theme/10 ring-1 ring-theme/30' : ''}`}
-                style={{ 
-                  color: activeTab === tab.id ? 'var(--theme-primary)' : 'var(--text-secondary)',
-                  '&:hover': {
-                    backgroundColor: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)'
-                  }
-                }}>
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all hover:bg-white/5 ${activeTab === tab.id ? 'bg-theme/10 ring-1 ring-theme/30' : ''}`}
+                style={{ color: activeTab === tab.id ? 'var(--theme-primary)' : 'var(--text-secondary)' }}>
                 {tab.icon}
                 <span>{tab.label}</span>
               </button>
@@ -862,12 +850,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             {theme.icon}
                           </div>
                         </div>
-                        <p className="text-[9px] font-medium text-center transition-colors" style={{ 
-                          color: 'var(--text-secondary)',
-                          '&:hover': {
-                            color: 'var(--text-primary)'
-                          }
-                        }}>{theme.name}</p>
+                        <p className="text-[9px] font-medium text-center transition-colors" style={{ color: 'var(--text-secondary)' }}>{theme.name}</p>
                         {preferences.theme === theme.id && (
                           <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center animate-pulse"
                             style={{ backgroundColor: theme.color }}>
@@ -936,7 +919,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       </button>
                     ))}
                   </div>
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2">
+                    <svg className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     <p className="text-xs text-amber-400">{t.settings.preferences.fontSizeTip}</p>
                   </div>
                 </div>
@@ -952,7 +936,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       { id: 'zh-CN', label: 'CN 简体中文' },
                       { id: 'en-US', label: 'EN English' },
                       { id: 'ja-JP', label: 'JP 日本語' },
-                      { id: 'ko-KR', label: 'KR 한국어' },
+                      { id: 'ko-KR', label: 'KR Korean' },
                       { id: 'es-ES', label: 'ES Español' },
                       { id: 'fr-FR', label: 'FR Français' },
                       { id: 'de-DE', label: 'DE Deutsch' },

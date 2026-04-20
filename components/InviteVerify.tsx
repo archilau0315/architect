@@ -330,7 +330,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       <div className="relative w-full max-w-md">
         <div className="text-center mb-10 animate-[fadeInUp_0.6s_ease-out]">
           <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-2xl shadow-indigo-500/30 mb-6 overflow-hidden transition-transform duration-300 hover:scale-105">
-            <img src="/architect/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
+            <img src="/public/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white italic tracking-wide mb-2 px-1">
             KBITAI <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Architect</span>

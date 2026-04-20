@@ -44,22 +44,28 @@ class MailService {
       <head>
         <meta charset="UTF-8">
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #0f172a; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; padding: 30px 30px 24px; text-align: center; border-radius: 10px 10px 0 0; }
+          .logo-wrap { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; margin: 0 auto 16px; display: block; }
+          .logo-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+          .header h1 { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+          .header p { margin: 6px 0 0; font-size: 12px; opacity: 0.7; letter-spacing: 2px; text-transform: uppercase; }
           .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-          .button { display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; }
+          .button { display: inline-block; background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white !important; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 15px; }
           .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔒 密码重置请求</h1>
+            <span class="logo-wrap"><img src="https://www.kbitai.com.cn/public/archi01.png" alt="KBITAI" /></span>
+            <h1>KBITAI Architect</h1>
+            <p>首席图像架构师 · 内测版</p>
           </div>
           <div class="content">
             <p>您好，</p>
-            <p>我们收到了您的密码重置请求。请点击以下链接重置您的密码：</p>
+            <p>我们收到了您的密码重置请求。请点击以下按钮重置您的密码：</p>
             <p style="text-align: center; margin: 30px 0;">
               <a href="${resetLink}" class="button">重置密码</a>
             </p>

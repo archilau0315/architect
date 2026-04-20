@@ -13,7 +13,7 @@ export const VideoWatermarkUtils = {
 
   async addWatermark(
     videoUrl: string, 
-    logoUrl: string = '/architect/LOGOkbitwater.png',
+    logoUrl: string = '/public/LOGOkbitwater.png',
     onProgress?: (progress: number) => void
   ): Promise<{ objectUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
@@ -129,7 +129,7 @@ export const VideoWatermarkUtils = {
     }
   },
   
-  async preloadLogo(logoUrl: string = '/architect/LOGOkbitwater.png'): Promise<void> {
+  async preloadLogo(logoUrl: string = '/public/LOGOkbitwater.png'): Promise<void> {
     try {
       const logoData = await fetchFile(logoUrl);
       if (logoData.byteLength > 0) {

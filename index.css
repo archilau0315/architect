@@ -475,6 +475,7 @@ html {
   --text-tertiary: #64748b;
   --text-error: #EF4444;
   --text-success: #10B981;
+  --bg-card: #ffffff;
   --border-color: rgba(0, 0, 0, 0.15);
   --border-hover: rgba(0, 0, 0, 0.3);
   

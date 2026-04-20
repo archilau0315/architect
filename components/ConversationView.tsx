@@ -283,7 +283,7 @@ const ImageBubble: React.FC<{
           
           {/* 全屏水印 */}
           <div className="absolute bottom-8 right-8 w-32 h-auto opacity-60 pointer-events-none z-10">
-            <img src="/architect/LOGOkbitwater.png" className="w-full h-full object-contain" />
+            <img src="/public/LOGOkbitwater.png" className="w-full h-full object-contain" />
           </div>
           
           {images.length > 1 && (
@@ -371,7 +371,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
           ) : (
-            <img src="/architect/archi01.png" className="w-full h-full object-cover" alt="AI" onError={() => setAiLogoError(true)} />
+            <img src="/public/archi01.png" className="w-full h-full object-cover" alt="AI" onError={() => setAiLogoError(true)} />
           )
         )}
       </div>
@@ -761,7 +761,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl scale-150" />
               <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-2xl shadow-indigo-500/30 ring-1 ring-white/10">
-                <img src="/architect/archi01.png" className="w-full h-full object-cover" alt="Kbit" />
+                <img src="/public/archi01.png" className="w-full h-full object-cover" alt="Kbit" />
               </div>
             </div>
             {/* 文字 */}
