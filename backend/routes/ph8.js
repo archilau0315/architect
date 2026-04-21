@@ -147,6 +147,15 @@ async function getUserInfo(userId) {
   }
 }
 
+// HTML 实体解码函数 - 修复图片数据中的 &#x2F; 等编码问题
+function decodeHtmlEntities(str) {
+  return str.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
+    return String.fromCharCode(parseInt(hex, 16));
+  }).replace(/&#([0-9]+);/g, (match, dec) => {
+    return String.fromCharCode(parseInt(dec, 10));
+  });
+}
+
 // 获取当前用户信息（包含等级）- 必须在通配符路由之前
 router.get('/user-info', async (req, res) => {
   try {
@@ -198,7 +207,49 @@ router.all('/*', async (req, res) => {
   const requestId = uuidv4();
   const startTime = Date.now();
   
-  console.log('[PH8 Proxy] ' + req.method + ' ' + fullPath + ' [ID: ' + requestId + ']');
+  // 详细调试日志
+  console.log('[PH8 Proxy] ==================== 请求开始 ====================');
+  console.log('[PH8 Proxy] 请求ID: ' + requestId);
+  console.log('[PH8 Proxy] 请求方法: ' + req.method);
+  console.log('[PH8 Proxy] 请求路径: ' + fullPath);
+  console.log('[PH8 Proxy] 请求来源: ' + (req.headers['referer'] || '未知'));
+  console.log('[PH8 Proxy] 用户代理: ' + (req.headers['user-agent'] || '未知'));
+  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  
+  // 解码图片数据中的 HTML 实体（修复 &#x2F; 等编码问题）
+  if (req.body && req.body.messages) {
+    req.body.messages.forEach((msg) => {
+      if (msg.content && Array.isArray(msg.content)) {
+        msg.content.forEach((c) => {
+          if (c.type === 'image_url' && c.image_url && c.image_url.url) {
+            c.image_url.url = decodeHtmlEntities(c.image_url.url);
+          }
+        });
+      }
+    });
+  }
+  
+  // 调试日志：检查请求体中是否包含图片数据
+  if (req.body && req.body.messages) {
+    const messages = req.body.messages;
+    messages.forEach((msg, index) => {
+      if (msg.content && Array.isArray(msg.content)) {
+        const imageContents = msg.content.filter(c => c.type === 'image_url');
+        if (imageContents.length > 0) {
+          console.log(`[PH8 Proxy] 消息 ${index} 包含 ${imageContents.length} 张图片`);
+          imageContents.forEach((img, imgIndex) => {
+            if (img.image_url && img.image_url.url) {
+              const url = img.image_url.url;
+              console.log(`[PH8 Proxy] 图片 ${imgIndex}: 长度=${url.length}, startsWithData=${url.startsWith('data:')}`);
+              if (url.length > 1000) {
+                console.log(`[PH8 Proxy] 图片 ${imgIndex}: 前100字符=${url.substring(0, 100)}...`);
+              }
+            }
+          });
+        }
+      }
+    });
+  }
   
   const bodyData = req.body ? JSON.stringify(req.body) : '';
   const userId = getUserId(req);
@@ -235,6 +286,21 @@ router.all('/*', async (req, res) => {
     
     proxyRes.on('end', async () => {
       const responseTime = Date.now() - startTime;
+      
+      // 详细响应日志
+      console.log('[PH8 Proxy] ==================== 响应开始 ====================');
+      console.log('[PH8 Proxy] 请求ID: ' + requestId);
+      console.log('[PH8 Proxy] 响应状态码: ' + proxyRes.statusCode);
+      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
+      console.log('[PH8 Proxy] 响应内容类型: ' + contentType);
+      
+      // 如果响应状态码不是 200，记录详细信息
+      if (proxyRes.statusCode !== 200) {
+        console.log('[PH8 Proxy] ============ 错误响应详情 ============');
+        console.log('[PH8 Proxy] 请求体(前2000字符): ' + bodyData.substring(0, 2000));
+        console.log('[PH8 Proxy] 响应体(前2000字符): ' + (typeof data === 'string' ? data.substring(0, 2000) : '二进制数据'));
+        console.log('[PH8 Proxy] =====================================');
+      }
       
       // 设置响应头
       res.setHeader('Content-Type', contentType || 'application/json');

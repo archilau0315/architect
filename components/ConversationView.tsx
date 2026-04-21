@@ -568,12 +568,32 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
       // ── CHAT ──────────────────────────────────────────────────────────────
       if (m === 'chat') {
-        const files = payload.images.map(f => ({ name: f.name, type: f.type, mimeType: f.type, data: f.data }));
+        const files = payload.images.map(f => {
+          let mimeType = f.type || f.mimeType || '';
+          if (!mimeType || mimeType === 'image/' || mimeType.length <= 6) {
+            const dataUrlMatch = f.data.match(/^data:([^;]+);/);
+            if (dataUrlMatch) {
+              mimeType = dataUrlMatch[1];
+            } else {
+              mimeType = 'image/png';
+            }
+          }
+          return { name: f.name, type: mimeType, mimeType: mimeType, data: f.data };
+        });
         const res = await gemini.chat(finalText, chatHistoryRef.current, 'FAST', files, instructions, modelConfig, signal);
         const text = res?.text || '';
         updateLast({ type: 'text', text });
+        
+        // 构建包含图片的用户消息
+        const userParts: any[] = [{ text: finalText }];
+        for (const f of files) {
+          if (f.data && f.mimeType) {
+            userParts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
+          }
+        }
+        
         chatHistoryRef.current = [...chatHistoryRef.current,
-          { role: 'user', parts: [{ text: finalText }] },
+          { role: 'user', parts: userParts },
           { role: 'model', parts: [{ text }] }
         ];
 

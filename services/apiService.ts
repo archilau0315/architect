@@ -13,14 +13,39 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
     const gatewayConfig = config as any;
     if (gatewayConfig.url && gatewayConfig.proxy_path) {
       if (url.startsWith(gatewayConfig.url)) {
-        if (useOpenaiPath) return `${base}${gatewayConfig.proxy_path}/openai/v1`;
+        if (useOpenaiPath) {
+          let pathSuffix = '';
+          if (url.includes('/v1/')) {
+            pathSuffix = url.replace(gatewayConfig.url + '/v1/', '');
+          } else {
+            const urlObj = new URL(url);
+            pathSuffix = urlObj.pathname.replace(/^\//, '');
+          }
+          if (!pathSuffix || pathSuffix === '/') {
+            return `${base}${gatewayConfig.proxy_path}/openai/v1`;
+          }
+          return `${base}${gatewayConfig.proxy_path}/openai/v1/${pathSuffix}`;
+        }
         return url.replace(gatewayConfig.url, `${base}${gatewayConfig.proxy_path}`);
       }
     }
   }
 
   if (url.includes('ph8.co')) {
-    if (useOpenaiPath) return `${base}/api/ph8/openai/v1`;
+    if (useOpenaiPath) {
+      let pathSuffix = '';
+      if (url.includes('/v1/')) {
+        pathSuffix = url.replace('https://ph8.co/v1/', '');
+      } else {
+        const urlObj = new URL(url);
+        pathSuffix = urlObj.pathname.replace(/^\//, '');
+      }
+      // 如果路径后缀为空或只有斜杠，返回基础路径
+      if (!pathSuffix || pathSuffix === '/') {
+        return `${base}/api/ph8/openai/v1`;
+      }
+      return `${base}/api/ph8/openai/v1/${pathSuffix}`;
+    }
     return url.replace('https://ph8.co', `${base}/api/ph8`);
   }
 

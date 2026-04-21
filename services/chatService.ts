@@ -1,14 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { CustomModel } from "../types.ts";
 import { getProxiedUrl, fetchWithRetry } from "./apiService.ts";
+import { GeminiService } from "./geminiService.ts";
 
 // 聊天服务 - 处理所有与AI对话相关的功能
 
-let useThirdPartyGateway = false;
-
-export const setGatewayMode = (enabled: boolean) => {
-  useThirdPartyGateway = enabled;
-  console.log(`[ChatService] 网关模式: ${enabled ? '第三方' : '官方'}`);
+const isUsingThirdPartyGateway = () => {
+  return (GeminiService as any).isUsingThirdPartyGateway?.() ?? true;
 };
 
 // 系统预设配置
@@ -92,7 +90,7 @@ export const sendChatMessage = async (
     ];
 
     // 如果使用第三方网关
-    if (useThirdPartyGateway) {
+    if (isUsingThirdPartyGateway()) {
       const url = getProxiedUrl('https://ph8.co/v1/chat/completions', true);
       
       const response = await fetchWithRetry(url, {

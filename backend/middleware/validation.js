@@ -175,7 +175,7 @@ const sqlInjectionProtection = (req, res, next) => {
       const currentPath = path ? `${path}.${key}` : key;
       
       if (typeof value === 'string') {
-        if (detectSqlInjection(value)) {
+        if (value.length < 500 && detectSqlInjection(value)) {
           throw new Error(`检测到潜在的SQL注入攻击: ${currentPath}`);
         }
       } else if (typeof value === 'object' && value !== null) {

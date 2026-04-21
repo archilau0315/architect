@@ -15,14 +15,38 @@ const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
     const gatewayConfig = config as any;
     if (gatewayConfig.url && gatewayConfig.proxy_path) {
       if (url.startsWith(gatewayConfig.url)) {
-        if (useOpenaiPath) return `${base}${gatewayConfig.proxy_path}/openai/v1`;
+        if (useOpenaiPath) {
+          let pathSuffix = '';
+          if (url.includes('/v1/')) {
+            pathSuffix = url.replace(gatewayConfig.url + '/v1/', '');
+          } else {
+            const urlObj = new URL(url);
+            pathSuffix = urlObj.pathname.replace(/^\//, '');
+          }
+          if (!pathSuffix || pathSuffix === '/') {
+            return `${base}${gatewayConfig.proxy_path}/openai/v1`;
+          }
+          return `${base}${gatewayConfig.proxy_path}/openai/v1/${pathSuffix}`;
+        }
         return url.replace(gatewayConfig.url, `${base}${gatewayConfig.proxy_path}`);
       }
     }
   }
 
   if (url.includes('ph8.co')) {
-    if (useOpenaiPath) return `${base}/api/ph8/openai/v1`;
+    if (useOpenaiPath) {
+      let pathSuffix = '';
+      if (url.includes('/v1/')) {
+        pathSuffix = url.replace('https://ph8.co/v1/', '');
+      } else {
+        const urlObj = new URL(url);
+        pathSuffix = urlObj.pathname.replace(/^\//, '');
+      }
+      if (!pathSuffix || pathSuffix === '/') {
+        return `${base}/api/ph8/openai/v1`;
+      }
+      return `${base}/api/ph8/openai/v1/${pathSuffix}`;
+    }
     return url.replace('https://ph8.co', `${base}/api/ph8`);
   }
 
@@ -460,6 +484,10 @@ export const GeminiService = {
 
   setGatewayMode(enabled: boolean) {
     updateGatewayMode(enabled);
+  },
+
+  isUsingThirdPartyGateway() {
+    return useThirdPartyGateway;
   },
 
   getFinanceData() {
@@ -1462,7 +1490,8 @@ export const GeminiService = {
   },
 
   async analyzeImage(image: string, prompt: string, instructions: any, modelConfig: any, signal?: AbortSignal) {
-    const requestedModel = getModelName(modelConfig, "gemini-3-flash-preview");
+    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash-lite-preview" : "gemini-3-flash-preview";
+    const requestedModel = getModelName(modelConfig, defaultModel);
     const { ai, modelId, node, apiKey } = getAI(modelConfig, requestedModel);
     
     // Suggestion 5: Visual Downsampling to 512px for analysis tasks
@@ -1479,24 +1508,20 @@ export const GeminiService = {
 
     if (node && node.provider !== "Google Cloud") {
       try {
-        const proxiedUrl = getProxiedUrl(node.url);
+        const proxiedUrl = getProxiedUrl(node.url, true);
+        // 直接使用 base64 数据传递图片
+        const imageUrl = `data:image/jpeg;base64,${base64Data}`;
         const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-            // Authorization 头由后端代理自动添加
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: modelId,
             messages: [
               { role: "system", content: instructions.VISUAL_ANALYST },
-              { 
-                role: "user", 
-                content: [
-                  { type: "text", text: prompt },
-                  { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Data}` } }
-                ] 
-              }
+              { role: "user", content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: imageUrl } }
+              ]}
             ],
             max_tokens: 2048
           }),
@@ -1530,7 +1555,8 @@ export const GeminiService = {
   },
 
   async generateReversePrompt(image: string, instructions: any, modelConfig: any, signal?: AbortSignal): Promise<EnhancedPrompt> {
-    const requestedModel = getModelName(modelConfig, "gemini-3-pro-preview");
+    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash-lite-preview" : "gemini-3-pro-preview";
+    const requestedModel = getModelName(modelConfig, defaultModel);
     const { ai, modelId, node, apiKey } = getAI(modelConfig, requestedModel);
     
     // Suggestion 5: Visual Downsampling to 512px for reverse prompting
@@ -1539,28 +1565,29 @@ export const GeminiService = {
     
     if (node && node.provider !== "Google Cloud") {
       try {
-        const proxiedUrl = getProxiedUrl(node.url);
+        const proxiedUrl = getProxiedUrl(node.url, true);
+        // 直接使用 base64 数据传递图片
+        const imageUrl = `data:image/jpeg;base64,${base64Data}`;
         const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-            // Authorization 头由后端代理自动添加
+          headers: { 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           },
           body: JSON.stringify({
             model: modelId,
             messages: [
-              { role: "system", content: instructions.PROMPT_SPECIALIST },
-              { 
-                role: "user", 
-                content: [
-                  { type: "text", text: "Deconstruct the visual elements and provide a prompt to replicate this style." },
-                  { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Data}` } }
-                ] 
-              }
+              { role: "user", content: [
+                { type: "text", text: "Please analyze the image I provided and deconstruct its visual elements. Output a JSON with fields: zh (Chinese description), en (English prompt), analysis (style analysis)." },
+                { type: "image_url", image_url: { url: imageUrl } }
+              ]}
             ],
-            response_format: { type: "json_object" }
+            max_tokens: 1024
           }),
-          signal
+          signal,
+          cache: 'no-store'
         });
 
         if (!fetchResponse.ok) {
@@ -1626,7 +1653,7 @@ export const GeminiService = {
         }
       } else {
         // 有图片的多模态对话
-        defaultModel = 'gemini-3.1-flash-lite-preview';  // 图片分析统一用 gemini
+        defaultModel = 'gemini-3.1-flash-lite-preview';
       }
     } else {
       // 开发模式：使用 Gemini 官方模型
@@ -1650,21 +1677,59 @@ export const GeminiService = {
         // 构建用户消息内容（支持文本+图片）
         const userContent: any[] = [{ type: "text", text: prompt }];
         for (const f of files) {
-          const mimeType = f.mimeType || f.type;
-          if (f.data && mimeType && mimeType.startsWith('image/')) {
-            const dataUrl = f.data.startsWith('data:') ? f.data : `data:${mimeType};base64,${f.data}`;
-            userContent.push({ type: "image_url", image_url: { url: dataUrl } });
+          let mimeType = f.mimeType || f.type;
+          if (f.data && mimeType) {
+            // 修复不完整的 MIME 类型
+            if (mimeType === 'image/' || mimeType === 'image' || mimeType.length <= 6) {
+              mimeType = 'image/png';
+            } else if (!mimeType.startsWith('image/')) {
+              mimeType = 'image/' + mimeType;
+            }
+            
+            if (mimeType.startsWith('image/')) {
+              const dataUrl = f.data.startsWith('data:') ? f.data : `data:${mimeType};base64,${f.data}`;
+              userContent.push({ type: "image_url", image_url: { url: dataUrl } });
+            }
           }
         }
 
+        // 构建历史消息（包含图片）
+        const historyMessages = history.map(h => {
+          const role = h.role === 'model' ? 'assistant' : h.role;
+          const hasImages = h.parts.some(p => p.inlineData && p.inlineData.mimeType);
+          if (hasImages) {
+            const content: any[] = [];
+            for (const part of h.parts) {
+              if (part.text) {
+                content.push({ type: "text", text: part.text });
+              } else if (part.inlineData && part.inlineData.mimeType) {
+                let mimeType = part.inlineData.mimeType;
+                if (mimeType === 'image/' || mimeType === 'image') {
+                  mimeType = 'image/png';
+                } else if (!mimeType.startsWith('image/')) {
+                  mimeType = 'image/' + mimeType;
+                }
+                
+                if (mimeType.startsWith('image/')) {
+                  const dataUrl = part.inlineData.data.startsWith('data:') 
+                    ? part.inlineData.data 
+                    : `data:${mimeType};base64,${part.inlineData.data}`;
+                  content.push({ type: "image_url", image_url: { url: dataUrl } });
+                }
+              }
+            }
+            return { role, content };
+          }
+          return { role, content: h.parts[0].text };
+        });
+
         const messages = [
-          { role: "system", content: systemInstruction },
-          ...history.map(h => ({ role: h.role === 'model' ? 'assistant' : h.role, content: h.parts[0].text })),
+          ...historyMessages,
           { role: "user", content: userContent }
         ];
 
         // 详细日志输出
-        const proxiedUrl = getProxiedUrl(node.url);
+        const proxiedUrl = getProxiedUrl(node.url, true);
         console.log(`%c[Chat Gateway] 正在连接 ${node.provider}...`, 'color: #4f46e5; font-weight: bold;');
         console.log(`[Chat Gateway] URL: ${proxiedUrl}/chat/completions`);
         console.log(`[Chat Gateway] Model: ${modelId}`);

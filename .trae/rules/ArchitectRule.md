@@ -24,5 +24,5 @@
       root /www/wwwroot/kbitai.com.cn/;
   }
   ```
-
+每次文件打包，都要看打包文件夹dist/子文件夹下的assets/是否有无用和重复文件。把它们删除。
 

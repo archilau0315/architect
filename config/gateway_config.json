@@ -1,41 +1,29 @@
 {
   "gateways": {
     "ph8": {
-      "name": "ph8.co",
+      "name": "PH8 Gateway",
       "url": "https://ph8.co",
-      "proxy_path": "/api/ph8"
+      "proxy_path": "/api/ph8",
+      "api_key": "",
+      "enabled": true
     }
   },
   "models": {
-    "gemini-3-pro-preview": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3-pro-preview",
-        "priority": 20,
-        "active": true
-      },
-      {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-3-pro-preview",
-        "priority": 10,
-        "active": true
-      }
-    ],
     "gemini-3-flash-preview": [
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
         "remoteModelId": "gemini-3-flash-preview",
-        "priority": 20,
+        "priority": 100,
         "active": true
-      },
+      }
+    ],
+    "gemini-3-pro-preview": [
       {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-3-flash-preview",
-        "priority": 10,
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3-pro-preview",
+        "priority": 100,
         "active": true
       }
     ],
@@ -44,7 +32,7 @@
         "provider": "ph8.co",
         "url": "https://ph8.co",
         "remoteModelId": "gemini-3.1-flash-lite-preview",
-        "priority": 20,
+        "priority": 100,
         "active": true
       }
     ],
@@ -53,7 +41,7 @@
         "provider": "ph8.co",
         "url": "https://ph8.co",
         "remoteModelId": "qwen3-vl-flash",
-        "priority": 20,
+        "priority": 90,
         "active": true
       }
     ],
@@ -62,84 +50,7 @@
         "provider": "ph8.co",
         "url": "https://ph8.co",
         "remoteModelId": "deepseek-v3.2",
-        "priority": 20,
-        "active": true
-      }
-    ],
-    "gemini-3.1-flash-image-preview": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3.1-flash-image-preview",
-        "priority": 20,
-        "active": true
-      },
-      {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-3.1-flash-image-preview",
-        "priority": 10,
-        "active": true
-      }
-    ],
-    "gemini-3-pro-image-preview": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "gemini-3-pro-image-preview",
-        "priority": 20,
-        "active": true
-      },
-      {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-3-pro-image-preview",
-        "priority": 10,
-        "active": true
-      }
-    ],
-    "gemini-2.5-flash-image": [
-      {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-2.5-flash-image",
-        "priority": 10,
-        "active": true
-      }
-    ],
-    "gemini-1.5-flash": [
-      {
-        "provider": "Google Cloud",
-        "url": "https://generativelanguage.googleapis.com/v1",
-        "remoteModelId": "gemini-1.5-flash",
-        "priority": 10,
-        "active": true
-      }
-    ],
-    "KbitVeo-speed": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-0-pro-fast-251015",
-        "priority": 20,
-        "active": true
-      }
-    ],
-    "KbitVeo-normal": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-5-pro-251215",
-        "priority": 20,
-        "active": true
-      }
-    ],
-    "KbitVeo-pro": [
-      {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-2-0-fast",
-        "priority": 20,
+        "priority": 80,
         "active": true
       }
     ]

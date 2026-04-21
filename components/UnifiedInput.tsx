@@ -139,9 +139,20 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
       const r = new FileReader();
       r.onloadend = () => {
         const dataUrl = r.result as string;
+        let fileType = file.type || '';
+        if (isImage && (!fileType || fileType === 'image/' || fileType.length <= 6)) {
+          const dataUrlMatch = dataUrl.match(/^data:([^;]+);/);
+          if (dataUrlMatch) {
+            fileType = dataUrlMatch[1];
+          } else {
+            fileType = 'image/png';
+          }
+        } else if (!fileType) {
+          fileType = isText ? 'text/plain' : 'application/octet-stream';
+        }
         const item: ImageItem = {
           name: file.name,
-          type: file.type || (isText ? 'text/plain' : 'application/octet-stream'),
+          type: fileType,
           data: dataUrl,
           fileCategory: isImage ? 'image' : isPdf ? 'pdf' : isPpt ? 'ppt' : 'text'
         };
