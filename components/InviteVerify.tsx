@@ -141,7 +141,15 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     setError('');
 
     try {
-      const response = await fetch('/architect/api/auth/login', {
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+      console.log('登录请求URL:', `${apiBase}/api/auth/login`);
+      console.log('登录请求数据:', {
+        email: registerData.email,
+        password: registerData.password
+      });
+      
+      const response = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,7 +158,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
         })
       });
 
+      console.log('登录响应状态:', response.status);
+      console.log('登录响应头:', response.headers);
+      
       const data = await response.json();
+      console.log('登录响应数据:', data);
 
       if (data.success) {
         const sessionData = {
@@ -172,6 +184,11 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       }
     } catch (err) {
       console.error('登录失败:', err);
+      console.error('错误详情:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
       setError('网络错误，请检查后端服务是否运行');
     } finally {
       setIsLoggingIn(false);

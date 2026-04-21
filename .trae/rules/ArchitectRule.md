@@ -1,28 +1,52 @@
-​目前本应用的开发已经很完美，我对目前ui和各功能组件都很满意，严禁修改ui布局和各组件功能。
-切记！！！每次回复，你先梳理逻辑，给我汇报讨论，具体要修改哪行代码，没经我同意不得修改，修改代码始终最小化原则​。
-我是低代码开发，你必须用通俗易懂的语言解释技术问题，不能用专业术语。
-我要把这个应用部署到网上的,域名<https://www.kbitai.com.cn,宝塔软件，mysql数据库，服务器名kbitai0302，nginx服务器。有ssl证书，证书域名是www.kbitai.com.cn。ffmpeg服务器,版本6.1>
-我是低代码用户，你在本地文件改完，指导我上传，或你指导我在服务器上改，基本要求是必须保证本地与服务器代码保持一致。
+# 项目规则
+
+## 核心要求
+- **UI 保护**：严禁修改 UI 布局和组件功能
+- **代码修改**：修改前必须汇报讨论，未经同意不得修改，遵循最小化原则
+- **语言要求**：使用通俗易懂的语言解释技术问题
+- **部署目标**：`https://www.kbitai.com.cn`，使用宝塔、MySQL（服务器名：kbitai0302）、Nginx（SSL 证书：www.kbitai.com.cn）、FFmpeg 6.1
+- **代码一致性**：本地修改后指导上传，确保本地与服务器代码一致
+
+### Logo 配置
+| 类型 | 文件名 | 本地路径 | 服务器路径 | 代码引用 |
+|------|--------|----------|------------|----------|
+| 水印Logo | LOGOkbitwater.png | ../public/LOGOkbitwater.png | /www/wwwroot/kbitai.com.cn/public/LOGOkbitwater.png | /public/LOGOkbitwater.png |
+| 公司Logo | Com_Logo.png | ../public/Com_Logo.png | /www/wwwroot/kbitai.com.cn/public/Com_Logo.png | /public/Com_Logo.png |
+| 应用Logo | archi01.png | ../public/archi01.png | /www/wwwroot/kbitai.com.cn/public/archi01.png | /public/archi01.png |
+| 备案图标 | 备案图标.png | ../public/备案图标.png | /www/wwwroot/kbitai.com.cn/public/备案图标.png | /public/备案图标.png |
+| 用户头像 | - | 存储在localStorage | 存储在localStorage | 键名：user-architect-avatar-v120-locked |
+| 公司Logo设置 | - | 存储在localStorage | 存储在localStorage | 键名：kbit-company-logo-v120-locked |
 
 
+## 配置要求
+- **Vite**：vite.config.ts 中 publicDir 设置为 '../public'
+- **Nginx**：location /public/ { root /www/wwwroot/kbitai.com.cn/; }
 
-### 水印设置规范
-- **颜色**：所有水印必须为白色（#FFFFFF）
-- **透明度**：所有水印透明度必须为50%（globalAlpha = 0.5）
-- **水印文件**：统一使用 `LOGOkbitwater.png`
-- **路径格式**：统一使用 `/architect/LOGOkbitwater.png`（应用内部路径）
+## 开发环境
+- **前端**：http://localhost:3000
+- **后端**：http://localhost:3001
+- **数据库**：MySQL，配置在 backend/.env
 
-### Vite配置
-- `vite.config.ts` 中 `publicDir` 设置为 `'../public'`，指向上级目录的公共资源文件夹
-- 删除了项目内的 `public/` 文件夹，避免重复
-- 开发环境通过代理规则支持 `/public/` 路径访问
+## API 配置
+- **开发**：http://localhost:3001
+- **生产**：https://api.kbitai.com.cn
+- **接口**：/api/auth/login（登录）、/api/invite/register（注册）、/api/invite/verify/:code（邀请码验证）
 
-### 服务器部署配置
-- Nginx 需要配置 `/public/` 路径指向正确的目录：
-  ```nginx
-  location /public/ {
-      root /www/wwwroot/kbitai.com.cn/;
-  }
-  ```
-每次文件打包，都要看打包文件夹dist/子文件夹下的assets/是否有无用和重复文件。把它们删除。
+## 技术栈
+- **前端**：React 18, TypeScript, Vite
+- **后端**：Node.js, Express, MySQL 5.7+
+- **部署**：Nginx, PM2
+
+## 部署流程
+1. 本地修改代码
+2. 构建前端：npm run build（删除 dist/assets/ 中无用文件）
+3. 上传文件：前端 dist/、后端 backend/、Nginx 配置
+4. 重启服务：pm2 restart kbitai-api
+5. 重载 Nginx：nginx -s reload
+
+## 故障排查
+- **CORS 错误**：检查 Nginx 和后端 CORS 配置
+- **404 错误**：检查 API 路径和 Nginx 反向代理
+- **数据库错误**：检查数据库连接配置和服务状态
+- **502 错误**：检查后端服务运行状态和端口配置
 

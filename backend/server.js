@@ -42,7 +42,14 @@ const {
 const app = express();
 // 本地开发环境处理 CORS
 app.use(cors({
-  origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    const allowedOrigins = ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, origin);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));

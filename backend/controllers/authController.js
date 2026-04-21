@@ -39,6 +39,9 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
+      return res.status(503).json({ error: '数据库连接失败，请检查后端服务状态' });
+    }
     res.status(500).json({ error: '服务器错误' });
   }
 };

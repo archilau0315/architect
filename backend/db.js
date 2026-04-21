@@ -89,7 +89,7 @@ const monitorQuery = async (queryFn, sql, params) => {
     poolStats.lastError = error.message;
     poolStats.lastErrorTime = new Date();
     console.error(`[DB] Query error: ${error.message}`);
-    dbMonitor.emit('error', { error, sql, params });
+    // 移除错误事件发射，避免未处理的错误导致应用崩溃
     throw error;
   }
 };
