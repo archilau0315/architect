@@ -1,6 +1,11 @@
 ---
+description: 
 alwaysApply: true
+enabled: true
+updatedAt: 2026-04-22T02:23:40.070Z
+provider: 
 ---
+
 # 项目规则
 本规则各条必须严格遵守，否则将导致项目失败。
 ## 核心要求
@@ -52,4 +57,3 @@ alwaysApply: true
 - **404 错误**：检查 API 路径和 Nginx 反向代理
 - **数据库错误**：检查数据库连接配置和服务状态
 - **502 错误**：检查后端服务运行状态和端口配置
-

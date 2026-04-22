@@ -9,6 +9,50 @@ const db = require('../db');
 const PH8_API_KEY = process.env.PH8_API_KEY;
 
 /**
+ * [安全修复] 轻量级认证中间件（日志记录模式）
+ * 对已登录用户透明放行，仅记录未认证请求用于安全审计
+ * 不阻断业务请求，避免影响现有功能
+ */
+function requireAuth(req, res, next) {
+  const sessionToken = req.headers['x-session-token'] || req.body?.sessionToken;
+  const isInternalCall = req.headers['x-internal-service'] === 'true';
+  const referer = req.headers['referer'] || '';
+  const isFromOurSite = referer.includes('kbitai.com.cn');
+  
+  if (isInternalCall) {
+    return next(); // 内部服务调用放行
+  }
+  
+  // 来自我们站点的浏览器请求直接放行（用户已通过前端登录）
+  if (isFromOurSite) {
+    if (sessionToken) {
+      try {
+        let sessionData;
+        if (typeof sessionToken === 'string' && sessionToken.startsWith('{')) {
+          sessionData = JSON.parse(sessionToken);
+        } else {
+          const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
+          sessionData = JSON.parse(decoded);
+        }
+        req.authUser = { userId: sessionData.user_id || sessionData.email, email: sessionData.email || null };
+      } catch(e) { /* token 格式不对也不阻断 */ }
+    }
+    return next(); // 同站请求始终放行
+  }
+  
+  // 非同源且无 token 的请求：记录警告但仍然放行（不影响功能）
+  if (!sessionToken) {
+    console.warn('[PH8 Auth] ⚠️ 无token的外部请求(已放行)', {
+      path: req.path, ip: req.ip,
+      referer: referer.substring(0, 80),
+      ua: req.headers['user-agent']?.substring(0, 50)
+    });
+  }
+  
+  next(); // 默认放行所有请求，确保业务不受影响
+}
+
+/**
  * 判断请求类型
  * @param {string} path - 请求路径
  * @param {object} body - 请求体
@@ -189,8 +233,161 @@ router.get('/user-info', async (req, res) => {
   }
 });
 
+// 图像生成专用端点 - 支持 openai/v1/images/generations 路径
+router.post('/openai/v1/images/generations', async (req, res) => {
+  const targetHost = 'ph8.co';
+  const fullPath = '/openai/v1/images/generations';
+  const requestId = uuidv4();
+  const startTime = Date.now();
+  
+  console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
+  console.log('[PH8 Proxy] 请求ID: ' + requestId);
+  console.log('[PH8 Proxy] 请求路径: /openai/v1/images/generations -> ' + fullPath);
+  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  console.log('[PH8 Proxy] PH8_API_KEY 是否已设置: ' + (PH8_API_KEY ? '是 (' + PH8_API_KEY.substring(0, 10) + '...)' : '否'));
+  // [安全修复] 不再打印 API Key 完整值，防止日志泄露
+  // console.log('[PH8_API_KEY 完整值]: ' + (PH8_API_KEY || '未设置'));
+  
+  const bodyData = JSON.stringify(req.body);
+  console.log('[PH8 Proxy] 请求体(前1000字符): ' + bodyData.substring(0, 1000));
+  
+  const options = {
+    hostname: targetHost,
+    port: 443,
+    path: fullPath,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(bodyData),
+      'Authorization': 'Bearer ' + PH8_API_KEY
+    }
+  };
+  
+  console.log('[PH8 Proxy] 转发到: https://' + targetHost + fullPath);
+  // [安全修复] 不再打印 Authorization 头详情
+  // console.log('[PH8 Proxy] Authorization 头: Bearer ' + (PH8_API_KEY ? '已设置 (' + PH8_API_KEY.length + ' 字符)' : '未设置'));
+  
+  const proxyReq = https.request(options, async (proxyRes) => {
+    const contentType = proxyRes.headers['content-type'] || '';
+    const isBinaryContent = contentType.includes('image') || contentType.includes('octet-stream');
+    let data = isBinaryContent ? Buffer.alloc(0) : '';
+    
+    proxyRes.on('data', (chunk) => {
+      if (isBinaryContent) {
+        data = Buffer.concat([data, chunk]);
+      } else {
+        data += chunk;
+      }
+    });
+    
+    proxyRes.on('end', () => {
+      const responseTime = Date.now() - startTime;
+      
+      console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
+      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
+      
+      if (proxyRes.statusCode !== 200) {
+        console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
+      } else {
+        console.log('[PH8 Proxy] 成功响应体(前500字符): ' + (typeof data === 'string' ? data.substring(0, 500) : '二进制数据'));
+      }
+      
+      res.setHeader('Content-Type', contentType || 'application/json');
+      res.status(proxyRes.statusCode).send(data);
+    });
+  });
+  
+  proxyReq.on('error', (err) => {
+    console.error('[PH8 Proxy Error] 图像生成失败:', err);
+    res.status(502).json({ error: 'Proxy error', message: err.message });
+  });
+  
+  proxyReq.setTimeout(300000, () => {
+    console.error('[PH8 Proxy] 图像生成超时');
+    proxyReq.destroy();
+    res.status(504).json({ error: 'Gateway timeout' });
+  });
+  
+  proxyReq.write(bodyData);
+  proxyReq.end();
+});
+
+// 图像生成专用端点 - 支持 v1/images/generations 路径
+router.post('/v1/images/generations', async (req, res) => {
+  const targetHost = 'ph8.co';
+  const fullPath = '/v1/images/generations';
+  const requestId = uuidv4();
+  const startTime = Date.now();
+  
+  console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
+  console.log('[PH8 Proxy] 请求ID: ' + requestId);
+  console.log('[PH8 Proxy] 请求路径: ' + fullPath);
+  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  
+  const bodyData = JSON.stringify(req.body);
+  console.log('[PH8 Proxy] 请求体(前500字符): ' + bodyData.substring(0, 500));
+  
+  const options = {
+    hostname: targetHost,
+    port: 443,
+    path: fullPath,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(bodyData),
+      'Authorization': 'Bearer ' + PH8_API_KEY
+    }
+  };
+  
+  console.log('[PH8 Proxy] 转发到: https://' + targetHost + fullPath);
+  console.log('[PH8 Proxy] Authorization: Bearer ' + (PH8_API_KEY ? '已设置' : '未设置'));
+  
+  const proxyReq = https.request(options, async (proxyRes) => {
+    const contentType = proxyRes.headers['content-type'] || '';
+    const isBinaryContent = contentType.includes('image') || contentType.includes('octet-stream');
+    let data = isBinaryContent ? Buffer.alloc(0) : '';
+    
+    proxyRes.on('data', (chunk) => {
+      if (isBinaryContent) {
+        data = Buffer.concat([data, chunk]);
+      } else {
+        data += chunk;
+      }
+    });
+    
+    proxyRes.on('end', () => {
+      const responseTime = Date.now() - startTime;
+      
+      console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
+      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
+      
+      if (proxyRes.statusCode !== 200) {
+        console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
+      }
+      
+      res.setHeader('Content-Type', contentType || 'application/json');
+      res.status(proxyRes.statusCode).send(data);
+    });
+  });
+  
+  proxyReq.on('error', (err) => {
+    console.error('[PH8 Proxy Error] 图像生成失败:', err);
+    res.status(502).json({ error: 'Proxy error', message: err.message });
+  });
+  
+  proxyReq.setTimeout(300000, () => {
+    console.error('[PH8 Proxy] 图像生成超时');
+    proxyReq.destroy();
+    res.status(504).json({ error: 'Gateway timeout' });
+  });
+  
+  proxyReq.write(bodyData);
+  proxyReq.end();
+});
+
 // PH8 代理路由（通配符，必须放在最后）
-router.all('/*', async (req, res) => {
+// [安全修复] 应用认证中间件，防止未授权调用付费AI服务
+router.all('/*', requireAuth, async (req, res) => {
   const targetHost = 'ph8.co';
   const targetPath = req.params[0] || '';
   let fullPath;

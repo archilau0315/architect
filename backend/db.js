@@ -6,11 +6,12 @@ const EventEmitter = require('events');
 const dbMonitor = new EventEmitter();
 
 // 数据库连接池配置
+// [安全修复] 从环境变量加载，兼容多种变量名（DB_USER / DB_USERNAME）
 const poolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'kbitai0302',
-  password: process.env.DB_PASSWORD || 'kbitai2026',
-  database: process.env.DB_DATABASE || 'kbitai0302',
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER || process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -149,3 +150,21 @@ module.exports.dbMonitor = dbMonitor;
 module.exports.getPoolStatus = getPoolStatus;
 module.exports.healthCheck = healthCheck;
 module.exports.resetStats = resetStats;
+
+// [安全修复] 启动时校验必要的环境变量，兼容 DB_USER / DB_USERNAME
+function getDbUser() { return process.env.DB_USER || process.env.DB_USERNAME; }
+const dbEnvCheck = {
+  DB_HOST: process.env.DB_HOST,
+  DB_USER: getDbUser(),
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_DATABASE: process.env.DB_DATABASE,
+};
+const missingEnvVars = Object.entries(dbEnvCheck).filter(([, v]) => !v).map(([k]) => k);
+if (missingEnvVars.length > 0) {
+  console.error(`[FATAL] 数据库: 缺少环境变量: ${missingEnvVars.join(', ')}`);
+  console.error('[FATAL] 当前已配置:', Object.keys(dbEnvCheck).filter(k => dbEnvCheck[k]).join(', ') || '(无)');
+  console.error('[FATAL] 请在 backend/.env 中配置（注意: 用户名字段支持 DB_USER 或 DB_USERNAME）:');
+  missingEnvVars.forEach(v => console.error(`  - ${v}=你的值`));
+} else {
+  console.log('[DB] 数据库配置校验通过 ✅ (host=' + dbEnvCheck.DB_HOST + ', user=' + dbEnvCheck.DB_USER + ', db=' + dbEnvCheck.DB_DATABASE + ')');
+}

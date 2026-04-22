@@ -39,7 +39,58 @@ const {
   sqlInjectionProtection,
 } = require('./middleware/validation');
 
+// [安全修复] 导入管理员认证中间件
+const { verifyAdminToken } = require('./middleware/adminAuth');
+
 const app = express();
+
+// [安全修复] 关键环境变量启动校验
+const criticalEnvCheck = () => {
+  const required = ['JWT_SECRET'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`[FATAL] 缺少关键环境变量: ${missing.join(', ')}`);
+    console.error('[FATAL] 管理员登录功能将不可用！');
+    // 不退出，但记录警告（允许非管理员功能正常运行）
+  } else {
+    console.log('[Security] 管理员认证配置校验通过');
+  }
+};
+criticalEnvCheck();
+
+// [安全修复] 管理员登录速率限制（防暴力破解）
+const adminLoginAttempts = new Map(); // IP -> { count, lastAttempt }
+const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15分钟
+app.use('/api/admin/login', (req, res, next) => {
+  const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  const attempts = adminLoginAttempts.get(clientIp);
+  
+  if (attempts && now - attempts.lastAttempt < ADMIN_LOGIN_WINDOW_MS) {
+    if (attempts.count >= ADMIN_LOGIN_MAX_ATTEMPTS) {
+      const retryAfterSec = Math.ceil((ADMIN_LOGIN_WINDOW_MS - (now - attempts.lastAttempt)) / 1000);
+      return res.status(429).json({
+        error: 'TOO_MANY_ATTEMPTS',
+        message: `登录尝试次数过多，请 ${retryAfterSec} 秒后重试`,
+        retryAfter: retryAfterSec
+      });
+    }
+  }
+  
+  // 记录本次尝试（在响应后更新计数）
+  res.on('finish', () => {
+    if (res.statusCode === 401 || res.statusCode === 400) {
+      const current = adminLoginAttempts.get(clientIp) || { count: 0, lastAttempt: now };
+      current.count++;
+      current.lastAttempt = now;
+      adminLoginAttempts.set(clientIp, current);
+    }
+  });
+  
+  next();
+});
+
 // 本地开发环境处理 CORS
 app.use(cors({
   origin: function (origin, callback) {
@@ -111,20 +162,26 @@ app.post('/api/logs/download', contentController.logDownload);
 
 // ==================== 管理后台 API ====================
 
-// 管理员登录
+// 管理员登录（无需 token 验证）
 app.post('/api/admin/login', adminController.login);
 
-app.get('/api/admin/users', adminController.getUsers);
-app.get('/api/admin/users/:id', adminController.getUser);
-app.put('/api/admin/users/:id', adminController.updateUser);
-app.delete('/api/admin/users/:id', adminController.deleteUser);
-app.get('/api/admin/dashboard', adminController.getDashboard);
-app.get('/api/admin/logs', adminController.getLogs);
-app.get('/api/admin/configs', adminController.getConfigs);
-app.put('/api/admin/configs/:key', adminController.updateConfig);
-app.get('/api/admin/beta-requests', adminController.getBetaRequests);
-app.post('/api/admin/beta-requests/:id/approve', adminController.approveBetaRequest);
-app.post('/api/admin/beta-requests/:id/reject', adminController.rejectBetaRequest);
+// [安全修复] 以下所有管理接口均需管理员 JWT 认证
+const adminRoutes = express.Router();
+adminRoutes.use(verifyAdminToken); // 全局中间件：验证每个请求的 Bearer token
+
+adminRoutes.get('/users', adminController.getUsers);
+adminRoutes.get('/users/:id', adminController.getUser);
+adminRoutes.put('/users/:id', adminController.updateUser);
+adminRoutes.delete('/users/:id', adminController.deleteUser);
+adminRoutes.get('/dashboard', adminController.getDashboard);
+adminRoutes.get('/logs', adminController.getLogs);
+adminRoutes.get('/configs', adminController.getConfigs);
+adminRoutes.put('/configs/:key', adminController.updateConfig);
+adminRoutes.get('/beta-requests', adminController.getBetaRequests);
+adminRoutes.post('/beta-requests/:id/approve', adminController.approveBetaRequest);
+adminRoutes.post('/beta-requests/:id/reject', adminController.rejectBetaRequest);
+
+app.use('/api/admin', adminRoutes);
 
 // ==================== 定时任务：每日重置 ====================
 // 每天凌晨 0:00 重置每日使用计数
@@ -139,18 +196,27 @@ function scheduleDailyReset() {
   console.log(`[定时任务] 下次每日重置将在 ${Math.round(msUntilMidnight / 1000 / 60)} 分钟后执行`);
   
   setTimeout(async () => {
-    console.log('[定时任务] 执行每日重置...');
-    await ph8TokenService.resetDailyUsage();
+    try {
+      console.log('[定时任务] 执行每日重置...');
+      await ph8TokenService.resetDailyUsage();
 
-    // 检查是否需要重置每月计数（每月1号）
-    const today = new Date();
-    if (today.getDate() === 1) {
-      console.log('[定时任务] 执行每月重置...');
-      await ph8TokenService.resetMonthlyUsage();
+      // 检查是否需要重置每月计数（每月1号）
+      const today = new Date();
+      if (today.getDate() === 1) {
+        console.log('[定时任务] 执行每月重置...');
+        await ph8TokenService.resetMonthlyUsage();
+      }
+
+      // 递归设置下一次重置
+      scheduleDailyReset();
+    } catch (err) {
+      console.error('[定时任务] 执行失败:', err.message || err);
+      console.error('[定时任务] 将在下一周期重试');
+      // 即使出错也继续调度下一次，避免定时任务中断
+      try { scheduleDailyReset(); } catch(schedErr) {
+        console.error('[定时任务] 重调度也失败:', schedErr.message);
+      }
     }
-    
-    // 递归设置下一次重置
-    scheduleDailyReset();
   }, msUntilMidnight);
 }
 

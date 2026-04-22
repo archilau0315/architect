@@ -1,0 +1,67 @@
+/* 全局样式 - 从 index.html 内联迁移 */
+:root {
+  --indigo-glow: rgba(79, 70, 229, 0.4);
+  --bg-color: #0a0a0a;
+  --grid-color: rgba(255, 255, 255, 0.02);
+}
+html.light {
+  --bg-color: #f8fafc;
+  --grid-color: rgba(15, 23, 42, 0.04);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-color);
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-grid {
+  background-size: 50px 50px;
+  background-image: 
+    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+}
+
+.custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+.glass-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInFromBottom { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideInFromLeft { from { transform: translateX(-1rem); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideInFromTop { from { transform: translateY(-1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes zoomIn { from { transform: scale(0.98); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.animate-in { animation-duration: 400ms; animation-fill-mode: both; animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+.fade-in { animation-name: fadeIn; }
+.slide-in-from-bottom-4 { animation-name: slideInFromBottom; }
+.slide-in-from-left-4 { animation-name: slideInFromLeft; }
+.slide-in-from-top-4 { animation-name: slideInFromTop; }
+.zoom-in { animation-name: zoomIn; }
+
+.weighted-block {
+  display: inline-block; background: rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.1); color: #6366f1;
+  padding: 0 8px; margin: 0 2px; border-radius: 8px;
+  border-bottom: 3px solid rgba(99, 102, 241, 0.8); font-weight: 900;
+  font-size: 1.1em; vertical-align: middle; transition: all 0.2s ease;
+  line-height: 1.1; white-space: nowrap; user-select: all; cursor: default;
+}
+.dark .weighted-block { color: #a5b4fc; background: rgba(99, 102, 241, 0.2); }
+
+.weight-marker {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0;
+  pointer-events: none; clip: rect(0 0 0 0); white-space: nowrap;
+}

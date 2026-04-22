@@ -759,7 +759,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               { id: 'sub',       label: t.settings.tabs.subscription, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg> },
               { id: 'agreement', label: t.settings.tabs.agreement, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> },
               { id: 'about',     label: t.settings.tabs.about, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /></svg> },
-              { id: 'system',    label: t.settings.tabs.system, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" /></svg>, hidden: !isSystemVisible }
+              { id: 'system',    label: '核心指令', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>, hidden: !isSystemVisible }
             ].filter(tabItem => !tabItem.hidden).map(tab => (
               <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setIsCheckout(false); }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all hover:bg-white/5 ${activeTab === tab.id ? 'bg-theme/10 ring-1 ring-theme/30' : ''}`}
@@ -936,7 +936,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       { id: 'zh-CN', label: 'CN 简体中文' },
                       { id: 'en-US', label: 'EN English' },
                       { id: 'ja-JP', label: 'JP 日本語' },
-                      { id: 'ko-KR', label: 'KR Korean' },
+                      { id: 'ko-KR', label: '🇰🇷 한국어' },
                       { id: 'es-ES', label: 'ES Español' },
                       { id: 'fr-FR', label: 'FR Français' },
                       { id: 'de-DE', label: 'DE Deutsch' },

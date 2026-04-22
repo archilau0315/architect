@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { GeminiService, ImageGenerationConfig, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
 import { CustomModel, Point, Stroke, HistoryItem, CreativeDomain, UserTier, Language } from '../types.ts';
 import { getTranslation } from '../i18n/locales.ts';
@@ -319,7 +320,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     setIsMarkingMode(true);
     // 自动切换到全屏显示，确保本地修改模式下全屏状态持续
     if (!isPreviewFullscreen && generatedImages.length > 0) {
-      setFullscreenImageIndex(activeIdx);
+      setFullscreenImageIndex(hoveredImageIndex ?? 0); // [Bug修复] activeIdx 未定义，改用 hoveredImageIndex
       setIsPreviewFullscreen(true);
     }
   };
@@ -481,7 +482,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         ).catch(err => console.error('记录token使用失败:', err));
       }
     } catch (err: any) {
-      if (err.name !== 'AbortError') alert(`${targetSize} ${t.parameters.upscaleFailed}: ${err.message}`);
+      if (err.name !== 'AbortError') alert(`${targetSize} ${t.parameters.upscaleFailed}，请稍后重试`); // [安全修复] 不暴露原始错误信息
     } finally { 
       setIsGenerating(false); 
       onBusyStateChange?.(false); 
@@ -593,7 +594,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         }
       }, 500);
     } catch (err: any) {
-      if (err.name !== 'AbortError') alert(`渲染失败: ${err.message}`);
+      if (err.name !== 'AbortError') alert('渲染失败，请稍后重试'); // [安全修复] 不暴露原始错误信息
     } finally { if (abortControllerRef.current === controller) { setIsGenerating(false); onBusyStateChange?.(false); } }
   };
 
@@ -804,15 +805,13 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         <div className="bg-white/60 dark:bg-slate-900/40 p-5 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 glass-card">
           <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-4">生成数量 / Count</p>
           <div className="flex gap-2">
-            {[1, 2, 3, 4].map(n => (
-              <button
-                key={n}
-                onClick={() => setConfig({...config, imageCount: n})}
-                className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${config.imageCount === n ? `bg-${themeColor}-600 text-white shadow-md` : 'bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400'}`}
-              >
-                {n}
-              </button>
-            ))}
+            {/* [Bug修复] 当前仅支持单图模式，隐藏多图选项避免用户困惑 */}
+            <button
+              onClick={() => setConfig({...config, imageCount: 1})}
+              className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${`bg-${themeColor}-600 text-white shadow-md`}`}
+            >
+              1
+            </button>
           </div>
         </div>
       </div>
@@ -1015,19 +1014,46 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         <button onClick={() => { if(window.confirm("确定重置工坊吗？")) onReset?.(); }} className="px-10 py-3 bg-white/5 text-white/30 hover:text-rose-400 hover:bg-rose-500/10 border border-white/[0.06] rounded-xl text-[11px] font-medium tracking-wide shadow-sm flex items-center gap-2 group transition-all"><svg className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>重置工坊</button>
       </div>
 
-      {isPreviewFullscreen && fullscreenImageIndex !== null && generatedImages[fullscreenImageIndex] && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-in fade-in duration-300" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}>
-          {/* 层1：主图区 */}
-          <div className="flex-1 flex items-center justify-center p-6 min-h-0 cursor-zoom-out">
+      {/* 全屏预览 - Portal 到 body，完全脱离父容器约束 */}
+      {isPreviewFullscreen && fullscreenImageIndex !== null && generatedImages[fullscreenImageIndex] && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black animate-in fade-in duration-300" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}>
+          {/* 主图区 - 完全铺满视口 */}
+          <div 
+            className="w-full h-full flex items-center justify-center overflow-hidden cursor-zoom-out"
+            onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}
+          >
             <img
               src={watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]}
-              className="max-h-full max-w-full rounded-xl shadow-2xl object-contain"
+              className="rounded-lg shadow-2xl block"
+              style={{ 
+                maxWidth: '100vw', 
+                maxHeight: '100vh',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                display: 'block'
+              }}
               alt="Fullscreen"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          {/* 层2：操作栏 */}
-          <div className="flex-shrink-0 flex justify-center pb-3" onClick={(e) => e.stopPropagation()}>
+
+          {/* 左右翻页按钮 */}
+          {generatedImages.length > 1 && (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(p => p > 0 ? p - 1 : generatedImages.length - 1); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm z-[10001]">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(p => p < generatedImages.length - 1 ? p + 1 : 0); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm z-[10001]">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </>
+          )}
+
+          {/* 操作栏 - 浮动在右下角 */}
+          <div className="fixed bottom-4 right-4 z-[10000]" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-center gap-1.5 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 pt-2 pb-2.5 shadow-2xl">
               <div className={`text-[9px] font-black uppercase tracking-widest text-${themeColor}-400 pb-1 border-b border-white/10 w-full text-center`}>
                 当前操作：图 {fullscreenImageIndex + 1}{generatedImages.length > 1 ? ` / 共 ${generatedImages.length} 张` : ''}
@@ -1061,9 +1087,9 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
               </div>
             </div>
           </div>
-          {/* 层3：缩略图条 */}
+          {/* 缩略图条 - 浮动在底部 */}
           {generatedImages.length > 1 && (
-            <div className="flex-shrink-0 flex gap-2 justify-center pb-4 px-4 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[10000] flex gap-2 px-4 py-2 bg-black/70 backdrop-blur-xl rounded-2xl" onClick={(e) => e.stopPropagation()}>
               {generatedImages.map((img, idx) => (
                 <div key={idx} onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(idx); }}
                   className={`relative flex-shrink-0 cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${fullscreenImageIndex === idx ? `ring-2 ring-${themeColor}-400 scale-110` : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
@@ -1075,7 +1101,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
               ))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
       {isMarkingMode && (

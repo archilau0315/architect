@@ -53,6 +53,64 @@
         "priority": 80,
         "active": true
       }
+    ],
+    "gemini-3.1-flash-image-preview": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3.1-flash-image-preview",
+        "priority": 100,
+        "active": true
+      }
+    ],
+    "gemini-3-pro-image-preview": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "gemini-3-pro-image-preview",
+        "priority": 100,
+        "active": true
+      }
+    ],
+    "KbitVeo-speed": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "doubao-seedance-2-0-fast",
+        "priority": 100,
+        "active": true,
+        "description": "单图生视频·快速模式"
+      }
+    ],
+    "KbitVeo-normal": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "doubao-seedance-1-5-normal",
+        "priority": 90,
+        "active": true,
+        "description": "双图生视频·标准模式"
+      }
+    ],
+    "KbitVeo-standard": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "doubao-seedance-2-0",
+        "priority": 80,
+        "active": true,
+        "description": "9图+视频参考·高质量"
+      }
+    ],
+    "KbitVeo-pro": [
+      {
+        "provider": "ph8.co",
+        "url": "https://ph8.co",
+        "remoteModelId": "doubao-seedance-2-0-pro",
+        "priority": 70,
+        "active": true,
+        "description": "9图+视频参考·快速高质量"
+      }
     ]
   }
 }

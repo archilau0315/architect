@@ -3,9 +3,12 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const ph8TokenService = require('../services/ph8TokenService');
+// [安全修复] 导入管理员认证中间件
+const { verifyAdminToken } = require('../middleware/adminAuth');
 
-// 生成邀请码（管理员）
-router.post('/generate', async (req, res) => {
+// 生成邀请码（仅管理员）
+// [安全修复] 添加管理员认证，防止任何人批量生成高价值邀请码刷积分
+router.post('/generate', verifyAdminToken, async (req, res) => {
   const { count = 1, pointsBonus = 1000, expiresInDays = 30, createdBy = 'admin' } = req.body;
   
   try {
@@ -154,8 +157,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// 获取邀请码列表（管理员）
-router.get('/list', async (req, res) => {
+// 获取邀请码列表（仅管理员）
+router.get('/list', verifyAdminToken, async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM invite_codes ORDER BY created_at DESC'

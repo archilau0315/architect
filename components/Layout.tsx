@@ -196,6 +196,11 @@ const Layout: React.FC<LayoutProps> = ({
   const [collapsed, setCollapsed] = useState(false);
   const [versionClickCount, setVersionClickCount] = useState(0);
   const [lastVersionClickTime, setLastVersionClickTime] = useState(0);
+  // 核心指令tab自动关闭计时器
+  const coreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 清理定时器
+  useEffect(() => { return () => { if (coreTimerRef.current) clearTimeout(coreTimerRef.current); }; }, []);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
@@ -256,8 +261,24 @@ const Layout: React.FC<LayoutProps> = ({
   const handleVersionClick = () => {
     const now = Date.now();
     const count = now - lastVersionClickTime > 3000 ? 1 : versionClickCount + 1;
-    if (count >= 5) { onToggleSystemVisible(); setVersionClickCount(0); }
-    else setVersionClickCount(count);
+    if (count >= 5) {
+      // 点击5次：切换核心指令tab的显示/隐藏
+      onToggleSystemVisible();
+      // 显示时启动10分钟自动关闭计时器
+      if (!isSystemVisible) {
+        // 即将显示，启动10分钟倒计时
+        if (coreTimerRef.current) clearTimeout(coreTimerRef.current);
+        coreTimerRef.current = setTimeout(() => {
+          onToggleSystemVisible();
+        }, 10 * 60 * 1000); // 10分钟
+      } else {
+        // 手动关闭时清除计时器
+        if (coreTimerRef.current) { clearTimeout(coreTimerRef.current); coreTimerRef.current = null; }
+      }
+      setVersionClickCount(0);
+    } else {
+      setVersionClickCount(count);
+    }
     setLastVersionClickTime(now);
   };
 

@@ -74,11 +74,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [watermarkedVideoUrl, setWatermarkedVideoUrl] = useState<string | null>(null);
   const [isWatermarkProcessing, setIsWatermarkProcessing] = useState(false);
+  const [showEngineDropdown, setShowEngineDropdown] = useState(false); // [Bug修复] 补充缺失的状态声明
   const [lastVideoRef, setLastVideoRef] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('解算引擎运行中');
 
-  const [showEngineDropdown, setShowEngineDropdown] = useState(false);
+  // 根据用户等级决定预览视频源
+  // free 用户：预览已烧录水印的视频，右键保存也是带水印的
+  // pro/plus/dev：预览原始高清，CSS 叠加层仅作品牌展示
+  const previewVideoSrc = isDeveloper ? videoUrl : (watermarkedVideoUrl || videoUrl);
+  const shouldShowWatermarkOverlay = isDeveloper; // 仅付费用户显示叠加层作为视觉提示
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -94,9 +99,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     };
   }, []);
 
+  // [Bug修复] 依赖 referenceVideos，确保 cleanup 捕获最新值释放 Blob URL，防止内存泄漏
   useEffect(() => {
-    return () => { referenceVideos.forEach(url => URL.revokeObjectURL(url)); };
-  }, []);
+    const currentUrls = [...referenceVideos];
+    return () => { currentUrls.forEach(url => URL.revokeObjectURL(url)); };
+  }, [referenceVideos]);
 
   // 预加载 FFmpeg 和 Logo 以加快水印处理速度
   useEffect(() => {
@@ -310,7 +317,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       }, 500);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        alert(`视频生成失败: ${err.message}`);
+        alert(`视频生成失败，请稍后重试`); // [安全修复] 不暴露原始错误信息
       }
     } finally {
       setIsGenerating(false);
@@ -334,45 +341,46 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     if (!videoUrl) return;
 
     if (isPro) {
-      const limits = getDownloadLimits(effectiveTier as UserTier | 'dev');
-      const currentCount = getTodayDownloadCount();
-      
-      if (limits.daily === 0) {
-        window.alert(t.buttons.unlockOriginal);
-        return;
+      // ===== 服务端权限验证（双重校验：后端数据库 + 前端localStorage）=====
+      try {
+        const session = localStorage.getItem('architect-invite-session');
+        let userId = '';
+        if (session) {
+          try { const sd = JSON.parse(session); userId = sd.user_id || sd.email || ''; } catch {}
+        }
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+        const checkRes = await fetch(`${apiBase}/api/usage/video-download/check`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            // [安全修复] 携带 session token，后端用于验证用户身份
+            ...(session ? { 'X-Session-Token': Buffer.from(session).toString('base64') } : {})
+          },
+          body: JSON.stringify({ userId, type: 'pro', sessionToken: session ? Buffer.from(session).toString('base64') : '' })
+        });
+        const checkResult = await checkRes.json();
+        if (!checkResult.allowed) {
+          window.alert(checkResult.error === 'UPGRADE_NEEDED'
+            ? (t.buttons.unlockOriginal || '升级 PRO/PLUS 解锁无水印下载')
+            : checkResult.message || '权限不足，请升级套餐');
+          return;
+        }
+        console.log('[Video Download] 服务端授权通过');
+      } catch (serverErr) {
+        console.warn('[Video Download] 后端验证失败，降级到本地:', serverErr);
+        const limits = getDownloadLimits(effectiveTier as UserTier | 'dev');
+        const currentCount = getTodayDownloadCount();
+        if (limits.daily === 0) { window.alert(t.buttons.unlockOriginal); return; }
+        if (currentCount >= limits.daily) { window.alert(`今日额度已用完 (${currentCount}/${limits.daily})`); return; }
       }
-      
-      if (currentCount >= limits.daily) {
-        const messages: Record<Language, string> = {
-          'zh-CN': `今日无水印下载次数已用完。\n\n您的额度：${limits.label}\n已下载：${currentCount} 次\n\n请明天再试或升级套餐。`,
-          'en-US': `Daily watermark-free downloads exhausted.\n\nYour quota: ${limits.label}\nDownloaded: ${currentCount} times\n\nPlease try again tomorrow or upgrade.`,
-          'ja-JP': `今日の透かしなしダウンロード回数が使い尽くされました。\n\nあなたのクォータ：${limits.label}\nダウンロード済み：${currentCount}回\n\n明日再試行するか、アップグレードしてください。`,
-          'ko-KR': `오늘 무수표 다운로드 횟수가 소진되었습니다.\n\n귀하의 할당량: ${limits.label}\n다운로드한 횟수: ${currentCount}회\n\n내일 다시 시도하거나 업그레이드하세요.`,
-          'es-ES': `Descargas sin marca de agua agotadas hoy.\n\nCuota: ${limits.label}\nDescargados: ${currentCount} veces\n\nIntente mañana o actualice.`,
-          'fr-FR': `Téléchargements sans filigrane épuisés aujourd'hui.\n\nVotre quota: ${limits.label}\nTéléchargés: ${currentCount} fois\n\nVeuillez réessayer demain ou mettre à niveau.`,
-          'de-DE': `Wassermarkenfreie Downloads heute erschöpft.\n\nIhr Kontingent: ${limits.label}\nHeruntergeladen: ${currentCount} Mal\n\nBitte versuchen Sie morgen erneut oder aktualisieren Sie.`,
-          'ru-RU': `Скачивания без водяного знака исчерпаны.\n\nВаш квота: ${limits.label}\nСкачано: ${currentCount} раз\n\nПопробуйте завтра или обновите подписку.`,
-        };
-        window.alert(messages[language]);
-        return;
-      }
-      
-      const confirmMessages: Record<Language, string> = {
-        'zh-CN': `【版权合规声明】\n本 AI 生成视频仅限个人/合法使用，禁止用于违法、侵权用途。平台已记录下载日志，请合规使用。\n\n今日剩余下载次数：${limits.daily - currentCount}\n\n确认下载无水印高清原片？`,
-        'en-US': `【Copyright Compliance】\nThis AI-generated video is for personal/legal use only. Prohibited for illegal or infringing purposes. Download logs are recorded. Please use legally.\n\nRemaining downloads today: ${limits.daily - currentCount}\n\nConfirm download watermark-free HD video?`,
-        'ja-JP': `【著作権コンプライアンス】\nこのAI生成動画は個人/合法的使用のみ許可されています。違法・権利侵害目的の使用は禁止されています。ダウンロードログが記録されます。\n\n今日の残りダウンロード回数：${limits.daily - currentCount}\n\n透かしなしHD動画をダウンロードしますか？`,
-        'ko-KR': `【저작권 준수】\n이 AI 생성 비디오는 개인/법적 사용만 허용됩니다. 불법 또는 저작권 침해 목적으로 사용하는 것은 금지됩니다. 다운로드 로그가 기록됩니다. 법적으로 사용해주세요.\n\n오늘 남은 다운로드 횟수: ${limits.daily - currentCount}\n\n무수표 HD 비디오 다운로드 확인?`,
-        'es-ES': `【Cumplimiento de Derechos de Autor】\nEste video generado por AI solo está permitido para uso personal/legal. Prohibido para fines ilegales o de infracción. Se registran los registros de descarga.\n\nDescargas restantes hoy: ${limits.daily - currentCount}\n\n¿Confirmar descarga de video HD sin marca de agua?`,
-        'fr-FR': `【Conformité Copyright】\nCette vidéo générée par AI est réservée à un usage personnel/légal uniquement. Interdit pour des fins illégales ou d'infraction. Les journaux de téléchargement sont enregistrés.\n\nTéléchargements restants aujourd'hui: ${limits.daily - currentCount}\n\nConfirmer le téléchargement de la vidéo HD sans filigrane ?`,
-        'de-DE': `【Urheberrechtskonformität】\nDieses AI-generierte Video ist nur für persönliche/rechtliche Nutzung zulässig. Verboten für illegale oder verletzende Zwecke. Download-Logs werden aufgezeichnet.\n\nVerbleibende Downloads heute: ${limits.daily - currentCount}\n\nWatermark-freies HD-Video herunterladen bestätigen?`,
-        'ru-RU': `【Соответствие авторским правам】\nЭто видео, сгенерированное AI, предназначено только для личного/правового использования. Запрещено для незаконных или нарушающих права целей. Журналы загрузок записываются.\n\nОсталось загрузок сегодня: ${limits.daily - currentCount}\n\nПодтвердить загрузку HD-видео без водяного знака?`,
-      };
-      const confirmed = window.confirm(confirmMessages[language]);
+
+      const confirmed = window.confirm('【版权合规声明】本视频仅限个人/合法使用。\n确认下载无水印高清原片？');
       if (!confirmed) return;
-      
+
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'pro' });
       incrementDownloadCount();
-      
+
       const link = document.createElement('a');
       link.href = videoUrl;
       link.download = `Architect_Motion_PRO_${Date.now()}.mp4`;
@@ -598,7 +606,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                 <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'} shadow-2xl`}>
                   <video 
   ref={videoRef}
-  src={videoUrl} 
+  src={previewVideoSrc} 
   controls 
   autoPlay 
   loop 
@@ -606,9 +614,19 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   className="w-full h-full object-cover" 
   disablePictureInPicture={false}
 />
-                  <div className="absolute bottom-4 right-4 w-20 h-auto opacity-80 pointer-events-none z-10">
+                  {/* 水印叠加层：仅付费用户可见（品牌展示用，非安全防护） */}
+                  {shouldShowWatermarkOverlay && (
+                  <div className="absolute bottom-4 right-4 w-20 h-auto opacity-60 pointer-events-none z-10">
                     <img src="/public/LOGOkbitwater.png" className="w-full h-full object-contain" />
                   </div>
+                  )}
+                  {/* 非付费用户：显示"升级解锁无水印"提示 */}
+                  {!isDeveloper && videoUrl && (
+                    <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-sm rounded-md text-[10px] text-white/60 font-medium pointer-events-none select-none flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      预览版本 · 升级解锁高清原片
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center justify-between w-full">
                   <div className="text-[9px] font-black uppercase tracking-widest text-blue-400">

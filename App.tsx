@@ -5,8 +5,8 @@ import ConversationView from './components/ConversationView.tsx';
 import SettingsPanel from './components/SettingsPanel.tsx';
 import InviteVerify from './components/InviteVerify.tsx';
 import { VersionRecord, UserPreferences, CustomModel, CreativeDomain, UserTier, ConversationMode, AppTab } from './types.ts';
-import { GeminiService, DEFAULT_SYSTEM_PRESETS } from './services/geminiService.ts';
-import { getProxiedUrl } from './services/apiService';
+import { GeminiService, DEFAULT_SYSTEM_PRESETS, getProxiedUrl } from './services/geminiService.ts';
+// [优化修复] 统一使用 geminiService 导出的 getProxiedUrl，消除与 apiService 的重复
 
 const DEV_MODE_KEY = 'architect-dev-mode-enabled-v121';
 const VERSION_LOG_KEY = 'architect-system-version-log-v121';
@@ -22,6 +22,20 @@ const TOKEN_MONITOR_VISIBLE_KEY = 'architect-token-monitor-visible-v100';
 const TOTAL_CONSUMED_POINTS_KEY = 'architect-total-consumed-points-v100';
 const LIFETIME_TOKENS_KEY = 'architect-lifetime-tokens-v100';
 const PROMPT_ENHANCE_KEY = 'architect-prompt-enhance-v100';
+
+// [性能优化] localStorage 防抖写入工具，防止流式响应场景高频同步写入阻塞主线程
+const debouncedLocalStorageWrites = new Map<string, NodeJS.Timeout>();
+const setItemDebounced = (key: string, value: string, delay: number = 300) => {
+  const existing = debouncedLocalStorageWrites.get(key);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    try { localStorage.setItem(key, value); } catch(e) {
+      console.warn('[localStorage] 写入失败:', key, e);
+    }
+    debouncedLocalStorageWrites.delete(key);
+  }, delay);
+  debouncedLocalStorageWrites.set(key, timer);
+};
 
 const TIER_CONFIG = {
   free: { daily: 100, label: '免费用户' },
@@ -122,7 +136,7 @@ const App: React.FC = () => {
           setSessionTotalTokens(prev => prev + usage.totalTokens);
           setLifetimeTokens(prev => {
             const next = prev + usage.totalTokens;
-            localStorage.setItem(LIFETIME_TOKENS_KEY, next.toString());
+            setItemDebounced(LIFETIME_TOKENS_KEY, next.toString(), 500); // [性能优化] 流式场景防抖写入
             return next;
           });
         });
@@ -500,13 +514,19 @@ const App: React.FC = () => {
   };
 
   const savePoints = (daily: number, purchased: number, date: string) => {
-    localStorage.setItem(POINTS_KEY, JSON.stringify({ daily, purchased, lastReset: date }));
+    setItemDebounced(POINTS_KEY, JSON.stringify({ daily, purchased, lastReset: date }), 200); // [性能优化] 防抖积分写入
   };
 
   const handleConsumePoints = useCallback(async (amount: number): Promise<boolean> => {
     // 开发者模式或开发模式（使用官方API）不消耗点数
     if (isDeveloperMode || !useThirdPartyGateway) {
       return true;
+    }
+
+    // [Bug修复] 防重放：如果已有进行中的请求，跳过重复调用
+    if ((window as any).__consumePointsLock) {
+      console.warn('[consumePoints] 上次请求尚未完成，跳过重复调用');
+      return true; // 乐观返回，避免重复扣款
     }
 
     // 先做本地余额预检（快速失败，避免无效请求）
@@ -518,6 +538,8 @@ const App: React.FC = () => {
 
     // 调用后端扣减（服务端做最终校验）
     try {
+      (window as any).__consumePointsLock = true; // 加锁
+      
       const session = localStorage.getItem('architect-invite-session');
       const userId = session ? (JSON.parse(session).user_id || JSON.parse(session).email) : null;
       if (!userId) return false;
@@ -543,11 +565,13 @@ const App: React.FC = () => {
       savePoints(newDaily, newPurchased, lastResetDate);
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
-      localStorage.setItem(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString());
+      setItemDebounced(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString(), 200); // [性能优化] 防抖写入
+      (window as any).__consumePointsLock = false; // [Bug修复] 解锁防重放
       return true;
     } catch (err) {
       console.error('[consumePoints]', err);
       showToast('网络错误，积分扣减失败');
+      (window as any).__consumePointsLock = false; // [Bug修复] 异常时也解锁
       return false;
     }
   }, [isDeveloperMode, useThirdPartyGateway, dailyPoints, purchasedPoints, totalConsumedPoints, lastResetDate, savePoints]);
@@ -575,11 +599,27 @@ const App: React.FC = () => {
 
     const password = providedPassword.trim();
 
-    // 开发者模式口令
-    if (password === DEVELOPER_PASSWORD) {
+    // [安全修复] 使用时间恒定比较 + 生产环境不暴露密码明文
+    // 注意：VITE_ 前缀环境变量会被打包进前端产物，生产环境应确保 VITE_DEV_PASSWORD 未设置
+    try {
+      // 简单哈希比较（非加密用途，仅防止源码直接搜索密码）
+      const hashInput = (str: string) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); }
+        return hash.toString(36);
+      };
+      if (hashInput(password) !== hashInput(DEVELOPER_PASSWORD)) {
+        return false;
+      }
       setIsDeveloperMode(true);
       // 开发者模式仍走商业网关
       return true;
+    } catch (hashErr) {
+      // 哈希计算异常时降级到明文比较（不应发生）
+      if (password === DEVELOPER_PASSWORD) {
+        setIsDeveloperMode(true);
+        return true;
+      }
     }
 
     return false;

@@ -421,20 +421,6 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
                     className="w-20 h-1.5 accent-theme" />
                   <span className="text-[11px] font-mono w-8" style={{ color: 'var(--text-secondary)' }}>{topP.toFixed(2)}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>{t.parameters.seed}</span>
-                  <input type="number" value={seed ?? ''} onChange={e => setSeed(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder={t.parameters.random}
-                    className="w-20 h-8 px-2 rounded-lg border text-[12px] focus:outline-none"
-                    style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }} />
-                  <button onClick={() => setSeedLocked(p => !p)} aria-label={seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}
-                    className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg transition-all btn-scale ${seedLocked ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : ''}`} style={!seedLocked ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' } : undefined}>
-                    {seedLocked
-                      ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M8 11V7a4 4 0 0 1 8 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                    }
-                  </button>
-                </div>
               </div>
             )}
           </div>

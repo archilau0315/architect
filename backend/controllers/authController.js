@@ -80,7 +80,8 @@ exports.forgotPassword = async (req, res) => {
     // 发送密码重置邮件
     const emailSent = await mailService.sendPasswordResetEmail(email, token);
     
-    console.log(`[密码重置] 用户 ${email} 的重置令牌: ${token}`);
+    // [安全修复] 不再打印完整重置令牌到日志，仅记录前8位用于追踪
+    console.log(`[密码重置] 用户 ${email} 的重置令牌已生成: ${token.substring(0, 8)}...`);
     console.log(`[密码重置] 邮件发送状态: ${emailSent ? '成功' : '失败'}`);
     
     res.json({ 

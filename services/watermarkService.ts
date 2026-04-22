@@ -5,7 +5,6 @@ import { ContentIdService } from './contentIdService';
 // 将字符串编码为二进制位数组
 function strToBits(str: string): number[] {
   const bits: number[] = [];
-  // 4字节长度头 + 内容
   const len = str.length;
   for (let i = 24; i >= 0; i -= 8) bits.push(...Array.from({length: 8}, (_, b) => (len >> (i - b)) & 1));
   for (const c of str) {
@@ -21,12 +20,80 @@ function embedLSB(ctx: CanvasRenderingContext2D, w: number, h: number, payload: 
   const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   for (let i = 0; i < bits.length && i * 4 < data.length; i++) {
-    data[i * 4] = (data[i * 4] & 0xFE) | bits[i]; // R 通道最低位
+    data[i * 4] = (data[i * 4] & 0xFE) | bits[i];
   }
   ctx.putImageData(imageData, 0, 0);
 }
 
+// ========== 预加载并缓存Logo（只加载一次） ==========
+let _cachedLogo: HTMLImageElement | null = null;
+let _logoLoadPromise: Promise<HTMLImageElement> | null = null;
+
+function preloadLogoOnce(): Promise<HTMLImageElement> {
+  if (_cachedLogo) return Promise.resolve(_cachedLogo);
+  if (_logoLoadPromise) return _logoLoadPromise;
+
+  _logoLoadPromise = new Promise((resolve, reject) => {
+    // 候选路径（按优先级排序）：
+    // 1. /public/LOGOkbitwater.png    → Nginx alias 直通 /www/wwwroot/kbitai.com.cn/public/ （首选，1步直达）
+    // 2. /architect/LOGOkbitwater.png → Nginx rewrite ^/architect/(LOGOkbitwater) → /public/$1   （备用）
+    const candidates = [
+      '/public/LOGOkbitwater.png',
+      '/architect/LOGOkbitwater.png',
+    ];
+    let idx = 0;
+
+    function tryNext(): void {
+      if (idx >= candidates.length) {
+        const err = new Error(`[水印] ❌ Logo加载失败: ${candidates.join(', ')}`);
+        console.error(err.message);
+        reject(err);
+        return;
+      }
+      const img = new Image();
+      // 【关键】同域请求不要设置 crossOrigin！
+      // 设置 crossOrigin='anonymous' 会要求服务器返回 CORS 头，
+      // 但 Nginx 给 /public/ 的静态文件没加 CORS 头，会导致 canvas 被污染无法绘制。
+      // 同域图片天然可以绘制到 canvas，不需要 CORS 声明。
+      img.onload = () => {
+        _cachedLogo = img;
+        console.log(`[水印] ✅ Logo预加载成功: ${candidates[idx - 1]} (${img.width}×${img.height})`);
+        resolve(img);
+      };
+      img.onerror = () => { idx++; tryNext(); };
+      img.src = candidates[idx++];
+    }
+    tryNext();
+  });
+
+  return _logoLoadPromise;
+}
+
 export const WatermarkUtils = {
+  // 统一完成水印处理：LSB隐写 + 返回结果 + 静默注册
+  finishWatermark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, contentId: string, generatedAt: string, userId: string | undefined, resolve: (value: { dataUrl: string; contentId: string }) => void) {
+    ctx.globalAlpha = 1.0;
+    // LSB隐式标识（不可见）
+    const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${generatedAt}`;
+    embedLSB(ctx, canvas.width, canvas.height, payload);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    resolve({ dataUrl, contentId });
+
+    // 异步注册到服务器 — 用 Image beacon 彻底静默，不触发控制台网络错误
+    setTimeout(() => {
+      try {
+        const regPayload = JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } });
+        const beacon = new Image();
+        beacon.onload = beacon.onerror = () => {};
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? ''
+          : 'https://api.kbitai.com.cn';
+        beacon.src = `${apiBase}/api/content/register?d=${encodeURIComponent(regPayload.substring(0, 200))}`;
+      } catch(_e) { /* 完全静默 */ }
+    }, 100);
+  },
+
   generateContentId(): string {
     return ContentIdService.generateId();
   },
@@ -43,19 +110,19 @@ export const WatermarkUtils = {
           [piexif.ExifIFD.UserComment]: `AI Generated|Platform:KBITAI|ID:${contentId}|Time:${new Date().toISOString()}`,
         }
       };
-      
+
       const exifStr = piexif.dump(exifObj);
-      
+
       const base64Data = dataUrl.split(',')[1];
       const binaryData = atob(base64Data);
-      
+
       const exifBytes = new Uint8Array(
         Array.from(exifStr).map((c: string) => c.charCodeAt(0))
       );
-      
+
       const pngSignature = new Uint8Array([0x89, 0x50, 0x4E, 0x47]);
       let insertPos = 8;
-      
+
       for (let i = 0; i < binaryData.length - 8; i++) {
         if (
           binaryData.charCodeAt(i) === pngSignature[0] &&
@@ -67,17 +134,17 @@ export const WatermarkUtils = {
           break;
         }
       }
-      
+
       const binaryArray = new Uint8Array(binaryData.length);
       for (let i = 0; i < binaryData.length; i++) {
         binaryArray[i] = binaryData.charCodeAt(i);
       }
-      
+
       const newData = new Uint8Array(binaryArray.length + exifBytes.length);
       newData.set(binaryArray.slice(0, insertPos));
       newData.set(exifBytes, insertPos);
       newData.set(binaryArray.slice(insertPos), insertPos + exifBytes.length);
-      
+
       let base64 = '';
       const chunkSize = 8192;
       for (let i = 0; i < newData.length; i += chunkSize) {
@@ -91,93 +158,52 @@ export const WatermarkUtils = {
     }
   },
 
-  async addWatermark(imageSrc: string, logoSrc: string = '/public/LOGOkbitwater.png', userId?: string): Promise<{ dataUrl: string; contentId: string }> {
+  /**
+   * 给图片添加可见的Logo水印（右下角）
+   * 只使用 LOGOkbitwater.png 图片，绝不使用文字水印。
+   * 如果Logo加载失败，抛出异常而不是降级到文字。
+   */
+  async addWatermark(imageSrc: string, _logoSrc?: string, userId?: string): Promise<{ dataUrl: string; contentId: string }> {
     const contentId = this.generateContentId();
     const generatedAt = new Date().toISOString();
-    
-    console.log(`[水印服务] 开始添加水印, logo路径: ${logoSrc}`);
-    
+
+    console.log(`[水印服务] 🚀 开始添加水印...`);
+
+    // 预加载Logo图片（带缓存，只加载一次；所有路径都失败则reject）
+    const logoImg = await preloadLogoOnce();
+
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      // 原图是base64 data URL，同源不需要crossOrigin
       img.onload = () => {
-        console.log(`[水印服务] 原图加载成功, 尺寸: ${img.width}x${img.height}`);
+        console.log(`[水印服务] 原图加载成功 ${img.width}×${img.height}`);
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          console.error("[水印服务] 获取canvas上下文失败");
-          reject(new Error("Failed to get canvas context"));
-          return;
-        }
-
         canvas.width = img.width;
         canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas context failed')); return; }
 
         ctx.drawImage(img, 0, 0);
 
-        const watermarkWidth = canvas.width * 0.15;
-        const margin = canvas.width * 0.03;
+        // 绘制Logo可见水印（右下角）
+        const logoW = Math.max(80, canvas.width * 0.15);
+        const logoH = (logoImg.height / logoImg.width) * logoW;
+        const margin = Math.max(10, canvas.width * 0.03);
+        ctx.globalAlpha = 0.75;
+        ctx.drawImage(
+          logoImg,
+          canvas.width - logoW - margin,
+          canvas.height - logoH - margin,
+          logoW,
+          logoH
+        );
+        console.log(`[水印] ✅ Logo水印已添加 (${Math.round(logoW)}×${Math.round(logoH)})`);
 
-        const logo = new Image();
-        logo.crossOrigin = "anonymous";
-        logo.onload = () => {
-          console.log(`[水印服务] 水印logo加载成功, 尺寸: ${logo.width}x${logo.height}`);
-          const logoWidth = watermarkWidth;
-          const logoHeight = (logo.height / logo.width) * logoWidth;
-          
-          const watermarkX = canvas.width - watermarkWidth - margin;
-          const watermarkY = canvas.height - logoHeight - margin;
-          
-          console.log(`[水印服务] 水印位置: (${watermarkX}, ${watermarkY}), 尺寸: ${logoWidth}x${logoHeight}`);
-          
-          ctx.globalAlpha = 0.7;
-          
-          ctx.drawImage(logo, watermarkX, watermarkY, logoWidth, logoHeight);
-          console.log("[水印服务] 水印添加成功（使用原图颜色，70%透明度）");
-
-          // 隐式标识：LSB 隐写
-          ctx.globalAlpha = 1.0;
-          const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
-          embedLSB(ctx, canvas.width, canvas.height, payload);
-
-          const dataUrl = canvas.toDataURL('image/png');
-          resolve({ dataUrl, contentId });
-          // 异步注册到服务器，不阻塞返回
-          fetch('/api/content/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } })
-          }).catch(() => {});
-        };
-        logo.onerror = () => {
-          console.error(`[水印服务] 水印logo加载失败: ${logoSrc}`);
-          // 如果logo加载失败，添加白色文字水印作为备用
-          ctx.globalAlpha = 0.5;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = `${Math.max(12, canvas.width * 0.03)}px sans-serif`;
-          ctx.textAlign = 'right';
-          ctx.textBaseline = 'bottom';
-          const watermarkText = 'KbitAI';
-          const margin = canvas.width * 0.03;
-          ctx.fillText(watermarkText, canvas.width - margin, canvas.height - margin);
-          console.log("[水印服务] 使用文字水印作为备用");
-          
-          ctx.globalAlpha = 1.0;
-          const payload = `v=1;type=image;platform=KBITAI;id=${contentId};ts=${new Date().toISOString()}`;
-          embedLSB(ctx, canvas.width, canvas.height, payload);
-          
-          const dataUrl = canvas.toDataURL('image/png');
-          resolve({ dataUrl, contentId });
-          fetch('/api/content/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } })
-          }).catch(() => {});
-        };
-        logo.src = logoSrc;
+        // 完成处理：LSB隐写 + 返回结果
+        this.finishWatermark(ctx, canvas, contentId, generatedAt, userId, resolve);
       };
       img.onerror = (e) => {
-        console.error("[水印服务] 原图加载失败:", e);
+        console.error('[水印服务] 原图加载失败', e);
         reject(e);
       };
       img.src = imageSrc;
@@ -191,7 +217,7 @@ export const WatermarkUtils = {
       ip: "127.0.0.1",
       userAgent: navigator.userAgent
     };
-    
+
     const logs = JSON.parse(localStorage.getItem('download_audit_logs') || '[]');
     logs.push(logEntry);
     localStorage.setItem('download_audit_logs', JSON.stringify(logs.slice(-100)));

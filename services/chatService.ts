@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { CustomModel } from "../types.ts";
-import { getProxiedUrl, fetchWithRetry } from "./apiService.ts";
+import { getProxiedUrl } from "./geminiService"; // [优化修复] 统一使用 geminiService 导出
+import { fetchWithRetry } from "./apiService.ts"; // fetchWithRetry 保留在 apiService
 import { GeminiService } from "./geminiService.ts";
 
 // 聊天服务 - 处理所有与AI对话相关的功能

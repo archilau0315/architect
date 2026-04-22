@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { GeminiService, MASTER_STYLES } from '../services/geminiService.ts';
 import { ConversationMode, CustomModel, CreativeDomain } from '../types.ts';
 import UnifiedInput, { UnifiedPayload } from './UnifiedInput.tsx';
@@ -8,7 +9,7 @@ import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { getTranslation } from '../i18n/locales.ts';
 import type { Language } from '../i18n/locales.ts';
-import { MessageCircle, Image, Video, Download, RefreshCw, Copy, StopCircle, UserCircle, Palette, X } from 'lucide-react';
+import { MessageCircle, Image, Video, Download, RefreshCw, Copy, StopCircle, UserCircle, Palette, X, Lock, LockOpen } from 'lucide-react';
 
 // ─── PH8 费用扣除（共享函数，避免竞态：每次调用独立查询，不依赖闭包状态）─────────
 async function deductPh8Cost(label: string, onConsumePoints?: (n: number) => Promise<boolean>) {
@@ -51,6 +52,7 @@ interface Message {
   text?: string;
   images?: string[];   // base64 data URLs
   watermarkedImages?: string[];  // 带水印版本
+  seeds?: number[];    // 每张图对应的seed值
   videoUrl?: string;
   watermarkedVideoUrl?: string;  // 带水印的视频版本
   timestamp: number;
@@ -75,30 +77,73 @@ const gemini = GeminiService;
 let msgId = 0;
 const uid = () => `m${++msgId}_${Date.now()}`;
 
-// ─── Text renderer with code block support ────────────────────────────────────
-const renderTextWithCode = (text: string, isError: boolean, copyLabel = 'Copy') => {
-  const parts = text.split(/(```[\w]*\n?[\s\S]*?```)/g);
+// ─── Text renderer（图片解析/反推提示词专用）─────────────────────────────
+// 规则：去除 ### 和 ** 标记，用项目主题色矩形块做背景，无左竖边框，支持暗/亮模式
+const renderTextWithCode = (text: string, isError: boolean, copyLabel = 'Copy', theme = 'dark') => {
+  // 预处理：去掉所有 ### 和 ** 标记
+  const cleaned = text
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .trim();
+
+  // 按代码块分割
+  const parts = cleaned.split(/(```[\w]*\n?[\s\S]*?```)/g);
+  // 使用CSS变量读取项目实时主题色（自动跟随用户选择的主题方案）
+  const isDark = theme === 'dark';
+
   return parts.map((part, i) => {
     const match = part.match(/^```([\w]*)\n?([\s\S]*?)```$/);
     if (match) {
       const lang = match[1] || 'code';
       const code = match[2].trim();
       return (
-        <div key={i} className="mt-2 rounded-xl overflow-hidden border border-white/[0.08]">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-black/50 border-b border-white/[0.06]">
-            <span className="text-[10px] text-white/30 font-mono uppercase">{lang}</span>
+        <div key={i} className="mt-2 rounded-xl overflow-hidden"
+          style={{
+            backgroundColor: isDark ? 'var(--bg-secondary)' : '#ffffff',
+            border: '1px solid var(--border-color)'
+          }}>
+          <div className="flex items-center justify-between px-3 py-1.5 border-b" style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+            borderColor: 'var(--border-color)'
+          }}>
+            <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--theme-primary-light)' }}>{lang}</span>
             <button
               onClick={() => navigator.clipboard.writeText(code)}
-              className="text-[10px] text-white/30 hover:text-white/70 transition-colors px-2 py-0.5 rounded hover:bg-white/10 flex items-center gap-1">
+              className="text-[10px] transition-colors px-2 py-0.5 rounded hover:opacity-80 flex items-center gap-1"
+              style={{ color: 'var(--text-secondary)' }}
+            >
               <Copy className="w-3 h-3" strokeWidth={2} />
               {copyLabel}
             </button>
           </div>
-          <pre className="bg-black/40 p-3 text-[12px] overflow-x-auto font-mono leading-relaxed text-emerald-400 custom-scrollbar">{code}</pre>
+          <pre className="p-3 text-[12px] overflow-x-auto font-mono leading-relaxed custom-scrollbar"
+            style={{ color: isDark ? 'rgb(110,231,183)' : 'rgb(5,150,105)' }}>{code}</pre>
         </div>
       );
     }
-    return <span key={i} className={`whitespace-pre-wrap ${isError ? 'text-rose-400' : ''}`}>{part}</span>;
+    // 正文文本：用主题色矩形块做背景，无边框竖线
+    return (
+      <span key={i} className={`whitespace-pre-wrap ${part.length > 20 ? 'block' : ''}`}
+        style={part.length > 20 ? {
+          color: isError ? (isDark ? 'rgb(251,113,133)' : 'rgb(220,38,38)') : 'var(--text-primary)',
+          padding: '12px 16px',
+          marginTop: '8px',
+          borderRadius: '12px',
+          lineHeight: '1.75',
+          fontSize: '13.5px',
+          // 核心设计：纯矩形色块背景，用项目主题色的低透明度版本
+          backgroundColor: isDark
+            ? 'rgba(var(--theme-primary-rgb, 99, 102, 241), 0.08)'   // 暗色：8%透明度主题色
+            : 'rgba(var(--theme-primary-rgb, 99, 102, 241), 0.06)',   // 亮色：6%（更淡）
+          border: 'none',
+          boxShadow: isDark ? 'none' : '0 1px 2px rgba(0,0,0,0.04)'
+        } : {
+          color: isError ? (isDark ? 'rgb(251,113,133)' : 'rgb(220,38,38)') : 'var(--text-primary)'
+        }}>
+        {part}
+      </span>
+    );
   });
 };
 
@@ -107,6 +152,7 @@ const renderTextWithCode = (text: string, isError: boolean, copyLabel = 'Copy') 
 const ImageBubble: React.FC<{
   images: string[];
   watermarkedImages?: string[];
+  seeds?: number[];
   onInpaint?: (imageUrl: string) => void;
   onRerun?: (payload: UnifiedPayload) => void;
   onUpscale?: (imageUrl: string) => void;
@@ -115,11 +161,35 @@ const ImageBubble: React.FC<{
   rerunCount: number;
   setRerunCount: (n: number) => void;
   isDeveloper?: boolean;
-}> = ({ images, watermarkedImages = [], onInpaint, onRerun, onUpscale, rerunPayload, t, rerunCount, setRerunCount, isDeveloper = false }) => {
+}> = ({ images, watermarkedImages = [], seeds = [], onInpaint, onRerun, onUpscale, rerunPayload, t, rerunCount, setRerunCount, isDeveloper = false }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [fsIdx, setFsIdx] = useState(0);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  // Seed 锁定状态：锁定时重跑复用当前图的seed，解锁时随机
+  const [seedLocked, setSeedLocked] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('architect-seed-lock-v120') || 'false'); }
+    catch { return false; }
+  });
+
+  // 监听 ESC 键关闭全屏
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (fullscreen && e.key === 'Escape') {
+        setFullscreen(false);
+      }
+      // 全屏时左右箭头切换图片
+      if (fullscreen && images.length > 1) {
+        if (e.key === 'ArrowLeft') {
+          setFsIdx(p => p > 0 ? p - 1 : images.length - 1);
+        } else if (e.key === 'ArrowRight') {
+          setFsIdx(p => p < images.length - 1 ? p + 1 : 0);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fullscreen, images.length]);
 
   const safeIdx = Math.min(activeIdx, images.length - 1);
 
@@ -140,6 +210,39 @@ const ImageBubble: React.FC<{
       <div className="flex items-center gap-3 pt-3 pb-2 border-t flex-wrap" style={{ borderColor: 'var(--border-color)' }}>
         {/* 左侧：图片计数 */}
         <span className="text-[11px] mr-2 shrink-0" style={{ color: 'var(--text-tertiary)' }}>{t.buttons.imageCount} {safeIdx + 1}/{images.length}</span>
+
+        {/* Seed显示：随图切换，可点击复制；点击图标切换锁定状态 */}
+        {seeds.length > 0 && seeds[safeIdx] != null && (
+          <button
+            onClick={() => {
+              // 左键：锁定/解锁seed（切换状态）
+              setSeedLocked(prev => {
+                const next = !prev;
+                localStorage.setItem('architect-seed-lock-v120', JSON.stringify(next));
+                return next;
+              });
+              // 同时复制seed值
+              navigator.clipboard.writeText(String(seeds[safeIdx]));
+            }}
+            title={`${seedLocked ? t.parameters.unlockSeed : t.parameters.lockSeed}\n${t.parameters.seed}: ${seeds[safeIdx]}`}
+            className={`flex items-center gap-1 min-h-[28px] px-2 py-1 rounded-md text-[11px] font-mono transition-all btn-scale ${
+              seedLocked ? 'ring-1 ring-offset-1' : ''
+            }`}
+            style={{
+              backgroundColor: seedLocked ? 'rgba(234, 179, 8, 0.15)' : 'rgba(99, 102, 241, 0.08)',
+              borderColor: seedLocked ? 'rgba(234, 179, 8, 0.5)' : 'rgba(99, 102, 241, 0.2)',
+              color: seedLocked ? 'rgb(245, 158, 11)' : 'rgb(139, 92, 246)',
+              ...(seedLocked ? { '--tw-ring-color': 'rgba(234, 179, 8, 0.4)', '--tw-ring-offset-color': 'transparent' } as React.CSSProperties : {})
+            }}>
+            {/* 锁定=关闭的锁，解锁=打开的锁（Lucide 项目统一图标） */}
+            {seedLocked ? (
+              <Lock className="w-3.5 h-3.5" strokeWidth={2.5} />
+            ) : (
+              <LockOpen className="w-3.5 h-3.5" strokeWidth={2} />
+            )}
+            S:{seeds[safeIdx]}
+          </button>
+        )}
         
         {/* 编辑按钮组 */}
         <div className="flex items-center gap-2">
@@ -191,12 +294,27 @@ const ImageBubble: React.FC<{
                 {[1,2,3,4].map(n => <option key={n} value={n} style={{ backgroundColor: 'var(--bg-tertiary)' }}>x{n}</option>)}
               </select>
               
-              {/* 重新生成 - 图标按钮 */}
-              <button 
-                onClick={() => onRerun({ ...rerunPayload, imageConfig: rerunPayload.imageConfig ? { ...rerunPayload.imageConfig, imageCount: rerunCount } : undefined })}
-                title={t.buttons.rerender}
-                className="w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale"
-                style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.3)', color: 'rgb(99, 102, 241)' }}>
+              {/* 重新生成 - 图标按钮（锁定seed时复用固定值，否则随机） */}
+              <button
+                onClick={() => {
+                  const lockedSeed = (seedLocked && seeds.length > 0 && seeds[safeIdx] != null) ? seeds[safeIdx] : undefined;
+                  onRerun({ ...rerunPayload,
+                    imageConfig: rerunPayload.imageConfig ? { ...rerunPayload.imageConfig, imageCount: rerunCount } : undefined,
+                    // 锁定时传递固定seed，解锁时传undefined让后端随机
+                    ...(lockedSeed != null && { lockedSeed })
+                  });
+                }}
+                title={seedLocked
+                  ? `${t.buttons.rerender} (🔒 Seed: ${seeds.length > 0 && seeds[safeIdx] != null ? seeds[safeIdx] : '?'})`
+                  : t.buttons.rerender}
+                className={`w-11 h-11 flex items-center justify-center rounded-lg border transition-all btn-scale ${
+                  seedLocked ? 'animate-pulse-subtle' : ''
+                }`}
+                style={{
+                  backgroundColor: seedLocked ? 'rgba(234, 179, 8, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                  borderColor: seedLocked ? 'rgba(234, 179, 8, 0.5)' : 'rgba(99, 102, 241, 0.3)',
+                  color: seedLocked ? 'rgb(245, 158, 11)' : 'rgb(99, 102, 241)'
+                }}>
                 <RefreshCw className="w-4 h-4" strokeWidth={2} />
               </button>
             </div>
@@ -219,10 +337,11 @@ const ImageBubble: React.FC<{
               <div className="absolute bottom-full right-0 mb-1 w-44 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200" style={{ zIndex: 200 }}>
                 {/* 带水印下载 */}
                 <button
-                  onClick={() => { 
-                    const a = document.createElement('a'); 
-                    a.href = images[safeIdx]; 
-                    a.download = `image_${Date.now()}.png`; 
+                  onClick={() => {
+                    const src = watermarkedImages[safeIdx] || images[safeIdx];
+                    const a = document.createElement('a');
+                    a.href = src;
+                    a.download = `image_${Date.now()}.png`;
                     a.click();
                     setShowDownloadMenu(false);
                   }}
@@ -276,44 +395,52 @@ const ImageBubble: React.FC<{
         </div>
       )}
 
-      {/* 全屏模式 - 覆盖整个屏幕，图片保持完整 */}
-      {fullscreen && (
-        <div className="fixed inset-0 z-[9999] bg-black/98 backdrop-blur-xl flex items-center justify-center cursor-zoom-out" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => setFullscreen(false)}>
-          <img src={images[fsIdx]} className="max-w-full max-h-full object-contain shadow-2xl" onClick={e => e.stopPropagation()} />
-          
-          {/* 全屏水印 */}
-          <div className="absolute bottom-8 right-8 w-32 h-auto opacity-60 pointer-events-none z-10">
-            <img src="/public/LOGOkbitwater.png" className="w-full h-full object-contain" />
+      {/* 全屏模式 - Portal 到 body，完全脱离父容器约束（不受导航栏/输入栏/overflow 限制） */}
+      {fullscreen && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black flex items-center justify-center cursor-zoom-out"
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, width: '100vw', height: '100vh', backgroundColor: '#000' }}
+          onClick={() => setFullscreen(false)}>
+          {/* 图片容器：完全铺满视口 */}
+          <div className="relative flex items-center justify-center" style={{ width: '100vw', height: '100vh' }}>
+            <img src={watermarkedImages[fsIdx] || images[fsIdx]}
+              className="object-contain shadow-2xl select-none"
+              style={{ maxWidth: '100vw', maxHeight: '100vh', width: 'auto', height: 'auto', display: 'block' }}
+              onClick={e => e.stopPropagation()} />
           </div>
           
+          {/* 左右切换按钮 */}
           {images.length > 1 && (
             <>
               <button onClick={e => { e.stopPropagation(); setFsIdx(p => p > 0 ? p-1 : images.length-1); }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg">
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
               </button>
               <button onClick={e => { e.stopPropagation(); setFsIdx(p => p < images.length-1 ? p+1 : 0); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg">
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
               </button>
             </>
           )}
           
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl px-5 py-3">
-              <span className="text-[12px] text-white/50">{fsIdx+1} / {images.length}</span>
-              <div className="w-px h-6 bg-white/10" />
-              <button onClick={() => { const a = document.createElement('a'); a.href = images[fsIdx]; a.download = `image_${Date.now()}.png`; a.click(); }}
-                className="flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-white/[0.06] text-white/70 text-[12px] hover:bg-white/[0.12] hover:text-white transition-all btn-scale">
+          {/* 底部操作栏 */}
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-5 pt-4 bg-gradient-to-t from-black/80 to-transparent" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl px-6 py-3 shadow-2xl">
+              <span className="text-[13px] text-white/70 font-medium tabular-nums min-w-[60px] text-center">{fsIdx+1} / {images.length}</span>
+              <div className="w-px h-6 bg-white/15" />
+              <button onClick={() => { const a = document.createElement('a'); a.href = watermarkedImages[fsIdx] || images[fsIdx]; a.download = `Creative_STD_${Date.now()}.png`; a.click(); }}
+                className="flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-white/[0.08] text-white/80 text-[13px] hover:bg-white/[0.16] hover:text-white transition-all btn-scale font-medium">
                 <Download className="w-4 h-4" strokeWidth={2} />下载
               </button>
               <button onClick={() => setFullscreen(false)}
-                className="flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-white/[0.06] text-white/70 text-[12px] hover:bg-white/[0.12] hover:text-white transition-all btn-scale">
-                <X className="w-4 h-4" />关闭
+                className="flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-white/[0.08] text-white/80 text-[13px] hover:bg-white/[0.16] hover:text-white transition-all btn-scale font-medium">
+                <X className="w-4 h-4" />关闭 (Esc)
               </button>
             </div>
           </div>
-        </div>
+
+          <div className="absolute top-5 right-5 text-white/30 text-[11px] pointer-events-none select-none">按 Esc 退出</div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -412,7 +539,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 
         {/* text with code block support */}
         {(msg.type === 'text' || msg.type === 'error') && msg.text && (
-          <div>{renderTextWithCode(msg.text, msg.type === 'error', t.common.copy)}</div>
+          <div>{renderTextWithCode(msg.text, msg.type === 'error', t.common.copy, theme)}</div>
         )}
 
         {/* user uploaded images */}
@@ -426,7 +553,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 
         {/* generated images */}
         {msg.type === 'image' && msg.images && msg.images.length > 0 && (
-          <ImageBubble images={msg.images} watermarkedImages={msg.watermarkedImages} onInpaint={onInpaint} onRerun={onRerun} onUpscale={onUpscale} rerunPayload={msg.rerunPayload} t={t} rerunCount={rerunCount} setRerunCount={setRerunCount} isDeveloper={isDeveloper} />
+          <ImageBubble images={msg.images} watermarkedImages={msg.watermarkedImages} seeds={msg.seeds} onInpaint={onInpaint} onRerun={onRerun} onUpscale={onUpscale} rerunPayload={msg.rerunPayload} t={t} rerunCount={rerunCount} setRerunCount={setRerunCount} isDeveloper={isDeveloper} />
         )}
 
         {/* video */}
@@ -606,7 +733,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         updateLast({ type: 'thinking', text: t.buttons.generatingImage });
         const baseRefs = payload.images.map(f => f.data);
         const config = payload.imageConfig || { aspectRatio: '1:1', imageSize: '1K', modelTier: 'FAST', imageCount: 1 };
-        const imgs: string[] = await gemini.generateImage(
+        // 读取锁定seed（重跑时从payload.lockedSeed传入，首次生图从config.seed传入）
+        const forcedSeed = (payload as any).lockedSeed || config.seed || undefined;
+        const imgResult: any = await gemini.generateImage(
           finalText,
           {
             aspectRatio: config.aspectRatio,
@@ -614,18 +743,31 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             modelTier: config.modelTier,
             imageCount: config.imageCount,
             temperature: 1.0,
-            top_p: 0.95
+            top_p: 0.95,
+            seed: forcedSeed  // 传递固定seed（有值=锁定，undefined=随机）
           },
           false, baseRefs, [], [], [], undefined, undefined, undefined,
           instructions, modelConfig, signal, domain
         );
-        const imgList = Array.isArray(imgs) ? imgs : [];
+        // 防御性解构：兼容旧版(返回数组)和新版({images, seeds})两种格式
+        let imgList: string[];
+        let seedList: number[];
+        if (Array.isArray(imgResult)) {
+          imgList = imgResult;
+          seedList = [];
+        } else if (imgResult && typeof imgResult === 'object') {
+          imgList = Array.isArray(imgResult.images) ? imgResult.images : [];
+          seedList = Array.isArray(imgResult.seeds) ? imgResult.seeds : [];
+        } else {
+          imgList = [];
+          seedList = [];
+        }
         const wmList1: string[] = [];
         for (const url of imgList) {
           try { wmList1.push((await WatermarkUtils.addWatermark(url)).dataUrl); }
           catch { wmList1.push(url); }
         }
-        updateLast({ type: 'image', images: imgList, watermarkedImages: wmList1, text: undefined, rerunPayload: payload });
+        updateLast({ type: 'image', images: imgList, watermarkedImages: wmList1, seeds: seedList, text: undefined, rerunPayload: payload });
 
         // 获取 PH8 真实费用并扣除积分
         setTimeout(() => deductPh8Cost('Image', onConsumePoints), 500);
@@ -710,18 +852,19 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         return;
       }
       const ratio = `${imgInfo.w}:${imgInfo.h}`;
-      const imgs: string[] = await gemini.generateImage(
+      const imgResult: any = await gemini.generateImage(
         '[HIFI-EVOLUTION]: Enhance texture and clarity while maintaining 100% structural fidelity.',
         { aspectRatio: ratio, imageSize: targetSize as any, modelTier: 'FAST', imageCount: 1, temperature: 1.0, top_p: 0.95 },
         false, [imageUrl], [], [], [], undefined, undefined, undefined,
         instructions, modelConfig, undefined, domain, undefined, true
       );
-      const imgList = Array.isArray(imgs) ? imgs : [];
+      const imgList = Array.isArray(imgResult) ? imgResult : (imgResult?.images || []);
+      const seedListUpscale = Array.isArray(imgResult) ? [] : (imgResult?.seeds || []);
       const wmList: string[] = [];
       for (const url of imgList) {
         try { wmList.push((await WatermarkUtils.addWatermark(url)).dataUrl); } catch { wmList.push(url); }
       }
-      updateLast({ type: 'image', images: imgList, watermarkedImages: wmList, text: undefined, rerunPayload: {
+      updateLast({ type: 'image', images: imgList, watermarkedImages: wmList, seeds: seedListUpscale, text: undefined, rerunPayload: {
         text: '[HIFI-EVOLUTION]: Enhance texture and clarity while maintaining 100% structural fidelity.',
         images: [{ name: 'upscaled.png', type: 'image/png', data: imgList[0], fileCategory: 'image' }],
         mode: 'architect',
@@ -742,19 +885,20 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     addMsg({ role: 'assistant', type: 'thinking', text: t.buttons.inpainting });
 
     try {
-      const imgs: string[] = await gemini.generateImage(
+      const imgResult2: any = await gemini.generateImage(
         prompt,
         { aspectRatio: '1:1', imageSize: '1K', modelTier: 'FAST', imageCount: 1, temperature: 1.0, top_p: 0.95 },
         false, [inpaintImage], [], [], [], maskDataUrl, prompt, undefined,
         instructions, modelConfig, abortRef.current?.signal, domain
       );
-      const imgList2 = Array.isArray(imgs) ? imgs : [];
+      const imgList2 = Array.isArray(imgResult2) ? imgResult2 : (imgResult2?.images || []);
+      const seedListInpaint = Array.isArray(imgResult2) ? [] : (imgResult2?.seeds || []);
       const wmList2: string[] = [];
       for (const url of imgList2) {
         try { wmList2.push((await WatermarkUtils.addWatermark(url)).dataUrl); }
         catch { wmList2.push(url); }
       }
-      updateLast({ type: 'image', images: imgList2, watermarkedImages: wmList2, text: undefined });
+      updateLast({ type: 'image', images: imgList2, watermarkedImages: wmList2, seeds: seedListInpaint, text: undefined });
 
       // 获取 PH8 真实费用并扣除积分
       setTimeout(() => deductPh8Cost('Inpaint', onConsumePoints), 500);

@@ -5,10 +5,14 @@ import gatewayConfig from "../config/gateway_config.json";
 /**
  * 获取代理 URL
  * 所有请求都通过后端代理，前端不直接接触 API Key
+ * [优化修复] 改为导出函数，供其他模块复用（消除与 apiService 的重复）
  */
-const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
+export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const base = isDev ? '' : 'https://api.kbitai.com.cn';
+  // 【修复】生产环境使用空字符串前缀，生成的URL如：
+  //   /api/ph8/openai/v1/images/generations → 匹配 www.kbitai.com.cn Nginx的 location /api/ph8/ 规则（第113行）
+  //   而非 /architect/api/ph8/...（会被SPA规则拦截返回405）或 https://api.kbitai.com.cn/...（跨域CORS错误）
+  const base = '';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {
@@ -157,6 +161,7 @@ interface BaseImageCache {
 }
 
 const baseImageCaches: Map<string, BaseImageCache> = new Map();
+const BASE_IMAGE_CACHE_MAX_SIZE = 20; // [性能修复] 缓存上限，防止内存无限增长
 
 // 生成底图缓存键
 const generateBaseImageCacheKey = (base64: string, model: string): string => {
@@ -179,9 +184,25 @@ const getValidBaseImageCache = (base64: string, model: string): BaseImageCache |
   return cache;
 };
 
-// 设置底图缓存
+// 设置底图缓存（带 LRU 淘汰策略，防止内存泄漏）
 const setBaseImageCache = (base64: string, model: string, cacheId: string, ttl: number): void => {
   const key = generateBaseImageCacheKey(base64, model);
+  
+  // [性能修复] 达到上限时淘汰最旧的条目
+  if (baseImageCaches.size >= BASE_IMAGE_CACHE_MAX_SIZE) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    baseImageCaches.forEach((val, k) => {
+      if (val.createdAt < oldestTime) {
+        oldestTime = val.createdAt;
+        oldestKey = k;
+      }
+    });
+    if (oldestKey) {
+      baseImageCaches.delete(oldestKey);
+    }
+  }
+  
   baseImageCaches.set(key, {
     cacheId,
     base64,
@@ -717,9 +738,15 @@ export const GeminiService = {
   },
 
   async generateImage(prompt: string, config: ImageGenerationConfig, isComposite: boolean, baseRefs: string[], slotARefs: string[], slotBRefs: string[], styleRefs: string[], maskB?: string, inpaintPrompt?: string, maskA?: string, instructions?: any, modelConfig?: any, signal?: AbortSignal, domain?: CreativeDomain, baseRefsOriginalSizes?: {width: number, height: number}[], isUpscale?: boolean) {
-    let model = getModelName(modelConfig, "gemini-2.5-flash-image");
+    let model = getModelName(modelConfig, "gemini-3.1-flash-image-preview");
     const tier = config.modelTier || "FAST";
     const size = config.imageSize;
+    
+    // 根据尺寸生成可读标签（用于提示词）
+    let targetSizeLabel = '';
+    if (size === '4K') targetSizeLabel = '4096px ultra-high resolution';
+    else if (size === '2K') targetSizeLabel = '2048px high resolution';
+    else targetSizeLabel = '1024px standard resolution';
     
     // 核心分流逻辑
     if (modelConfig?.isOfficial || !modelConfig) {
@@ -730,27 +757,23 @@ export const GeminiService = {
           model = "gemini-3.1-flash-image-preview";
           console.log("[Inpainting] 使用 Flash 模型进行语义遮盖局部修改");
         }
-        // 放大任务：根据用户选择的 tier 决定模型
+        // 放大任务：商业模式统一使用 3.1 Flash
         else if (isUpscale) {
-          if (tier === "QUALITY") {
-            model = "gemini-3-pro-image-preview";
-            console.log("[Upscale] QUALITY 模式放大使用 Pro 模型");
-          } else {
-            model = "gemini-3.1-flash-image-preview";
-            console.log("[Upscale] FAST 模式放大使用 Flash 模型");
-          }
+          model = "gemini-3.1-flash-image-preview";
+          console.log("[Upscale] 使用 3.1 Flash 模型进行放大");
         }
         // 4K + QUALITY 使用 gemini-3-pro-image-preview
         else if (size === "4K" && tier === "QUALITY") {
           model = "gemini-3-pro-image-preview";
+          console.log("[Image] 4K + QUALITY 模式使用 Pro 模型");
         }
-        // 其他所有情况（包括 1K + QUALITY）使用 gemini-3.1-flash-image-preview
+        // 其他所有情况使用 gemini-3.1-flash-image-preview
         else {
           model = "gemini-3.1-flash-image-preview";
         }
       } else {
-        // 开发模式 (OFF) - 默认使用 2.5 Flash
-        model = "gemini-2.5-flash-image";
+        // 开发模式 (OFF) - 默认使用 3.1 Flash
+        model = "gemini-3.1-flash-image-preview";
         // 只有在强制要求 4K 时才考虑 Pro，否则保持 2.5 Flash 节省成本
         if (size === "4K") {
           model = "gemini-3-pro-image-preview";
@@ -790,9 +813,10 @@ export const GeminiService = {
     }
     
     // 核心逻辑对位：图像放大 (Upscale)
-    if (isUpscale && baseRefs.length > 0 && baseRefs[0].includes(",")) {
+    // 注意：baseRefs[0].includes(",") 用于检测是否为有效的 base64 data URL
+    if (isUpscale && baseRefs.length > 0 && (baseRefs[0].includes(",") || baseRefs[0].startsWith("data:"))) {
       hasBaseImage = true;
-      
+
       // 获取原始图像尺寸
       try {
         const img = new Image();
@@ -808,20 +832,33 @@ export const GeminiService = {
       } catch (e) {
         console.warn("[放大模式] 获取尺寸失败", e);
       }
-      
-      // 放大专用提示词 - 强调保持原始内容
-      const upscalePrompt = `Upscale this image to higher resolution while preserving all original content, composition, and style exactly. Enhance details and clarity. Do not add, remove, or modify any elements.`;
-      
+
+      // 放大专用提示词 - 强调必须基于底图进行超分辨率重建
+      const upscalePrompt = `[IMAGE UPSCALE TASK - CRITICAL INSTRUCTION]
+You are performing a super-resolution upscaling operation on the reference image provided.
+TARGET RESOLUTION: ${size} (${targetSizeLabel || 'high resolution'})
+ORIGINAL IMAGE SIZE: ${originalImageWidth || 'unknown'}x${originalImageHeight || 'unknown'}
+
+MANDATORY REQUIREMENTS:
+1. This is an UPSACLE operation - you MUST use the provided reference image as the SOURCE
+2. Reconstruct/enhance the EXACT same image at higher resolution
+3. Preserve ALL original content: composition, objects, colors, lighting, style
+4. Do NOT generate a new image - enhance the existing one
+5. Improve sharpness, detail, and clarity while maintaining 100% fidelity to source
+6. Output must be recognizable as an enhanced version of the input
+
+The attached image IS the source material for this upscale operation.`;
+
       // 使用高质量压缩（放大需要保留更多细节）
       const upscaledImageData = await compress(baseRefs[0], true);
-      
+
       parts.push({ text: upscalePrompt });
       parts.push({ inlineData: { mimeType: "image/jpeg", data: upscaledImageData } });
-      
-      console.log("[放大模式] 已准备放大请求，目标尺寸:", size);
+
+      console.log("[放大模式] 已准备放大请求，目标尺寸:", size, ", 底图已附加到 parts");
     }
     // 核心逻辑对位：局部重绘 (Normal Mode Inpainting) - 语义遮盖方式
-    else if (maskB && baseRefs.length > 0 && baseRefs[0].includes(",")) {
+    else if (maskB && baseRefs.length > 0 && (baseRefs[0].includes(",") || baseRefs[0].startsWith("data:"))) {
       hasBaseImage = true;
       
       // 在压缩之前获取原始图像的尺寸
@@ -1063,19 +1100,28 @@ export const GeminiService = {
     let response;
     
     // 计算图像尺寸（在 try 块外部定义，以便 fallback 可以访问）
-    let imageSize = "1024x1024"; // 默认尺寸
+    // 根据用户选择的 aspectRatio 和 imageSize 动态计算输出尺寸
+    let maxSize = 1024;
+    if (size === "2K") maxSize = 2048;
+    else if (size === "4K") maxSize = 4096;
+    
+    // 根据 aspectRatio 解析比例并计算实际像素尺寸
+    const ratioMap: Record<string, [number, number]> = {
+      '1:1': [1, 1],
+      '3:4': [3, 4], '4:3': [4, 3],
+      '9:16': [9, 16], '16:9': [16, 9]
+    };
+    const [rw, rh] = ratioMap[safeRatio] || [1, 1];
+    
+    let imageSize: string;
     if (hasBaseImage) {
       const width = originalImageWidth;
       const height = originalImageHeight;
       
-      let maxSize = 1024;
-      if (size === "2K") maxSize = 2048;
-      else if (size === "4K") maxSize = 4096;
-      
       let finalWidth = width;
       let finalHeight = height;
       
-      // 放大模式：强制放大到目标尺寸
+      // 放大模式：强制放大到目标尺寸，保持底图原始比例
       if (isUpscale) {
         const ratio = height / width;
         if (width >= height) {
@@ -1101,9 +1147,25 @@ export const GeminiService = {
       
       imageSize = `${finalWidth}x${finalHeight}`;
       console.log(`底图尺寸: ${width}x${height}, 生成尺寸: ${imageSize}, 用户选择: ${size}, 最大边: ${maxSize}`);
+    } else {
+      // 纯文生图：根据用户选择的aspectRatio计算尺寸
+      if (rw >= rh) {
+        // 横图或正方图：宽度为maxSize
+        imageSize = `${maxSize}x${Math.round(maxSize * rh / rw)}`;
+      } else {
+        // 竖图：高度为maxSize
+        imageSize = `${Math.round(maxSize * rw / rh)}x${maxSize}`;
+      }
+      console.log(`[纯文生图] 比例:${safeRatio}, 生成尺寸: ${imageSize}`);
     }
 
+    // 【关键修复】seedList 必须在 try 块之前声明，确保所有分支（PH8/Google/fallback/catch后return）都能访问到
+    let seedList: number[] = [];
+
     try {
+      // seedList 已在外层声明，此处仅清空以确保干净状态
+      seedList = [];
+      
       // 判断是否使用第三方网关格式
       // 条件：有第三方网关URL 且 (第三方网关模式 或 官网模式但provider不是Google Cloud)
       const shouldUseThirdPartyFormat = node && node.url && (
@@ -1120,7 +1182,8 @@ export const GeminiService = {
         const imageParts = parts.filter(p => p.inlineData);
         
         // 获取代理后的 URL（开发环境解决 CORS）
-        const proxiedUrl = getProxiedUrl(node.url);
+        // 使用 useOpenaiPath: true 确保正确的路径映射
+        const proxiedUrl = getProxiedUrl(node.url, true);
         
         // 详细日志输出
         console.log(`%c[图像生成请求 - Gemini原生格式]`, 'color: #4f46e5; font-weight: bold;');
@@ -1141,6 +1204,7 @@ export const GeminiService = {
         // ph8 使用 Gemini 原生 API 格式
         const imageCount = config.imageCount || 1;
         const imageDataList: string[] = [];
+        // 注意：seedList 已在外层 try 块声明为 let，此处直接使用
         
         // 检测是否是 inpainting 模式（有底图且有遮罩）
         const isInpaintingMode = imageParts.length >= 2 && maskB && !isUpscale && !isComposite;
@@ -1151,21 +1215,26 @@ export const GeminiService = {
           
           // ph8 使用 /v1/images/generations 端点
           // 请求体格式：OpenAI 风格，参数平铺在顶层（无 extra_body 包装）
-          // 所有底图统一使用 reference_images 字段传递
+          // 所有底图统一使用 reference_images 字段传递（顶层，与旧版兼容）
           const dynamicTemperature = config.temperature ?? 1.0;
           const dynamicTopP = config.top_p ?? 0.95;
           
+          // PH8 OpenAI 兼容格式：所有参数平铺在顶层（无 extra_body 包装）
+          // 注意：只用 OpenAI 标准参数，不要混入 Gemini 原生参数（如 output_mime_type）
+          // 【Seed逻辑】如果调用方传了 config.seed（锁定模式），使用固定值；否则随机
+          const requestSeed = (typeof config.seed === 'number' && !isNaN(config.seed))
+            ? Math.floor(config.seed) % 2147483647
+            : Math.floor(Math.random() * 2147483647);
           const requestBody: any = {
             model: modelId,
             prompt: enhancedPrompt,
-            size: imageSize,
+            size: imageSize === "1024x1024" ? "1024x1024" : imageSize,
+            response_format: "b64_json",
             n: 1,
-            seed: Math.floor(Math.random() * 2147483647),
-            temperature: dynamicTemperature,
-            top_p: dynamicTopP,
-            output_mime_type: "image/png"
+            seed: requestSeed
           };
           
+          // reference_images 放在顶层，PH8 才能正确识别
           if (imageParts.length > 0) {
             requestBody.reference_images = imageParts.map((img: any) => ({
               data: img.inlineData.data,
@@ -1222,9 +1291,9 @@ export const GeminiService = {
           }
           
           const data = await fetchResponse.json();
-          console.log("[网关响应]", JSON.stringify(data).substring(0, 500));
+          console.log("[网关响应]", JSON.stringify(data).substring(0, 1000));
           
-          // 解析响应：支持 Gemini 原生格式和 OpenAI 格式
+          // 解析响应：支持多种格式
           let imgData: string | null = null;
           
           // Gemini 原生 API 格式: { candidates: [{ content: { parts: [{ inlineData: { data } }] } }] }
@@ -1245,9 +1314,28 @@ export const GeminiService = {
               console.log("[OpenAI 格式] 解析成功");
             }
           }
+          // PH8 特殊格式: { image: "base64..." } 或 { result: { image: "..." } }
+          else if (data.image) {
+            imgData = data.image;
+            console.log("[PH8 特殊格式] 解析成功");
+          }
+          // 检查异步任务格式
+          else if (data.job_id && !data.data) {
+            console.warn("[异步任务格式] 需要轮询获取结果:", data.job_id);
+            throw new Error("Async job not supported yet");
+          }
+          // 检查是否返回了其他格式
+          else {
+            console.error("[网关响应格式未知]", JSON.stringify(data));
+          }
           
           if (imgData) {
+            // 验证 base64 数据
+            if (imgData.startsWith('data:image')) {
+              imgData = imgData.split(',')[1];
+            }
             imageDataList.push(imgData);
+            seedList.push(requestSeed);  // 记录这张图对应的seed
           } else {
             console.error("[网关响应无法解析图像数据]", data);
           }
@@ -1330,11 +1418,9 @@ export const GeminiService = {
                 model: newModelId,
                 prompt: fallbackPrompt,
                 size: imageSize,
+                response_format: "b64_json",
                 n: 1,
-                seed: Math.floor(Math.random() * 2147483647),
-                temperature: fallbackTemperature,
-                top_p: fallbackTopP,
-                output_mime_type: "image/png"
+                seed: Math.floor(Math.random() * 2147483647)
               };
               
               if (hasFallbackBaseImage) {
@@ -1386,7 +1472,7 @@ export const GeminiService = {
         }
       } else if (this.isPermissionError(err) && modelId?.includes("pro")) {
         console.warn("Pro image model failed, falling back to Flash engine...");
-        const fallbackModel = useThirdPartyGateway ? "gemini-3.1-flash-image-preview" : "gemini-2.5-flash-image";
+        const fallbackModel = "gemini-3-pro-image-preview";
         const { ai: fallbackAi, modelId: finalFallbackId, node: fallbackNode, apiKey: fallbackKey } = getAI(modelConfig, fallbackModel);
         
         if (fallbackNode && fallbackNode.provider !== "Google Cloud") {
@@ -1404,11 +1490,9 @@ export const GeminiService = {
             model: finalFallbackId,
             prompt: finalFallbackPrompt,
             size: imageSize,
+            response_format: "b64_json",
             n: 1,
-            seed: Math.floor(Math.random() * 2147483647),
-            temperature: finalFallbackTemperature,
-            top_p: finalFallbackTopP,
-            output_mime_type: "image/png"
+            seed: Math.floor(Math.random() * 2147483647)
           };
           
           if (hasFinalFallbackBaseImage) {
@@ -1486,7 +1570,8 @@ export const GeminiService = {
     if (images.length === 0) {
       throw new Error("No image data found in response");
     }
-    return images;
+    // 返回图片列表 + 对应的seed列表
+    return { images, seeds: seedList };
   },
 
   async analyzeImage(image: string, prompt: string, instructions: any, modelConfig: any, signal?: AbortSignal) {
@@ -1555,26 +1640,32 @@ export const GeminiService = {
   },
 
   async generateReversePrompt(image: string, instructions: any, modelConfig: any, signal?: AbortSignal): Promise<EnhancedPrompt> {
-    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash-lite-preview" : "gemini-3-pro-preview";
+    const defaultModel = useThirdPartyGateway ? "gemini-3-flash-preview" : "gemini-3-pro-preview";
     const requestedModel = getModelName(modelConfig, defaultModel);
     const { ai, modelId, node, apiKey } = getAI(modelConfig, requestedModel);
     
-    // Suggestion 5: Visual Downsampling to 512px for reverse prompting
+    // 【反推提示词】网关路径用 512px 图片（后端已跳过 sanitize，base64 不再被破坏）
+    // 原生 API 路径同样 512px（inlineData 方式）
+    const compressedImageForGateway = await this.compressImage(image, 512);
+    const base64ForGateway = compressedImageForGateway.split(",")[1];
     const compressedImage = await this.compressImage(image, 512);
     const base64Data = compressedImage.split(",")[1];
     
-    if (node && node.provider !== "Google Cloud") {
+    // 【反推提示词】优先使用 Google 原生 API（inlineData 方式传递图片）
+    // 第三方网关 /chat/completions 端点可能因 base64 过长触发"非法字符"拦截
+    const useNativePath = !node || node.provider === "Google Cloud";
+
+    if (!useNativePath) {
       try {
         const proxiedUrl = getProxiedUrl(node.url, true);
-        // 直接使用 base64 数据传递图片
-        const imageUrl = `data:image/jpeg;base64,${base64Data}`;
+        const imageUrl = `data:image/jpeg;base64,${base64ForGateway}`;
+        console.log(`[反推] 网关请求 base64 长度: ${base64ForGateway.length} (${(base64ForGateway.length/1024).toFixed(1)}KB)`);
         const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            'Authorization': `Bearer ${apiKey}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
           },
           body: JSON.stringify({
             model: modelId,
@@ -1591,14 +1682,15 @@ export const GeminiService = {
         });
 
         if (!fetchResponse.ok) {
-          const errorData = await fetchResponse.json().catch(() => ({}));
-          throw new Error(`Gateway Error: ${errorData.error?.message || fetchResponse.statusText}`);
+          const errorText = await fetchResponse.text().catch(() => '');
+          console.error("[反推] 网关错误:", fetchResponse.status, errorText.substring(0, 200));
+          throw new Error(`Gateway ${fetchResponse.status}: ${errorText.substring(0, 100)}`);
         }
         const data = await fetchResponse.json();
         return this.parseJsonSafely(data.choices[0].message.content || '{}');
       } catch (err: any) {
-        console.error("Gateway Reverse Prompt Error:", err);
-        throw new Error(`[商业模式故障] 反向提示词生成异常: ${err.message}`);
+        console.warn("[反推] 网关路径失败，降级到 Google 原生 API:", err.message);
+        // 不抛出异常，继续走下方的 Google 原生路径
       }
     }
 

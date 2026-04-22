@@ -2,7 +2,14 @@ const db = require('../db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'kbitai-admin-secret';
+// [安全修复] 强制从环境变量加载，不允许弱默认值
+// 如果未设置 JWT_SECRET，服务启动时应直接退出（见 server.js 启动校验）
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error('[FATAL] 管理员认证: JWT_SECRET 环境变量未设置！管理员功能将不可用。');
+  console.error('[FATAL] 请在 backend/.env 中设置: JWT_SECRET=你的强密钥(至少32位随机字符)');
+}
 
 // 管理员登录
 exports.login = async (req, res) => {
@@ -33,6 +40,11 @@ exports.login = async (req, res) => {
       'UPDATE admins SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?',
       [req.ip || req.connection.remoteAddress, admin.id]
     );
+
+    // [安全修复] JWT_SECRET 未配置时拒绝登录
+    if (!JWT_SECRET) {
+      return res.status(500).json({ error: '服务端认证配置错误，请联系管理员' });
+    }
 
     const token = jwt.sign(
       { id: admin.id, username: admin.username, role: admin.role },

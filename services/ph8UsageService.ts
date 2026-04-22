@@ -3,7 +3,7 @@
  * 注意：API Key 由后端管理，前端不再直接接触
  */
 
-import { getProxiedUrl } from './apiService';
+import { getProxiedUrl } from './geminiService'; // [优化修复] 统一使用 geminiService 导出
 
 export interface Ph8UsageData {
   total_tokens: number;

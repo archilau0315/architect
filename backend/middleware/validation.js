@@ -61,9 +61,12 @@ const validatePoints = (points) => {
 
 // 请求验证中间件
 const validateRequest = (req, res, next) => {
-  // 清理请求体
-  if (req.body) {
-    req.body = sanitizeObject(req.body);
+  // 代理转发路径跳过清理（base64 数据会被 validator.escape 破坏）
+  if (!req.path.startsWith('/api/ph8/') && !req.path.startsWith('/api/gateway/')) {
+    // 清理请求体
+    if (req.body) {
+      req.body = sanitizeObject(req.body);
+    }
   }
   
   // 清理查询参数
@@ -169,7 +172,13 @@ const detectSqlInjection = (input) => {
 };
 
 // SQL注入防护中间件
+// 注意：/api/ph8/ 路径跳过此检测，因为 PH8 是代理转发（不操作数据库），base64 数据会误触发正则
 const sqlInjectionProtection = (req, res, next) => {
+  // 代理转发路径直接放行（不涉及数据库操作）
+  if (req.path.startsWith('/api/ph8/') || req.path.startsWith('/api/gateway/')) {
+    return next();
+  }
+  
   const checkSqlInjection = (obj, path = '') => {
     for (const [key, value] of Object.entries(obj)) {
       const currentPath = path ? `${path}.${key}` : key;
