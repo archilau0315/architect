@@ -368,6 +368,7 @@
         
         let currentPage = 1;
         let currentUserId = null;
+        let userUsageChart = null;  // 图表实例管理
         
         function loadUsers() {
             const search = document.getElementById('searchInput').value;
@@ -584,12 +585,36 @@
         
         function updateUserUsageChart(dailyStats) {
             const ctx = document.getElementById('userUsageChart').getContext('2d');
-            
+
+            // 销毁旧图表，防止重叠
+            if (userUsageChart) { userUsageChart.destroy(); }
+
+            // 空数据处理
+            if (!dailyStats || dailyStats.length === 0) {
+                const canvas = document.getElementById('userUsageChart');
+                const container = canvas.parentElement;
+                canvas.style.display = 'none';
+                let hint = container.querySelector('.empty-hint');
+                if (!hint) {
+                    hint = document.createElement('div');
+                    hint.className = 'empty-hint flex items-center justify-center h-full text-gray-400 text-sm';
+                    container.appendChild(hint);
+                }
+                hint.textContent = '暂无使用记录';
+                return;
+            }
+
+            // 恢复 canvas 显示
+            const canvas = document.getElementById('userUsageChart');
+            canvas.style.display = '';
+            const hintEl = canvas.parentElement.querySelector('.empty-hint');
+            if (hintEl) hintEl.remove();
+
             const labels = dailyStats.map(item => item.date);
             const requests = dailyStats.map(item => item.total_requests);
             const points = dailyStats.map(item => item.total_points_spent);
-            
-            new Chart(ctx, {
+
+            userUsageChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -692,6 +717,8 @@
         
         function closeModal() {
             document.getElementById('userModal').classList.add('hidden');
+            // 销毁图表实例
+            if (userUsageChart) { userUsageChart.destroy(); userUsageChart = null; }
             currentUserId = null;
         }
         

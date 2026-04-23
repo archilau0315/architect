@@ -29,7 +29,7 @@ class MonitoringService {
     // 保存到数据库
     try {
       await db.query(
-        'INSERT INTO monitoring_logs (endpoint, duration, success, timestamp) VALUES (?, ?, ?, ?)',
+        'INSERT INTO monitoring_logs (endpoint, duration_ms, success, timestamp) VALUES (?, ?, ?, ?)',
         [endpoint, duration, success ? 1 : 0, new Date()]
       );
     } catch (error) {

@@ -44,6 +44,72 @@ exports.getUserInfo = async (req, res) => {
   }
 };
 
+// 获取用户配额信息（供前端导航栏实时显示）
+exports.getQuota = async (req, res) => {
+  const userId = req.headers['x-user-id'] || req.query.userId;
+  
+  if (!userId) {
+    return res.json({ success: false, error: '未登录' });
+  }
+  
+  try {
+    const [users] = await db.query(
+      'SELECT daily_points, purchased_points, total_consumed_points, last_reset_date, user_tier FROM kbit_users WHERE id = ?',
+      [userId]
+    );
+    
+    if (users.length === 0) {
+      return res.json({ success: false, error: '用户不存在' });
+    }
+    
+    const user = users[0];
+    
+    // 检查是否需要重置每日积分
+    const today = new Date().toISOString().split('T')[0];
+    if (user.last_reset_date !== today) {
+      // 根据用户等级重置每日积分
+      const tierDailyQuota = {
+        'free': 100,
+        'beta': 200,
+        'basic': 500,
+        'pro': 1000,
+        'plus': 2000
+      };
+      const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];
+      
+      await db.query(
+        'UPDATE kbit_users SET daily_points = ?, last_reset_date = ?, daily_used = 0 WHERE id = ?',
+        [dailyQuota, today, userId]
+      );
+      
+      return res.json({
+        success: true,
+        data: {
+          points: {
+            daily: dailyQuota,
+            purchased: user.purchased_points,
+            total_consumed: user.total_consumed_points || 0
+          }
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        points: {
+          daily: user.daily_points,
+          purchased: user.purchased_points,
+          total_consumed: user.total_consumed_points || 0
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[getQuota Error]', err);
+    res.status(500).json({ success: false, error: '服务器错误' });
+  }
+};
+
 // 消耗积分
 exports.consumePoints = async (req, res) => {
   const { amount, description } = req.body;

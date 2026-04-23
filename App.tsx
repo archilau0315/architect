@@ -150,11 +150,16 @@ const App: React.FC = () => {
         const savedDomain = localStorage.getItem(DOMAIN_KEY) as CreativeDomain;
         if (savedDomain) setCurrentDomain(savedDomain);
 
-        // 获取用户等级（优先从后端获取）
+        // 获取用户等级（优先从后端获取，携带session认证）
         let savedTier: UserTier = localStorage.getItem(USER_TIER_KEY) as UserTier || 'free';
+        const inviteSession = localStorage.getItem('architect-invite-session');
         try {
           const userInfoUrl = getProxiedUrl('https://api.kbitai.com.cn/api/ph8/user-info');
-          const response = await fetch(userInfoUrl);
+          const response = await fetch(userInfoUrl, {
+            headers: {
+              ...(inviteSession ? { 'X-Session-Token': Buffer.from(inviteSession).toString('base64') } : {})
+            }
+          });
           const data = await response.json();
           if (data.success && data.data?.tier) {
             savedTier = data.data.tier as UserTier;
@@ -692,6 +697,7 @@ const App: React.FC = () => {
         onTogglePresetPanel={() => setShowPresetPanel(p => !p)}
         language={preferences.language}
         theme={preferences.theme}
+        userTier={userTier}
       />
 
       <SettingsPanel 

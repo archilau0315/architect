@@ -129,11 +129,12 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">配置分类</label>
                         <select id="configCategory" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
                             <option value="">所有分类</option>
-                            <option value="general">通用配置</option>
-                            <option value="security">安全配置</option>
+                            <option value="general">通用设置</option>
+                            <option value="security">安全管理</option>
                             <option value="rate_limit">速率限制</option>
-                            <option value="budget">预算管理</option>
-                            <option value="cache">缓存配置</option>
+                            <option value="quota">额度配额</option>
+                            <option value="points">积分设置</option>
+                            <option value="api_keys">API密钥</option>
                         </select>
                     </div>
                     <div id="configList" class="space-y-4">
@@ -148,6 +149,8 @@
     </div>
     
     <script>
+        let isAdminDev = false; // 全局：是否为 dev/super 角色
+
         document.addEventListener('DOMContentLoaded', function() {
             // 检查登录状态
             const adminToken = localStorage.getItem('admin_token');
@@ -155,24 +158,26 @@
                 window.location.href = 'index.html';
                 return;
             }
-            
-            // 显示管理员信息
+
+            // 显示管理员信息 & 判断角色权限
             const adminUser = localStorage.getItem('admin_user');
             if (adminUser) {
                 const admin = JSON.parse(adminUser);
                 document.getElementById('adminName').textContent = admin.username || '管理员';
+                // dev 或 super 角色才能修改敏感配置
+                isAdminDev = (admin.role === 'dev' || admin.role === 'super' || admin.role === 'admin');
             }
-            
+
             // 退出登录
             document.getElementById('logoutButton').addEventListener('click', function() {
                 localStorage.removeItem('admin_token');
                 localStorage.removeItem('admin_user');
                 window.location.href = 'index.html';
             });
-            
+
             // 加载配置
             loadConfigs();
-            
+
             // 分类切换事件
             document.getElementById('configCategory').addEventListener('change', loadConfigs);
         });
@@ -217,12 +222,26 @@
                                         <p class="text-sm font-medium text-gray-900">${item.config_key}</p>
                                         <p class="text-xs text-gray-500">${item.config_description || '无描述'}</p>
                                     </div>
-                                    <div class="w-48">
+                                    <div class="w-56">
                                         ${item.config_type === 'boolean' ? `
                                             <select class="w-full px-3 py-1 border border-gray-300 rounded-lg" onchange="updateConfig('${item.config_key}', this.value)">
                                                 <option value="1" ${item.config_value === '1' ? 'selected' : ''}>启用</option>
                                                 <option value="0" ${item.config_value === '0' ? 'selected' : ''}>禁用</option>
                                             </select>
+                                        ` : isSensitiveKey(item.config_key) ? `
+                                            <div class="flex flex-col space-y-1 w-full">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="text-xs truncate max-w-[140px] ${item.config_value ? 'text-green-600 font-mono' : 'text-red-500'}">${item.config_value ? '●●●●●●●● 已配置(' + item.config_value.substring(0,4) + '...)' : '⚠ 未设置'}</span>
+                                                    ${isAdminDev ? `<button type="button" class="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 whitespace-nowrap" onclick="showKeyValue('${item.config_key}', '${(item.config_value||'').replace(/'/g,"\\'")}')">查看</button>` : ''}
+                                                </div>
+                                                ${isAdminDev ? `
+                                                    <div class="flex items-center space-x-1">
+                                                        <input id="edit_${item.config_key}" type="text" class="w-full px-2 py-0.5 text-xs border border-gray-300 rounded" placeholder="输入新值后点保存" onkeydown="if(event.key==='Enter')saveKey('${item.config_key}')">
+                                                        <button type="button" class="px-2 py-0.5 text-xs bg-green-50 text-green-600 rounded hover:bg-green-100 whitespace-nowrap" onclick="saveKey('${item.config_key}')">保存</button>
+                                                        <button type="button" class="px-2 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap" onclick="deleteKey('${item.config_key}')">删除</button>
+                                                    </div>
+                                                ` : '<span class="text-xs text-gray-400">仅Dev可操作</span>'}
+                                            </div>
                                         ` : `
                                             <input type="text" class="w-full px-3 py-1 border border-gray-300 rounded-lg" value="${item.config_value}" onchange="updateConfig('${item.config_key}', this.value)">
                                         `}
@@ -231,6 +250,13 @@
                                 </div>
                             `).join('')}
                         </div>
+                        
+                        <!-- Dev专属：添加新配置项按钮 -->
+                        ${isAdminDev && category === 'api_keys' ? `
+                            <button type="button" class="mt-4 w-full py-2 text-sm border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-primary hover:text-primary transition-colors" onclick="addNewKey()">
+                                + 添加新API密钥
+                            </button>
+                        ` : ''}
                     `;
                     configList.appendChild(categoryDiv);
                 });
@@ -243,18 +269,102 @@
             }
         }
         
+        function confirmUpdateKey(key) {
+            const newValue = prompt('⚠️ 正在修改敏感配置：' + key + '\n\n请输入新值（留空则取消修改）：');
+            if (newValue === null || newValue.trim() === '') return;
+            
+            fetch(`/api/admin/configs/${key}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                },
+                body: JSON.stringify({ value: newValue.trim() })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.success ? '✅ 配置已更新' : '更新失败: ' + (data.error || data.message));
+                if (data.success) loadConfigs();
+            });
+        }
+
+        // Dev CRUD：查看密钥完整值
+        function showKeyValue(key, value) {
+            alert('🔑 ' + key + '\n\n值：' + value);
+        }
+
+        // Dev CRUD：保存密钥
+        function saveKey(key) {
+            const input = document.getElementById('edit_' + key);
+            if (!input || !input.value.trim()) {
+                alert('请输入新值'); return;
+            }
+            fetch(`/api/admin/configs/${key}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+                body: JSON.stringify({ value: input.value.trim() })
+            }).then(r => r.json()).then(data => {
+                alert(data.success ? '✅ 已更新' : '❌ 失败: ' + (data.error || ''));
+                if (data.success) loadConfigs();
+            });
+        }
+
+        // Dev CRUD：删除密钥
+        function deleteKey(key) {
+            if (!confirm('⚠️ 确定要删除配置：' + key + '？\n此操作不可恢复！')) return;
+            fetch(`/api/admin/configs/${key}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+            }).then(r => r.json()).then(data => {
+                alert(data.success ? '✅ 已删除' : '❌ 失败: ' + (data.error || ''));
+                if (data.success) loadConfigs();
+            });
+        }
+
+        // Dev CRUD：添加新密钥
+        function addNewKey() {
+            const newKey = prompt('请输入新的配置键名（如 api_key_openai）：');
+            if (!newKey || !newKey.trim()) return;
+            const newVal = prompt('请输入配置值：');
+            if (!newVal && newVal !== '') return;
+            const desc = prompt('请输入描述（可选）：') || '';
+            fetch('/api/admin/configs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+                body: JSON.stringify({ config_key: newKey.trim(), config_value: newVal.trim(), description: desc, category: 'api_keys' })
+            }).then(r => r.json()).then(data => {
+                alert(data.success ? '✅ 已添加' : '❌ 失败: ' + (data.error || ''));
+                if (data.success) loadConfigs();
+            });
+        }
+        
+        function isSensitiveKey(key) {
+            const sensitivePatterns = ['key', 'secret', 'password', 'token', 'api_', 'credential', 'private'];
+            return sensitivePatterns.some(pattern => key.toLowerCase().includes(pattern));
+        }
+        
         function getCategoryName(category) {
             const categoryMap = {
-                'general': '通用配置',
-                'security': '安全配置',
+                'general': '通用设置',
+                'security': '安全管理',
                 'rate_limit': '速率限制',
-                'budget': '预算管理',
-                'cache': '缓存配置'
+                'quota': '额度配额',
+                'points': '积分设置',
+                'api_keys': 'API密钥',
+                'cache': '缓存配置',
+                'budget': '预算管理'
             };
             return categoryMap[category] || category;
         }
         
         function updateConfig(key, value) {
+            // 敏感字段：空值表示不修改
+            if (isSensitiveKey(key) && !value) {
+                alert('未输入新值，配置保持不变');
+                return;
+            }
+            
             fetch(`/api/admin/configs/${key}`, {
                 method: 'PUT',
                 headers: {

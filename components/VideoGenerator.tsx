@@ -607,12 +607,12 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                   <video 
   ref={videoRef}
   src={previewVideoSrc} 
-  controls 
-  autoPlay 
-  loop 
+  {...(isDeveloper ? { controls: true } : { controls: false, autoPlay: true, loop: true, muted: true })}
   playsInline
-  className="w-full h-full object-cover" 
-  disablePictureInPicture={false}
+  className={`w-full h-full object-cover ${isDeveloper ? '' : 'select-none'}`}
+  style={{ pointerEvents: isDeveloper ? 'auto' : 'none' }}
+  disablePictureInPicture={!isDeveloper}
+  onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }}
 />
                   {/* 水印叠加层：仅付费用户可见（品牌展示用，非安全防护） */}
                   {shouldShowWatermarkOverlay && (

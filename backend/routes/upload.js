@@ -7,13 +7,25 @@ const { v4: uuidv4 } = require('uuid');
 const UPLOAD_DIR = path.join(__dirname, '../uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// 定期清理超过1小时的临时图片
+// 定期清理超过1小时的临时文件（只删除文件，不删除目录）
 setInterval(() => {
   const now = Date.now();
-  fs.readdirSync(UPLOAD_DIR).forEach(f => {
-    const fp = path.join(UPLOAD_DIR, f);
-    if (now - fs.statSync(fp).mtimeMs > 3600000) fs.unlinkSync(fp);
-  });
+  try {
+    fs.readdirSync(UPLOAD_DIR).forEach(f => {
+      const fp = path.join(UPLOAD_DIR, f);
+      try {
+        const stat = fs.statSync(fp);
+        // 只处理文件，跳过目录
+        if (stat.isFile() && now - stat.mtimeMs > 3600000) {
+          fs.unlinkSync(fp);
+        }
+      } catch (err) {
+        // 忽略单个文件删除错误
+      }
+    });
+  } catch (err) {
+    // 忽略目录读取错误
+  }
 }, 600000);
 
 // POST /api/upload/image  body: { data: "data:image/png;base64,..." }

@@ -94,7 +94,7 @@ app.use('/api/admin/login', (req, res, next) => {
 // 本地开发环境处理 CORS
 app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'];
+    const allowedOrigins = ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000', 'https://api.kbitai.com.cn'];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, origin);
     } else {
@@ -147,6 +147,9 @@ app.post('/api/auth/reset-password', authController.resetPassword);
 // 获取用户信息
 app.get('/api/user/info', validateUserIdParam, userController.getUserInfo);
 
+// 获取用户配额（供前端导航栏实时显示积分）
+app.get('/api/user/quota', userController.getQuota);
+
 // 消耗积分
 app.post('/api/user/consume', validateUserIdParam, validateConsumePointsRequest, userController.consumePoints);
 
@@ -175,8 +178,11 @@ adminRoutes.put('/users/:id', adminController.updateUser);
 adminRoutes.delete('/users/:id', adminController.deleteUser);
 adminRoutes.get('/dashboard', adminController.getDashboard);
 adminRoutes.get('/logs', adminController.getLogs);
+adminRoutes.get('/logs/users', adminController.getLogUsers);
 adminRoutes.get('/configs', adminController.getConfigs);
+adminRoutes.post('/configs', adminController.createConfig);
 adminRoutes.put('/configs/:key', adminController.updateConfig);
+adminRoutes.delete('/configs/:key', adminController.deleteConfig);
 adminRoutes.get('/beta-requests', adminController.getBetaRequests);
 adminRoutes.post('/beta-requests/:id/approve', adminController.approveBetaRequest);
 adminRoutes.post('/beta-requests/:id/reject', adminController.rejectBetaRequest);

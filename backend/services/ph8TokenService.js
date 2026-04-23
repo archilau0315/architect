@@ -37,7 +37,14 @@ async function recordUsage(data) {
       'enhance': 'prompt_enhance',
       'analyze': 'image_analyze'
     };
-    const feature = featureMap[data.requestType] || data.requestType || 'chat';
+    // 确保feature永远不为undefined/null（防止数据库写入NULL）
+    const rawFeature = data.requestType || '';
+    const feature = featureMap[rawFeature] || rawFeature || 'chat';
+    // 确保model永远不为undefined/null
+    const dbModel = data.model || data.modelId || 'unknown';
+
+    // 处理用户ID：null/undefined → 0（数据库BIGINT UNSIGNED字段）
+    const dbUserId = data.userId != null ? data.userId : 0;
 
     // 计算费用：如果PH8 API返回了cost字段则使用，否则根据token数量估算
   let actualCost = data.cost || 0;
@@ -56,10 +63,10 @@ async function recordUsage(data) {
   await db.query(
       'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
       [
-        data.userId,
+        dbUserId,
         data.requestId || uuidv4(),
         feature,
-        data.model,
+        dbModel,
         data.channelId || 'default', // 添加 channel_id 字段
         data.promptTokens || 0,
         data.completionTokens || 0,

@@ -3,6 +3,23 @@ import { CustomModel, CreativeDomain } from "../types.ts";
 import gatewayConfig from "../config/gateway_config.json";
 
 /**
+ * 获取当前登录用户ID（统一入口，供所有API请求使用）
+ * 优先级：user_id(下划线) > userId(驼峰) > email > guest
+ */
+export const getCurrentUserId = (): string => {
+  try {
+    const sessionData = localStorage.getItem('architect-invite-session');
+    if (sessionData) {
+      const parsed = JSON.parse(sessionData);
+      return parsed.user_id || parsed.userId || parsed.email || 'guest';
+    }
+  } catch (e) {
+    console.error('[getCurrentUserId] 解析用户会话失败:', e);
+  }
+  return 'guest';
+};
+
+/**
  * 获取代理 URL
  * 所有请求都通过后端代理，前端不直接接触 API Key
  * [优化修复] 改为导出函数，供其他模块复用（消除与 apiService 的重复）
@@ -241,6 +258,13 @@ const fetchWithRetry = async (
   options: RequestInit,
   maxRetries: number = 3
 ): Promise<Response> => {
+  // 统一注入用户ID到所有API请求，确保后端能正确记录日志
+  const currentUserId = getCurrentUserId();
+  if (!options.headers) {
+    options.headers = {};
+  }
+  (options.headers as Record<string, string>)['x-user-id'] = currentUserId;
+
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -1252,25 +1276,12 @@ The attached image IS the source material for this upscale operation.`;
           console.log(`[ph8格式] 底图数量: ${imageParts.length}`);
           console.log(`[ph8格式] requestBody:`, JSON.stringify(requestBody, null, 2).substring(0, 500));
           
-          // 获取用户ID
-          let userId = 'guest';
-          try {
-            const sessionData = localStorage.getItem('architect-invite-session');
-            if (sessionData) {
-              const parsed = JSON.parse(sessionData);
-              userId = parsed.userId || parsed.email || 'guest';
-            }
-          } catch (e) {
-            console.error('获取用户ID失败:', e);
-          }
-
-          // 使用带重试机制的 fetch
+          // 使用带重试机制的 fetch（fetchWithRetry 自动注入 x-user-id 头）
           fetchResponse = await fetchWithRetry(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               // Authorization 头由后端代理自动添加
-              'x-user-id': userId
             },
             body: JSON.stringify(requestBody),
             signal
@@ -1741,7 +1752,7 @@ The attached image IS the source material for this upscale operation.`;
         if (mode === 'DEEP') {
           defaultModel = 'gemini-3.1-flash-lite-preview';  // 深度模式
         } else {
-          defaultModel = 'qwen3-vl-flash';  // 极速/逻辑模式
+          defaultModel = 'deepseek-v3.2';  // 极速/逻辑模式（性价比高）
         }
       } else {
         // 有图片的多模态对话

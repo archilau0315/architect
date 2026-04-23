@@ -13,17 +13,24 @@ router.get('/latest/:userId', async (req, res) => {
   try {
     // 查询用户最近一条记录
     const [rows] = await db.query(
-      `SELECT 
+      `SELECT
+        id,
         request_id,
-        model_id as model,
+        user_id,
+        feature,
+        model_id,
+        channel_id,
         prompt_tokens,
         completion_tokens,
         total_tokens,
-        feature as request_type,
+        points_cost,
+        actual_cost,
+        status,
+        ip_address,
         created_at
-      FROM kbit_usage_logs 
-      WHERE user_id = ? 
-      ORDER BY created_at DESC 
+      FROM kbit_usage_logs
+      WHERE user_id = ?
+      ORDER BY created_at DESC
       LIMIT 1`,
       [userId]
     );
@@ -54,17 +61,22 @@ router.get('/detail/:requestId', async (req, res) => {
   
   try {
     const [rows] = await db.query(
-      `SELECT 
+      `SELECT
+        id,
         request_id,
         user_id,
-        model_id as model,
+        feature,
+        model_id,
+        channel_id,
         prompt_tokens,
         completion_tokens,
         total_tokens,
-        feature as request_type,
+        points_cost,
+        actual_cost,
+        status,
         created_at
-      FROM kbit_usage_logs 
-      WHERE request_id = ? 
+      FROM kbit_usage_logs
+      WHERE request_id = ?
       LIMIT 1`,
       [requestId]
     );
@@ -266,7 +278,7 @@ router.post('/video-download/check', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const [countResult] = await db.query(
       `SELECT COUNT(*) as count FROM kbit_usage_logs 
-       WHERE user_id = ? AND feature = 'video_pro_download' 
+       WHERE user_id = ? AND feature = 'video_gen' 
        AND DATE(created_at) = ?`,
       [userId, today]
     );
@@ -289,10 +301,10 @@ router.post('/video-download/check', async (req, res) => {
     // 4. 验证通过，记录本次下载请求
     const requestId = `vdl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await db.query(
-      `INSERT INTO kbit_usage_logs 
-       (user_id, user_nickname, request_id, model_id, feature, prompt_tokens, completion_tokens, total_tokens, cost, status, created_at)
-       VALUES (?, ?, ?, 'video-pro', 'video_pro_download', 0, 0, 1, 0, 'success', NOW())`,
-      [userId, userId, requestId]
+      `INSERT INTO kbit_usage_logs
+       (user_id, request_id, model_id, feature, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
+       VALUES (?, ?, 'video-pro', 'video_gen', 'video-download', 0, 0, 1, 1, 0, 'success', '', NOW())`,
+      [userId, requestId]
     );
     
     console.log(`[Video Download] 用户 ${userId}(${tier}) 无水印下载授权成功, 今日第 ${usedToday + 1} 次`);
@@ -332,7 +344,7 @@ router.get('/video-download/stats/:userId', async (req, res) => {
     
     const [countResult] = await db.query(
       `SELECT COUNT(*) as count FROM kbit_usage_logs 
-       WHERE user_id = ? AND feature = 'video_pro_download' 
+       WHERE user_id = ? AND feature = 'video_gen' 
        AND DATE(created_at) = ?`,
       [userId, today]
     );

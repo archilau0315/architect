@@ -134,18 +134,38 @@ function extractUsage(responseBody) {
  * @param {object} req - Express 请求对象
  * @returns {string} - 用户ID
  */
-function getUserId(req) {
-  // 优先从请求头获取
-  const userId = req.headers['x-user-id'] || req.headers['x-user-email'];
-  if (userId) return userId;
+async function getUserId(req) {
+  // 1. 优先从请求头获取（前端统一注入 x-user-id）
+  let rawUserId = req.headers['x-user-id'] || req.headers['x-user-email'];
 
-  // 从请求体中获取
-  if (req.body && req.body.user_id) {
-    return req.body.user_id;
+  // 2. 从请求体中获取（备用方案）
+  if (!rawUserId && req.body && req.body.user_id) {
+    rawUserId = req.body.user_id;
   }
 
-  // 默认返回 guest
-  return 'guest';
+  if (!rawUserId || rawUserId === 'guest') {
+    return null; // 返回null表示未识别，由调用方决定如何处理
+  }
+
+  // 3. 如果是邮箱格式，尝试查找对应的数字ID
+  if (rawUserId.includes('@')) {
+    try {
+      const [rows] = await db.query(
+        'SELECT id FROM kbit_users WHERE email = ? LIMIT 1',
+        [rawUserId]
+      );
+      if (rows.length > 0) return rows[0].id;
+    } catch (err) {
+      console.error('[PH8 Proxy] 查询用户ID失败:', err.message);
+    }
+  }
+
+  // 4. 尝试作为数字ID直接使用（纯数字字符串转数字）
+  if (/^\d+$/.test(rawUserId)) {
+    return parseInt(rawUserId);
+  }
+
+  return rawUserId;
 }
 
 /**
@@ -203,7 +223,7 @@ function decodeHtmlEntities(str) {
 // 获取当前用户信息（包含等级）- 必须在通配符路由之前
 router.get('/user-info', async (req, res) => {
   try {
-    const userId = getUserId(req);
+    const userId = await getUserId(req);
     if (!userId) {
       return res.json({
         success: true,
@@ -243,10 +263,8 @@ router.post('/openai/v1/images/generations', async (req, res) => {
   console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
   console.log('[PH8 Proxy] 请求ID: ' + requestId);
   console.log('[PH8 Proxy] 请求路径: /openai/v1/images/generations -> ' + fullPath);
-  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  console.log('[PH8 Proxy] 用户ID: ' + (await getUserId(req)));
   console.log('[PH8 Proxy] PH8_API_KEY 是否已设置: ' + (PH8_API_KEY ? '是 (' + PH8_API_KEY.substring(0, 10) + '...)' : '否'));
-  // [安全修复] 不再打印 API Key 完整值，防止日志泄露
-  // console.log('[PH8_API_KEY 完整值]: ' + (PH8_API_KEY || '未设置'));
   
   const bodyData = JSON.stringify(req.body);
   console.log('[PH8 Proxy] 请求体(前1000字符): ' + bodyData.substring(0, 1000));
@@ -280,7 +298,54 @@ router.post('/openai/v1/images/generations', async (req, res) => {
       }
     });
     
-    proxyRes.on('end', () => {
+    // [管理后台] 记录图像生成使用
+    const userId = await getUserId(req);
+    let actualUserId = userId;
+    let userInfo = { nickname: '未知用户', email: '' };
+    
+    try {
+      if (userId) {
+        userInfo = await getUserInfo(userId);
+        actualUserId = userInfo.id || userId;
+      }
+    } catch (err) {
+      console.error('[PH8 Image] 获取用户信息失败:', err);
+    }
+
+    // 解析请求体获取模型和prompt信息
+    let reqModel = '';
+    let reqPrompt = '';
+    try {
+      const bodyObj = JSON.parse(bodyData || '{}');
+      reqModel = bodyObj.model || 'unknown';
+      reqPrompt = (bodyObj.prompt || '').substring(0, 100);
+    } catch(e) {}
+
+    // 计算消耗积分（从PH8响应提取真实费用，或使用默认值）
+    // PH8 图像生成实际费用约 0.014 元/次（根据 PH8 控制台账单）
+    // 之前硬编码为 5 元导致多扣用户约 357 倍积分！
+    
+    proxyRes.on('end', async () => {
+      // 尝试从PH8响应中提取真实费用
+      let ph8ActualCost = 0;
+      try {
+        if (!isBinaryContent && typeof data === 'string' && data.trim()) {
+          const respBody = JSON.parse(data);
+          // PH8 可能返回的费用字段（多种格式兼容）
+          ph8ActualCost = respBody.usage?.cost 
+                       || respBody.usage?.price 
+                       || respBody.cost 
+                       || respBody.price 
+                       || respBody.charge 
+                       || respBody.usage?.total_cost
+                       || 0;
+        }
+      } catch(e) {}
+      
+      // 图像生成默认费用（基于PH8控制台实际账单约 0.014元/次）
+      // 如果PH8未返回费用则使用默认值 0.014 元
+      let finalCost = ph8ActualCost > 0 ? ph8ActualCost : 0.014;
+      console.log(`[PH8 Image] 费用计算: PH8返回=${ph8ActualCost}, 最终使用=${finalCost}元`);
       const responseTime = Date.now() - startTime;
       
       console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
@@ -290,6 +355,43 @@ router.post('/openai/v1/images/generations', async (req, res) => {
         console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
       } else {
         console.log('[PH8 Proxy] 成功响应体(前500字符): ' + (typeof data === 'string' ? data.substring(0, 500) : '二进制数据'));
+      }
+
+      // [管理后台] 写入使用记录
+      try {
+        await ph8TokenService.recordUsage({
+          userId: actualUserId,
+          userNickname: userInfo.nickname,
+          userEmail: userInfo.email,
+          requestId: requestId,
+          model: reqModel,
+          channelId: 'ph8-image',
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cost: proxyRes.statusCode === 200 ? finalCost : 0,
+          cachedTokens: 0,
+          requestType: 'image',
+          endpoint: fullPath,
+          status: proxyRes.statusCode === 200 ? 'success' : 'failed',
+          errorMessage: proxyRes.statusCode !== 200 ? (typeof data === 'string' ? data.substring(0, 200) : '生成失败') : null,
+          responseTimeMs: responseTime,
+          ipAddress: req.ip || req.connection.remoteAddress
+        });
+
+        // 成功时扣减积分
+        if (proxyRes.statusCode === 200) {
+          try {
+            await ph8TokenService.deductBalance(actualUserId, finalCost, userInfo.nickname, userInfo.email);
+            console.log(`[PH8 Image] 记录成功并扣费: user=${actualUserId}(${userInfo.nickname}), cost=${finalCost}`);
+          } catch (deductErr) {
+            console.error('[PH8 Image] 扣费失败:', deductErr);
+          }
+        } else {
+          console.log(`[PH8 Image] 记录失败请求: user=${actualUserId}, status=${proxyRes.statusCode}`);
+        }
+      } catch (recordErr) {
+        console.error('[PH8 Image] 记录使用失败:', recordErr);
       }
       
       res.setHeader('Content-Type', contentType || 'application/json');
@@ -322,7 +424,7 @@ router.post('/v1/images/generations', async (req, res) => {
   console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
   console.log('[PH8 Proxy] 请求ID: ' + requestId);
   console.log('[PH8 Proxy] 请求路径: ' + fullPath);
-  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  console.log('[PH8 Proxy] 用户ID: ' + (await getUserId(req)));
   
   const bodyData = JSON.stringify(req.body);
   console.log('[PH8 Proxy] 请求体(前500字符): ' + bodyData.substring(0, 500));
@@ -355,7 +457,7 @@ router.post('/v1/images/generations', async (req, res) => {
       }
     });
     
-    proxyRes.on('end', () => {
+    proxyRes.on('end', async () => {
       const responseTime = Date.now() - startTime;
       
       console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
@@ -363,6 +465,65 @@ router.post('/v1/images/generations', async (req, res) => {
       
       if (proxyRes.statusCode !== 200) {
         console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
+      }
+
+      // [管理后台] 写入使用记录
+      const userId2 = await getUserId(req);
+      let actualUserId2 = userId2;
+      let userInfo2 = { nickname: '未知用户', email: '' };
+      
+      try {
+        if (userId2) {
+          userInfo2 = await getUserInfo(userId2);
+          actualUserId2 = userInfo2.id || userId2;
+        }
+      } catch (err) {}
+
+      let reqModel2 = '';
+      try {
+        reqModel2 = JSON.parse(bodyData || '{}').model || 'unknown';
+      } catch(e) {}
+      
+      // 尝试从PH8响应中提取真实费用（图像生成）
+      let ph8ActualCost2 = 0;
+      try {
+        if (!isBinaryContent && typeof data === 'string' && data.trim()) {
+          const respBody = JSON.parse(data);
+          ph8ActualCost2 = respBody.usage?.cost 
+                       || respBody.usage?.price 
+                       || respBody.cost || respBody.price || respBody.charge
+                       || respBody.usage?.total_cost || 0;
+        }
+      } catch(e) {}
+      
+      // 图像生成默认费用（基于PH8控制台实际账单约 0.014元/次）
+      const finalCost2 = ph8ActualCost2 > 0 ? ph8ActualCost2 : 0.014;
+      console.log(`[PH8 Image v1] 费用计算: PH8返回=${ph8ActualCost2}, 最终使用=${finalCost2}元`);
+
+      try {
+        await ph8TokenService.recordUsage({
+          userId: actualUserId2,
+          userNickname: userInfo2.nickname,
+          userEmail: userInfo2.email,
+          requestId: requestId,
+          model: reqModel2,
+          channelId: 'ph8-image',
+          promptTokens: 0, completionTokens: 0, totalTokens: 0,
+          cost: proxyRes.statusCode === 200 ? finalCost2 : 0,
+          cachedTokens: 0,
+          requestType: 'image',
+          endpoint: fullPath,
+          status: proxyRes.statusCode === 200 ? 'success' : 'failed',
+          errorMessage: proxyRes.statusCode !== 200 ? (typeof data === 'string' ? data.substring(0, 200) : '生成失败') : null,
+          responseTimeMs: responseTime,
+          ipAddress: req.ip || req.connection.remoteAddress
+        });
+        
+        if (proxyRes.statusCode === 200) {
+          try { await ph8TokenService.deductBalance(actualUserId2, finalCost2, userInfo2.nickname, userInfo2.email); } catch(e) {}
+        }
+      } catch(e) {
+        console.error('[PH8 Image v1] 记录使用失败:', e);
       }
       
       res.setHeader('Content-Type', contentType || 'application/json');
@@ -411,7 +572,7 @@ router.all('/*', requireAuth, async (req, res) => {
   console.log('[PH8 Proxy] 请求路径: ' + fullPath);
   console.log('[PH8 Proxy] 请求来源: ' + (req.headers['referer'] || '未知'));
   console.log('[PH8 Proxy] 用户代理: ' + (req.headers['user-agent'] || '未知'));
-  console.log('[PH8 Proxy] 用户ID: ' + getUserId(req));
+  console.log('[PH8 Proxy] 用户ID: ' + (await getUserId(req)));
   
   // 解码图片数据中的 HTML 实体（修复 &#x2F; 等编码问题）
   if (req.body && req.body.messages) {
@@ -449,7 +610,7 @@ router.all('/*', requireAuth, async (req, res) => {
   }
   
   const bodyData = req.body ? JSON.stringify(req.body) : '';
-  const userId = getUserId(req);
+  const userId = await getUserId(req);
   const requestType = getRequestType(fullPath, req.body);
   const model = getModel(req.body);
   

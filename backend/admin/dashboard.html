@@ -208,16 +208,10 @@
                     <div class="bg-white rounded-xl card-shadow p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold text-gray-900">用户分布</h3>
-                            <div class="flex space-x-2">
-                                <button class="px-3 py-1 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                    周
-                                </button>
-                                <button class="px-3 py-1 text-sm bg-primary text-white rounded-lg">
-                                    月
-                                </button>
-                                <button class="px-3 py-1 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                                    年
-                                </button>
+                            <div class="flex space-x-2" id="tierPeriodBtns">
+                                <button onclick="switchTierPeriod('week', this)" class="px-3 py-1 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">周</button>
+                                <button onclick="switchTierPeriod('month', this)" class="px-3 py-1 text-sm bg-primary text-white rounded-lg">月</button>
+                                <button onclick="switchTierPeriod('year', this)" class="px-3 py-1 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">年</button>
                             </div>
                         </div>
                         <div class="h-64">
@@ -228,10 +222,10 @@
                     <div class="bg-white rounded-xl card-shadow p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold text-gray-900">功能使用</h3>
-                            <select class="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
-                                <option>今日</option>
-                                <option>本周</option>
-                                <option>本月</option>
+                            <select id="featurePeriodSelect" class="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-primary focus:border-primary" onchange="switchFeaturePeriod(this.value)">
+                                <option value="today">今日</option>
+                                <option value="week">本周</option>
+                                <option value="month">本月</option>
                             </select>
                         </div>
                         <div class="h-64">
@@ -262,6 +256,9 @@
                                         操作
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        消耗
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         状态
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -272,7 +269,7 @@
                             <tbody class="bg-white divide-y divide-gray-200" id="activityLog">
                                 <!-- 活动记录将通过JavaScript动态添加 -->
                                 <tr>
-                                    <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                                    <td colspan="6" class="px-6 py-10 text-center text-gray-500">
                                         加载中...
                                     </td>
                                 </tr>
@@ -285,6 +282,9 @@
     </div>
     
     <script>
+        let userDistChart = null;
+        let featureUsageChart = null;
+
         document.addEventListener('DOMContentLoaded', function() {
             // 检查登录状态
             const adminToken = localStorage.getItem('admin_token');
@@ -334,6 +334,36 @@
                     document.getElementById('todayRequests').textContent = stats.today_requests;
                     document.getElementById('todayCost').textContent = '¥' + stats.today_cost.toFixed(2);
                     
+                    // 更新增长率
+                    const ug = stats.userGrowth || 0;
+                    const ag = stats.activeGrowth || 0;
+                    const rg = stats.requestGrowth || 0;
+                    const cg = stats.costGrowth || 0;
+
+                    // 总用户增长率
+                    const userGrowthEl = document.getElementById('userGrowth');
+                    userGrowthEl.textContent = (ug >= 0 ? '+' : '') + ug + '%';
+                    userGrowthEl.parentElement.className = 'mt-4 flex items-center text-sm ' + (ug >= 0 ? 'text-green-500' : 'text-red-500');
+                    userGrowthEl.previousElementSibling.className = 'fa fa-arrow-' + (ug >= 0 ? 'up mr-1' : 'down mr-1');
+
+                    // 活跃用户增长率
+                    const activeGrowthEl = document.getElementById('activeGrowth');
+                    activeGrowthEl.textContent = (ag >= 0 ? '+' : '') + ag + '%';
+                    activeGrowthEl.parentElement.className = 'mt-4 flex items-center text-sm ' + (ag >= 0 ? 'text-green-500' : 'text-red-500');
+                    activeGrowthEl.previousElementSibling.className = 'fa fa-arrow-' + (ag >= 0 ? 'up mr-1' : 'down mr-1');
+
+                    // 今日请求增长率
+                    const reqGrowthEl = document.getElementById('requestGrowth');
+                    reqGrowthEl.textContent = (rg >= 0 ? '+' : '') + rg + '%';
+                    reqGrowthEl.parentElement.className = 'mt-4 flex items-center text-sm ' + (rg >= 0 ? 'text-green-500' : 'text-red-500');
+                    reqGrowthEl.previousElementSibling.className = 'fa fa-arrow-' + (rg >= 0 ? 'up mr-1' : 'down mr-1');
+
+                    // 今日成本增长率（成本下降是好事，反向显示颜色）
+                    const costGrowthEl = document.getElementById('costGrowth');
+                    costGrowthEl.textContent = (cg >= 0 ? '+' : '') + cg + '%';
+                    costGrowthEl.parentElement.className = 'mt-4 flex items-center text-sm ' + (cg <= 0 ? 'text-green-500' : 'text-red-500');
+                    costGrowthEl.previousElementSibling.className = 'fa fa-arrow-' + (cg <= 0 ? 'down mr-1' : 'up mr-1');
+
                     // 更新图表数据
                     updateUserDistributionChart(data.data.tier_distribution);
                     updateFeatureUsageChart(data.data.feature_usage);
@@ -346,7 +376,31 @@
         
         function updateUserDistributionChart(tierData) {
             const ctx = document.getElementById('userDistributionChart').getContext('2d');
-            
+
+            // 销毁旧图表
+            if (userDistChart) { userDistChart.destroy(); }
+
+            // 空数据提示
+            if (!tierData || tierData.length === 0) {
+                const canvas = document.getElementById('userDistributionChart');
+                const container = canvas.parentElement;
+                canvas.style.display = 'none';
+                let hint = container.querySelector('.empty-hint');
+                if (!hint) {
+                    hint = document.createElement('div');
+                    hint.className = 'empty-hint flex items-center justify-center h-full text-gray-400 text-sm';
+                    container.appendChild(hint);
+                }
+                hint.textContent = '该时间段暂无新注册用户';
+                return;
+            }
+
+            // 恢复 canvas 显示
+            const canvas = document.getElementById('userDistributionChart');
+            canvas.style.display = '';
+            const hintEl = canvas.parentElement.querySelector('.empty-hint');
+            if (hintEl) hintEl.remove();
+
             const labels = tierData.map(item => {
                 const tierMap = {
                     'free': '免费',
@@ -357,10 +411,10 @@
                 };
                 return tierMap[item.user_tier] || item.user_tier;
             });
-            
+
             const data = tierData.map(item => item.count);
-            
-            new Chart(ctx, {
+
+            userDistChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: labels,
@@ -390,11 +444,44 @@
         
         function updateFeatureUsageChart(featureData) {
             const ctx = document.getElementById('featureUsageChart').getContext('2d');
-            
-            const labels = featureData.map(item => item.feature);
+
+            // 销毁旧图表
+            if (featureUsageChart) { featureUsageChart.destroy(); }
+
+            // 空数据提示
+            if (!featureData || featureData.length === 0) {
+                const canvas = document.getElementById('featureUsageChart');
+                const container = canvas.parentElement;
+                canvas.style.display = 'none';
+                let hint = container.querySelector('.empty-hint');
+                if (!hint) {
+                    hint = document.createElement('div');
+                    hint.className = 'empty-hint flex items-center justify-center h-full text-gray-400 text-sm';
+                    container.appendChild(hint);
+                }
+                hint.textContent = '该时间段暂无使用记录';
+                return;
+            }
+
+            // 恢复 canvas 显示
+            const canvas = document.getElementById('featureUsageChart');
+            canvas.style.display = '';
+            const hintEl = canvas.parentElement.querySelector('.empty-hint');
+            if (hintEl) hintEl.remove();
+
+            // 功能名称映射
+            const featureMap = {
+                'image_gen': '图像生成',
+                'video_gen': '视频生成',
+                'chat': '对话',
+                'image_analyze': '图像分析',
+                'prompt_enhance': '提示词增强'
+            };
+
+            const labels = featureData.map(item => featureMap[item.feature] || item.feature);
             const data = featureData.map(item => item.count);
-            
-            new Chart(ctx, {
+
+            featureUsageChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -414,6 +501,35 @@
                         }
                     }
                 }
+            });
+        }
+
+        // 用户分布：周/月/年切换
+        function switchTierPeriod(period, btn) {
+            // 按钮样式切换
+            document.querySelectorAll('#tierPeriodBtns button').forEach(b => {
+                b.className = 'px-3 py-1 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors';
+            });
+            btn.className = 'px-3 py-1 text-sm bg-primary text-white rounded-lg';
+
+            // 重新查询数据（按时间段统计新注册用户）
+            fetch(`/api/admin/dashboard?tier_period=${period}`, {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) updateUserDistributionChart(data.data.tier_distribution);
+            });
+        }
+
+        // 功能使用：今日/本周/本月切换
+        function switchFeaturePeriod(period) {
+            fetch(`/api/admin/dashboard?period=${period}`, {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) updateFeatureUsageChart(data.data.feature_usage);
             });
         }
         
@@ -437,15 +553,28 @@
                         
                         logs.forEach(log => {
                             const row = document.createElement('tr');
+                            const displayName = log.display_name || log.user_nickname || log.user_email || log.email || '未知用户';
+                            const safeDisplay = (displayName && displayName !== 'undefined' && displayName !== 'null') ? displayName : '未知用户';
+                            // 消耗显示：积分 + 金额
+                            const actualCost = parseFloat(log.actual_cost) || 0;
+                            const pointsCost = parseInt(log.points_cost) || 0;
+                            const costCell = (actualCost > 0 || pointsCost > 0)
+                                ? `<span class="font-semibold text-orange-600">${pointsCost}</span> <span class="text-xs text-gray-400">积分 / ¥${actualCost.toFixed(4)}</span>`
+                                : '<span class="text-gray-400">-</span>';
+                            const _featMap = {'image_gen':'图像生成','video_gen':'视频生成','chat':'聊天对话','image_analyze':'图像分析','prompt_enhance':'提示增强'};
+                            const featureLabel = _featMap[log.feature] || (log.feature && log.feature !== 'undefined' ? log.feature : '-');
                             row.innerHTML = `
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     ${new Date(log.created_at).toLocaleString()}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    ${log.email || '未知用户'}
+                                    ${safeDisplay}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    ${log.feature}
+                                    ${featureLabel}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    ${costCell}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -461,7 +590,7 @@
                     } else {
                         activityLog.innerHTML = `
                             <tr>
-                                <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
                                     暂无活动记录
                                 </td>
                             </tr>
@@ -473,7 +602,7 @@
                 console.error('加载最近活动失败:', error);
                 document.getElementById('activityLog').innerHTML = `
                     <tr>
-                        <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                        <td colspan="6" class="px-6 py-10 text-center text-red-500">
                             加载失败
                         </td>
                     </tr>

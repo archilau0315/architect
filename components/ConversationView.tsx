@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { GeminiService, MASTER_STYLES } from '../services/geminiService.ts';
-import { ConversationMode, CustomModel, CreativeDomain } from '../types.ts';
+import { ConversationMode, CustomModel, CreativeDomain, UserTier } from '../types.ts';
 import UnifiedInput, { UnifiedPayload } from './UnifiedInput.tsx';
 import InpaintEditor from './InpaintEditor.tsx';
 import { VideoPlayer } from './VideoPlayer.tsx';
@@ -71,6 +71,7 @@ interface ConversationViewProps {
   onTogglePresetPanel?: () => void;
   language?: Language;
   theme?: string;
+  userTier?: UserTier;
 }
 
 const gemini = GeminiService;
@@ -615,9 +616,11 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const ConversationView: React.FC<ConversationViewProps> = ({
   modelConfig, domain, instructions, points, onConsumePoints, useThirdPartyGateway, isDeveloperMode,
-  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark'
+  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark', userTier = 'free'
 }) => {
   const t = getTranslation(language);
+  // [修复] 基于用户等级判断是否为付费用户（PRO/PLUS 或开发者模式均可）
+  const isDeveloper = userTier === 'pro' || userTier === 'plus' || isDeveloperMode;
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, setMode] = useState<ConversationMode>('chat');
   const [isLoading, setIsLoading] = useState(false);
@@ -957,7 +960,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map(msg => (
             <div key={msg.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
-              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloperMode} theme={theme} />
+              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloper} theme={theme} />
             </div>
           ))}
         </div>

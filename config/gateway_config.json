@@ -76,40 +76,40 @@
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-2-0-fast",
+        "remoteModelId": "doubao-seedance-1-0-pro-fast-251015",
         "priority": 100,
         "active": true,
-        "description": "单图生视频·快速模式"
+        "description": "SeeDance-1.0F·单图生视频·快速模式"
       }
     ],
     "KbitVeo-normal": [
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-1-5-normal",
+        "remoteModelId": "doubao-seedance-1-5-i2v-normal-251015",
         "priority": 90,
         "active": true,
-        "description": "双图生视频·标准模式"
+        "description": "SeeDance-1.5·双图生视频·标准模式"
       }
     ],
     "KbitVeo-standard": [
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-2-0",
+        "remoteModelId": "doubao-seedance-2-0-t2v-251015",
         "priority": 80,
         "active": true,
-        "description": "9图+视频参考·高质量"
+        "description": "SeeDance-2.0·9图+视频参考·高质量"
       }
     ],
     "KbitVeo-pro": [
       {
         "provider": "ph8.co",
         "url": "https://ph8.co",
-        "remoteModelId": "doubao-seedance-2-0-pro",
+        "remoteModelId": "doubao-seedance-2-0-pro-t2v-251015",
         "priority": 70,
         "active": true,
-        "description": "9图+视频参考·快速高质量"
+        "description": "SeeDance-2F·9图+视频参考·快速高质量"
       }
     ]
   }

@@ -719,7 +719,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                  const isThisImageLocked = single ? locked : lockedIndices.includes(i);
                  return (
                    <div key={i} className={`relative group rounded-xl overflow-hidden border border-slate-100 dark:border-white/5 ${single ? 'w-full h-full' : 'aspect-square shadow-sm'} ${isThisImageLocked ? `ring-2 ring-${themeColor}-500` : ''}`}>
-                     <img src={v} className="w-full h-full object-cover" />
+                     <img src={v} className={`w-full h-full object-cover ${isDeveloper ? '' : 'select-none'}`} style={{ pointerEvents: isDeveloper ? 'auto' : 'none' }} onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
                      {originalSizes[i] && (() => { const { label, next, color } = getResolutionLabel(originalSizes[i].width, originalSizes[i].height); return (<div className={`absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded-md text-[9px] font-black pointer-events-none ${color}`}>{label}{next ? ` → ${next}` : ' MAX'}</div>); })()}
                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
                         <div className="flex items-center gap-2">
@@ -946,7 +946,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                <div className="flex flex-col items-center gap-4 w-full">
                  {/* 层1：主图区 */}
                  <div className="relative cursor-zoom-in group w-full flex justify-center" onMouseEnter={() => setIsMainImageHovered(true)} onMouseLeave={() => setIsMainImageHovered(false)} onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
-                   <img ref={mainImageRef} src={watermarkedImages[activeIdx] || generatedImages[activeIdx]} className="max-h-[90vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 transition-transform duration-300 origin-center" style={{ transform: isMainImageHovered ? 'scale(1.02)' : 'scale(1)' }} alt="Result" />
+                   <img ref={mainImageRef} src={isDeveloper ? (generatedImages[activeIdx] || watermarkedImages[activeIdx]) : (watermarkedImages[activeIdx] || generatedImages[activeIdx])} className={`max-h-[90vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 transition-transform duration-300 origin-center ${isDeveloper ? '' : 'select-none'}`} style={{ transform: isMainImageHovered ? 'scale(1.02)' : 'scale(1)', pointerEvents: isDeveloper ? 'auto' : 'none' }} alt="Result" onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
                    {imgNaturalSize && <div className="absolute top-3 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-white font-mono text-[10px] font-black tracking-widest pointer-events-none">{imgNaturalSize.w} × {imgNaturalSize.h}</div>}
                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                      <div className="bg-black/50 backdrop-blur-sm rounded-full p-3"><svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></div>
@@ -1023,18 +1023,20 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
             onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}
           >
             <img
-              src={watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]}
-              className="rounded-lg shadow-2xl block"
+              src={isDeveloper ? (generatedImages[fullscreenImageIndex] || watermarkedImages[fullscreenImageIndex]) : (watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex])}
+              className={`rounded-lg shadow-2xl block ${isDeveloper ? '' : 'select-none'}`}
               style={{ 
                 maxWidth: '100vw', 
                 maxHeight: '100vh',
                 width: 'auto',
                 height: 'auto',
                 objectFit: 'contain',
-                display: 'block'
+                display: 'block',
+                pointerEvents: isDeveloper ? 'auto' : 'none'
               }}
               alt="Fullscreen"
               onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }}
             />
           </div>
 

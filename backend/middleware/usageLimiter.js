@@ -171,13 +171,19 @@ async function recordTokenUsage(userId, tokens, model, requestType, requestId = 
     'chat': 'chat',
     'audio': 'chat'
   };
-  const feature = featureMap[requestType] || requestType || 'chat';
+  const rawFeature = requestType || '';
+  const feature = featureMap[rawFeature] || rawFeature || 'chat';
+
+  // 处理null/undefined用户ID → 0（数据库BIGINT UNSIGNED字段）
+  const dbUserId = (userId != null && userId !== '') ? userId : 0;
+  // 确保model永远有值
+  const dbModel = model || 'unknown';
 
   // 写入 kbit_usage_logs 表
   await db.query(
     `INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [userId, requestId || `req_${Date.now()}`, feature, model, 'default', tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, 0, 0, 'success', '']
+    [dbUserId, requestId || `req_${Date.now()}`, feature, dbModel, 'default', tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, 0, 0, 'success', '']
   );
 }
 
@@ -222,11 +228,11 @@ async function getUserUsageStats(userId) {
   );
   
   const [typeBreakdown] = await db.query(
-    `SELECT 
-      feature as request_type,
+    `SELECT
+      feature,
       SUM(total_tokens) as tokens,
       COUNT(*) as count
-    FROM kbit_usage_logs 
+    FROM kbit_usage_logs
     WHERE user_id = ? AND DATE(created_at) = CURDATE()
     GROUP BY feature`,
     [userId]
