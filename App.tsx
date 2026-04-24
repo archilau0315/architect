@@ -41,7 +41,7 @@ const TIER_CONFIG = {
   free: { daily: 100, label: '免费用户' },
   beta: { daily: 200, label: '内测用户', total: 1000 },
   basic: { daily: 350, label: '基础级' },
-  pro: { daily: 800, label: 'PRO 级' },
+  pro: { daily: 1200, label: 'PRO 级' },
   plus: { daily: 1800, label: 'PLUS 级' }
 };
 

@@ -120,10 +120,16 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token VARCHAR(255) UNIQUE NOT NULL COMMENT '令牌',
   expires_at TIMESTAMP NOT NULL COMMENT '过期时间',
   used_at TIMESTAMP NULL COMMENT '使用时间',
+  user_type ENUM('user', 'admin') DEFAULT 'user' COMMENT '用户类型',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_email (email),
-  INDEX idx_token (token)
+  INDEX idx_token (token),
+  INDEX idx_user_type (user_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密码重置令牌表';
+
+-- 如果 user_type 字段不存在，添加该字段
+ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS user_type ENUM('user', 'admin') DEFAULT 'user' COMMENT '用户类型';
+ALTER TABLE password_reset_tokens ADD INDEX IF NOT EXISTS idx_user_type (user_type);
 
 -- 用户配额表
 CREATE TABLE IF NOT EXISTS user_quotas (

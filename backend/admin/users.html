@@ -283,7 +283,7 @@
                             <!-- 流量监控 -->
                             <div>
                                 <h4 class="text-md font-semibold text-gray-900 mb-3">流量监控</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                     <div class="bg-gray-50 p-4 rounded-lg">
                                         <label class="block text-sm font-medium text-gray-700 mb-1">今日请求</label>
                                         <p id="modalTodayRequests" class="text-gray-900"></p>
@@ -299,6 +299,22 @@
                                     <div class="bg-gray-50 p-4 rounded-lg">
                                         <label class="block text-sm font-medium text-gray-700 mb-1">本周积分消耗</label>
                                         <p id="modalWeekPoints" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">本月请求</label>
+                                        <p id="modalMonthRequests" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">本月积分消耗</label>
+                                        <p id="modalMonthPoints" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">历史总请求</label>
+                                        <p id="modalTotalRequests" class="text-gray-900"></p>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">历史总消耗</label>
+                                        <p id="modalTotalPoints" class="text-gray-900"></p>
                                     </div>
                                 </div>
                                 <div class="h-64">
@@ -566,10 +582,14 @@
                     document.getElementById('modalTotalConsumed').textContent = user.total_consumed_points;
                     
                     // 填充流量统计
-                    document.getElementById('modalTodayRequests').textContent = usageStats.today.total_requests || 0;
-                    document.getElementById('modalTodayPoints').textContent = usageStats.today.total_points_spent || 0;
-                    document.getElementById('modalWeekRequests').textContent = usageStats.week.total_requests || 0;
-                    document.getElementById('modalWeekPoints').textContent = usageStats.week.total_points_spent || 0;
+                    document.getElementById('modalTodayRequests').textContent = usageStats.today?.total_requests || 0;
+                    document.getElementById('modalTodayPoints').textContent = usageStats.today?.total_points_spent || 0;
+                    document.getElementById('modalWeekRequests').textContent = usageStats.week?.total_requests || 0;
+                    document.getElementById('modalWeekPoints').textContent = usageStats.week?.total_points_spent || 0;
+                    document.getElementById('modalMonthRequests').textContent = usageStats.month?.total_requests || 0;
+                    document.getElementById('modalMonthPoints').textContent = usageStats.month?.total_points_spent || 0;
+                    document.getElementById('modalTotalRequests').textContent = usageStats.total?.total_requests || 0;
+                    document.getElementById('modalTotalPoints').textContent = usageStats.total?.total_points_spent || 0;
                     
                     // 生成使用图表
                     updateUserUsageChart(usageStats.daily);

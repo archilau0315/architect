@@ -119,6 +119,22 @@ exports.getUser = async (req, res) => {
     );
     const weekData = { total_requests: weekStats[0]?.total_requests || 0, total_points_spent: parseInt(weekStats[0]?.total_points_spent) || 0 };
 
+    // 本月统计（30天）
+    const [monthStats] = await db.query(
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+       FROM kbit_usage_logs WHERE user_id=? AND status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+      [uid]
+    );
+    const monthData = { total_requests: monthStats[0]?.total_requests || 0, total_points_spent: parseInt(monthStats[0]?.total_points_spent) || 0 };
+
+    // 历史总统计
+    const [totalStats] = await db.query(
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+       FROM kbit_usage_logs WHERE user_id=? AND status='success'`,
+      [uid]
+    );
+    const totalData = { total_requests: totalStats[0]?.total_requests || 0, total_points_spent: parseInt(totalStats[0]?.total_points_spent) || 0 };
+
     // 近30天每日趋势
     const [daily] = await db.query(
       `SELECT DATE(created_at) as date, 
@@ -130,7 +146,7 @@ exports.getUser = async (req, res) => {
       [uid]
     );
 
-    res.json({ success: true, data: { user, usage_stats: { today: todayData, week: weekData, daily } } });
+    res.json({ success: true, data: { user, usage_stats: { today: todayData, week: weekData, month: monthData, total: totalData, daily } } });
   } catch (err) {
     console.error('[Admin] getUser error:', err);
     res.status(500).json({ error: '服务器错误', message: err.message });
@@ -426,6 +442,142 @@ exports.getLogs = async (req, res) => {
   } catch (err) {
     console.error('[Admin] getLogs error:', err);
     res.status(500).json({ error: '获取日志失败', message: err.message });
+  }
+};
+
+// 修改管理员密码
+exports.changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const adminId = req.admin.id;
+
+    // 参数校验
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: '请输入旧密码和新密码' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: '新密码至少需要8个字符' });
+    }
+
+    // 验证旧密码
+    const [[admin]] = await db.query('SELECT password_hash, username FROM admins WHERE id = ?', [adminId]);
+    if (!admin) {
+      return res.status(404).json({ error: '管理员不存在' });
+    }
+
+    const isValid = await bcrypt.compare(oldPassword, admin.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: '旧密码错误' });
+    }
+
+    // 检查新密码是否与旧密码相同
+    if (await bcrypt.compare(newPassword, admin.password_hash)) {
+      return res.status(400).json({ error: '新密码不能与旧密码相同' });
+    }
+
+    // 更新新密码
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE admins SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hash, adminId]);
+
+    console.log(`[Admin] 管理员 ${admin.username} 已修改密码`);
+    res.json({ success: true, message: '密码修改成功，请重新登录' });
+  } catch (err) {
+    console.error('[Admin] 修改密码失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+};
+
+// 管理员找回密码（发送重置链接）
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: '请输入邮箱地址' });
+    }
+
+    // 查找管理员
+    const [[admin]] = await db.query('SELECT id, username, email FROM admins WHERE email = ?', [email]);
+    if (!admin) {
+      return res.status(404).json({ error: '未找到该邮箱对应的管理员' });
+    }
+
+    // 生成重置令牌
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600000); // 1小时后过期
+
+    // 先删除该邮箱之前的重置令牌
+    await db.query('DELETE FROM password_reset_tokens WHERE email = ?', [email]);
+
+    // 存储新令牌
+    await db.query(
+      'INSERT INTO password_reset_tokens (email, token, expires_at, user_type) VALUES (?, ?, ?, ?)',
+      [email, token, expiresAt, 'admin']
+    );
+
+    // 构建重置链接（指向后端服务的管理员重置密码页面）
+    const apiUrl = 'https://www.kbitai.com.cn';
+    const resetUrl = `${apiUrl}/admin/reset-password.html?token=${token}`;
+
+    // 发送邮件（如果配置了邮件服务）
+    try {
+      const mailService = require('../services/mailService');
+      await mailService.sendPasswordResetEmail(email, admin.username, resetUrl);
+    } catch (mailErr) {
+      console.warn('[Admin] 发送重置邮件失败:', mailErr.message);
+    }
+
+    console.log(`[Admin] 管理员 ${admin.username} 申请密码重置，重置链接已生成`);
+    res.json({ success: true, message: '重置链接已发送到您的邮箱，请在1小时内完成重置' });
+  } catch (err) {
+    console.error('[Admin] 找回密码失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+};
+
+// 管理员重置密码（通过令牌）
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: '请提供重置令牌和新密码' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: '新密码至少需要8个字符' });
+    }
+
+    // 验证令牌
+    const [[resetToken]] = await db.query(
+      'SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > NOW() AND used_at IS NULL AND user_type = ?',
+      [token, 'admin']
+    );
+
+    if (!resetToken) {
+      return res.status(400).json({ error: '无效的重置链接或链接已过期' });
+    }
+
+    // 查找管理员
+    const [[admin]] = await db.query('SELECT id, username FROM admins WHERE email = ?', [resetToken.email]);
+    if (!admin) {
+      return res.status(404).json({ error: '管理员不存在' });
+    }
+
+    // 更新密码
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE admins SET password_hash = ?, updated_at = NOW() WHERE id = ?', [hash, admin.id]);
+
+    // 标记令牌已使用
+    await db.query('UPDATE password_reset_tokens SET used_at = NOW() WHERE token = ?', [token]);
+
+    console.log(`[Admin] 管理员 ${admin.username} 已通过重置链接修改密码`);
+    res.json({ success: true, message: '密码重置成功，请使用新密码登录' });
+  } catch (err) {
+    console.error('[Admin] 重置密码失败:', err);
+    res.status(500).json({ error: '服务器错误' });
   }
 };
 

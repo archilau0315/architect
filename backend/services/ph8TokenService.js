@@ -373,7 +373,7 @@ async function getUserUsageHistory(userId, limit = 50, offset = 0) {
 async function resetDailyUsage() {
   try {
     await db.query(
-      `UPDATE kbit_users SET daily_points = CASE WHEN user_tier = 'free' THEN 50 WHEN user_tier = 'beta' THEN 150 WHEN user_tier = 'basic' THEN 300 WHEN user_tier = 'pro' THEN 1000 ELSE 50 END, updated_at = NOW()`
+      `UPDATE kbit_users SET daily_points = CASE WHEN user_tier = 'free' THEN 200 WHEN user_tier = 'beta' THEN 200 WHEN user_tier = 'basic' THEN 400 WHEN user_tier = 'pro' THEN 1500 WHEN user_tier = 'plus' THEN 2000 ELSE 200 END, updated_at = NOW()`
     );
     console.log('[PH8 Token] 每日使用计数已重置');
     return true;

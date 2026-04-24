@@ -1827,6 +1827,7 @@ The attached image IS the source material for this upscale operation.`;
         });
 
         const messages = [
+          { role: "system", content: systemInstruction },
           ...historyMessages,
           { role: "user", content: userContent }
         ];
@@ -1837,6 +1838,7 @@ The attached image IS the source material for this upscale operation.`;
         console.log(`[Chat Gateway] URL: ${proxiedUrl}/chat/completions`);
         console.log(`[Chat Gateway] Model: ${modelId}`);
         console.log(`[Chat Gateway] 图片数量: ${files.length}`);
+        console.log(`[Chat Gateway] 系统指令: ${systemInstruction.substring(0, 100)}...`);
 
         const response = await fetch(`${proxiedUrl}/chat/completions`, {
           method: 'POST',

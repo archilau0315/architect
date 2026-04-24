@@ -69,10 +69,10 @@ exports.getQuota = async (req, res) => {
     if (user.last_reset_date !== today) {
       // 根据用户等级重置每日积分
       const tierDailyQuota = {
-        'free': 100,
+        'free': 200,
         'beta': 200,
-        'basic': 500,
-        'pro': 1000,
+        'basic': 400,
+        'pro': 1500,
         'plus': 2000
       };
       const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];

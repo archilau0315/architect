@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
 const { getPoolStatus, healthCheck } = require('./db');
@@ -112,6 +113,8 @@ app.use(sqlInjectionProtection);  // 然后检查SQL注入
 app.use(validateRequest);         // 清理和验证输入
 app.use(monitoringMiddleware);    // 添加监控
 
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
+
 app.use('/api/invite', inviteRoutes);
 app.use('/api/watermark', watermarkRoutes);
 app.use('/api/usage', usageRoutes);
@@ -168,6 +171,12 @@ app.post('/api/logs/download', contentController.logDownload);
 // 管理员登录（无需 token 验证）
 app.post('/api/admin/login', adminController.login);
 
+// 管理员找回密码（无需 token 验证）
+app.post('/api/admin/forgot-password', adminController.forgotPassword);
+
+// 管理员重置密码（无需 token 验证）
+app.post('/api/admin/reset-password', adminController.resetPassword);
+
 // [安全修复] 以下所有管理接口均需管理员 JWT 认证
 const adminRoutes = express.Router();
 adminRoutes.use(verifyAdminToken); // 全局中间件：验证每个请求的 Bearer token
@@ -186,6 +195,7 @@ adminRoutes.delete('/configs/:key', adminController.deleteConfig);
 adminRoutes.get('/beta-requests', adminController.getBetaRequests);
 adminRoutes.post('/beta-requests/:id/approve', adminController.approveBetaRequest);
 adminRoutes.post('/beta-requests/:id/reject', adminController.rejectBetaRequest);
+adminRoutes.post('/change-password', adminController.changePassword);
 
 app.use('/api/admin', adminRoutes);
 

@@ -27,6 +27,12 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: '邮箱或密码错误' });
     }
     
+    // 更新登录时间和IP
+    await db.query(
+      'UPDATE kbit_users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?',
+      [req.ip || req.connection.remoteAddress, user.id]
+    );
+    
     res.json({
       success: true,
       user: {

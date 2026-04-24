@@ -35,8 +35,8 @@ class MailService {
     }
   }
 
-  async sendPasswordResetEmail(email, resetToken) {
-    const resetLink = `https://www.kbitai.com.cn/architect/?reset=${resetToken}`;
+  async sendPasswordResetEmail(email, tokenOrUsername, resetUrl) {
+    const resetLink = resetUrl || `https://www.kbitai.com.cn/architect/?reset=${tokenOrUsername}`;
     const subject = '【首席图像架构师】密码重置请求';
     const html = `
       <!DOCTYPE html>
