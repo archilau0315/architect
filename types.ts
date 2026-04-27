@@ -42,10 +42,23 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface SearchResult {
+  title: string;
+  content: string;
+  url: string;
+}
+
+export interface SearchContextData {
+  searched: boolean;
+  context: string;
+  results: SearchResult[];
+}
+
 export interface ExtendedChatMessage extends ChatMessage {
   sources?: { title: string; uri: string }[];
   parts?: any[];
   contentId?: string;
+  searchContext?: SearchContextData;
 }
 
 export interface ChatSession {

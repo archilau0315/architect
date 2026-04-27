@@ -30,6 +30,7 @@ export interface UnifiedPayload {
   images: ImageItem[];
   mode: ConversationMode;
   silent?: boolean;
+  useSearch?: boolean;
   imageConfig?: {
     aspectRatio: string;
     imageSize: '1K' | '2K' | '4K';
@@ -88,6 +89,7 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [inpaintIdx, setInpaintIdx] = useState<number | null>(null);
   const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // 视频生成参数
   const VIDEO_MODELS = [
@@ -221,12 +223,23 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
     setImages([]);
   };
 
-  const handleSubmit = () => {
+  const shouldAutoSearch = (query: string): boolean => {
+    const searchKeywords = [
+      '2024', '2025', '最新', '今天', '现在', '最近', '最新消息', '最新动态',
+      '趋势', '行情', '新闻', '天气', '股票', '价格', '政策', '发布',
+      '排名', '数据', '统计', '报告', '研究', '分析', '对比',
+      '设计趋势', '行业案例', '素材参考', '外部资料', '实时信息'
+    ];
+    return searchKeywords.some(keyword => query.includes(keyword));
+  };
+
+  const handleSubmit = (useSearch: boolean = false) => {
     if ((!text.trim() && images.length === 0) || isLoading) return;
     const payload: UnifiedPayload = {
       text: text.trim(),
       images,
       mode,
+      useSearch: useSearch || (mode === 'chat' && shouldAutoSearch(text)),
       imageConfig: mode === 'architect' ? {
         aspectRatio: effectiveRatio,
         imageSize, modelTier,
@@ -249,7 +262,7 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(false); }
   };
 
   const activeColor = 'text-blue-400 border-blue-500/30 bg-blue-500/10';
@@ -533,9 +546,29 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
             <span className="text-[10px] font-mono" style={{ color: 'var(--text-tertiary)' }}>{text.length}</span>
           )}
 
+          {/* search button - only in chat mode */}
+          {mode === 'chat' && (
+            <button
+              onClick={() => handleSubmit(true)}
+              disabled={(!text.trim() && images.length === 0) || isLoading}
+              aria-label="联网搜索"
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150
+                ${(!text.trim() && images.length === 0) || isLoading
+                  ? 'cursor-not-allowed'
+                  : 'bg-amber-500/80 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/40'}`}
+              style={(!text.trim() && images.length === 0) || isLoading ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' } : undefined}
+              title="联网搜索后发送"
+            >
+              {isSearching || isLoading
+                ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+              }
+            </button>
+          )}
+
           {/* send button */}
           <button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit(false)}
             disabled={(!text.trim() && images.length === 0) || isLoading}
             aria-label={isLoading ? "生成中" : "发送"}
             className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150

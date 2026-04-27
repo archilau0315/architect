@@ -130,6 +130,10 @@ app.use('/api/ph8', ph8Routes);
 app.use('/api/gateway', gatewayRoutes);
 app.use('/api/upload', uploadRoutes);
 
+// 搜索路由
+const searchRoutes = require('./routes/search');
+app.use('/api/search', searchRoutes);
+
 // 兼容旧路由：/api/ph8/* 仍然可用
 // 后续可以逐步迁移到 /api/gateway/ph8/*
 

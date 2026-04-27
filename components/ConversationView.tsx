@@ -57,6 +57,7 @@ interface Message {
   watermarkedVideoUrl?: string;  // 带水印的视频版本
   timestamp: number;
   rerunPayload?: UnifiedPayload;
+  searchImages?: string[];  // 搜索结果中的图片URL
 }
 
 interface ConversationViewProps {
@@ -543,6 +544,32 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
           <div>{renderTextWithCode(msg.text, msg.type === 'error', t.common.copy, theme)}</div>
         )}
 
+        {/* search images */}
+        {msg.searchImages !== undefined && (
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+              <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">搜索图片</span>
+            </div>
+            {msg.searchImages.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {msg.searchImages.slice(0, 4).map((src, i) => (
+                  <img key={i} src={src} className="max-h-32 max-w-32 rounded-xl object-cover border border-white/10" loading="lazy" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[12px] text-amber-600/60 dark:text-amber-400/60 bg-amber-50/30 dark:bg-amber-900/10 px-4 py-3 rounded-xl">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>图片搜索即将实现，敬请期待。</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* user uploaded images */}
         {msg.type !== 'image' && msg.images && msg.images.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
@@ -697,22 +724,52 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       const m = effectivePayload.mode;
 
       // ── CHAT ──────────────────────────────────────────────────────────────
-      if (m === 'chat') {
-        const files = payload.images.map(f => {
-          let mimeType = f.type || f.mimeType || '';
-          if (!mimeType || mimeType === 'image/' || mimeType.length <= 6) {
-            const dataUrlMatch = f.data.match(/^data:([^;]+);/);
-            if (dataUrlMatch) {
-              mimeType = dataUrlMatch[1];
-            } else {
-              mimeType = 'image/png';
+        if (m === 'chat') {
+          const files = payload.images.map(f => {
+            let mimeType = f.type || f.mimeType || '';
+            if (!mimeType || mimeType === 'image/' || mimeType.length <= 6) {
+              const dataUrlMatch = f.data.match(/^data:([^;]+);/);
+              if (dataUrlMatch) {
+                mimeType = dataUrlMatch[1];
+              } else {
+                mimeType = 'image/png';
+              }
+            }
+            return { name: f.name, type: mimeType, mimeType: mimeType, data: f.data };
+          });
+
+          // 执行联网搜索
+          let searchContext = '';
+          let searchImages: string[] = [];
+          if (payload.useSearch) {
+            try {
+              updateLast({ type: 'thinking', text: '正在联网搜索...' });
+              const searchResponse = await fetch('/api/search/web', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: payload.text, force: true }),
+                signal
+              });
+              const searchData = await searchResponse.json();
+              if (searchData.success && searchData.searched) {
+                if (searchData.context) {
+                  searchContext = searchData.context;
+                }
+                if (searchData.images && Array.isArray(searchData.images)) {
+                  searchImages = searchData.images;
+                }
+              }
+            } catch (searchErr) {
+              console.error('[Search] 联网搜索失败:', searchErr);
             }
           }
-          return { name: f.name, type: mimeType, mimeType: mimeType, data: f.data };
-        });
-        const res = await gemini.chat(finalText, chatHistoryRef.current, 'FAST', files, instructions, modelConfig, signal);
-        const text = res?.text || '';
-        updateLast({ type: 'text', text });
+
+          // 构建最终提示词（包含搜索上下文）
+          const enhancedText = searchContext ? `${searchContext}\n\n用户问题: ${finalText}` : finalText;
+          
+          const res = await gemini.chat(enhancedText, chatHistoryRef.current, 'FAST', files, instructions, modelConfig, signal);
+          const text = res?.text || '';
+          updateLast({ type: 'text', text, searchImages });
         
         // 构建包含图片的用户消息
         const userParts: any[] = [{ text: finalText }];

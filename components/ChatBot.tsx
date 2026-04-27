@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GeminiService, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
-import { ChatMessage, CustomModel, ChatSession, ExtendedChatMessage } from '../types.ts';
+import { ChatMessage, CustomModel, ChatSession, ExtendedChatMessage, SearchContextData } from '../types.ts';
 import { ContentIdService } from '../services/contentIdService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 
@@ -39,6 +39,9 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchContext, setSearchContext] = useState<SearchContextData | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,11 +182,32 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
 
   const removeFile = (index: number) => { setSelectedFiles(prev => prev.filter((_, i) => i !== index)); };
 
-  // 计算对话成本
-  const handleSend = async () => {
+  const executeSearch = async (query: string): Promise<SearchContextData | null> => {
+    try {
+      const response = await fetch('/api/search/web', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, force: false })
+      });
+      const data = await response.json();
+      if (data.success && data.searched && data.context) {
+        return {
+          searched: true,
+          context: data.context,
+          results: data.result?.results || []
+        };
+      }
+    } catch (err) {
+      console.error('[Search] 联网搜索失败:', err);
+    }
+    return null;
+  };
+
+  const handleSend = async (useSearch: boolean = false) => {
     if (isLoading) {
       abortControllerRef.current?.abort();
       setIsLoading(false);
+      setIsSearching(false);
       onBusyStateChange?.(false);
       return;
     }
@@ -193,7 +217,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
     let activeSessionId = currentSessionId;
     let nextSessions = [...sessions];
 
-    // 如果没有会话，创建一个
     if (!activeSessionId) {
       const newSession: ChatSession = { id: generateId(), title: '新对话', messages: [], timestamp: Date.now() };
       nextSessions = [newSession, ...nextSessions];
@@ -206,27 +229,45 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
     setInput('');
     setSelectedFiles([]);
     setIsLoading(true);
+    setIsSearching(true);
     onBusyStateChange?.(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    let currentSearchContext: SearchContext | null = null;
+    
     try {
+      if (useSearch || shouldAutoSearch(userPrompt)) {
+        currentSearchContext = await executeSearch(userPrompt);
+        setSearchContext(currentSearchContext);
+      }
+
       const targetSession = nextSessions.find(s => s.id === activeSessionId)!;
-      // Sliding Window: Only send the last 8 messages to the API to save tokens
       const contextMessages = targetSession.messages.slice(-8);
       const historyForAPI = contextMessages.map(m => ({ role: m.role, parts: m.parts || [{ text: m.text }] }));
       
-      const result = await GeminiService.chat(userPrompt, historyForAPI, thinkingMode, currentFiles, instructions, modelConfig, controller.signal);
+      let enhancedPrompt = userPrompt;
+      if (currentSearchContext?.context) {
+        enhancedPrompt = currentSearchContext.context + '\n\n用户问题: ' + userPrompt;
+      }
+      
+      const result = await GeminiService.chat(enhancedPrompt, historyForAPI, thinkingMode, currentFiles, instructions, modelConfig, controller.signal);
       
       const contentId = ContentIdService.generateId();
       
       const userMsg: ExtendedChatMessage = { role: 'user', text: userPrompt, parts: result.partsSent, timestamp: Date.now() };
-      const modelMsg: ExtendedChatMessage = { role: 'model', text: result.text, sources: result.sources, timestamp: Date.now(), contentId };
+      const modelMsg: ExtendedChatMessage = { 
+        role: 'model', 
+        text: result.text, 
+        sources: result.sources, 
+        timestamp: Date.now(), 
+        contentId,
+        searchContext: currentSearchContext
+      };
       
       const updatedMessages = [...targetSession.messages, userMsg, modelMsg];
       
-      // 自动标题逻辑：首条消息提取
       let updatedTitle = targetSession.title;
       if (targetSession.messages.length === 0) {
         updatedTitle = userPrompt.length > 15 ? userPrompt.substring(0, 15) + '...' : userPrompt;
@@ -235,7 +276,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
       const updatedSessions = nextSessions.map(s => s.id === activeSessionId ? { ...s, title: updatedTitle, messages: updatedMessages, timestamp: Date.now() } : s);
       updateSessionsAndStore(updatedSessions);
       
-      // 获取用户ID
       let userId = 'guest';
       try {
         const sessionData = localStorage.getItem('architect-invite-session');
@@ -247,7 +287,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
         console.error('获取用户ID失败:', e);
       }
       
-      // 获取真实的费用并扣除积分
       setTimeout(async () => {
         try {
           const usageResult = await Ph8UsageService.getLatestUsage(userId);
@@ -260,7 +299,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
               model: usageResult.data.model
             });
 
-            // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
             if (realCost > 0 && onConsumePoints) {
               const userPoints = Math.ceil(realCost / 10);
               const deducted = await onConsumePoints(userPoints);
@@ -285,9 +323,20 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
     } finally { 
       if (abortControllerRef.current === controller) {
         setIsLoading(false); 
+        setIsSearching(false);
         onBusyStateChange?.(false);
       }
     }
+  };
+
+  const shouldAutoSearch = (query: string): boolean => {
+    const searchKeywords = [
+      '2024', '2025', '最新', '今天', '现在', '最近', '最新消息', '最新动态',
+      '趋势', '行情', '新闻', '天气', '股票', '价格', '政策', '发布',
+      '排名', '数据', '统计', '报告', '研究', '分析', '对比',
+      '设计趋势', '行业案例', '素材参考', '外部资料', '实时信息'
+    ];
+    return searchKeywords.some(keyword => query.includes(keyword));
   };
 
   const handleCopy = (text: string, index: number) => {
@@ -476,6 +525,30 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                         <div className="flex flex-wrap gap-2">{msg.sources.map((source, idx) => (<a key={idx} href={source.uri} target="_blank" rel="noopener noreferrer" className="px-4 py-1.5 bg-slate-50 dark:bg-slate-900 rounded-full text-[10px] text-theme dark:text-theme-light font-black border border-slate-200 dark:border-white/5 hover:bg-theme hover:text-white shadow-sm transition-all">{source.title || 'Source Link'}</a>))}</div>
                       </div>
                     )}
+                    {msg.role === 'model' && msg.searchContext && msg.searchContext.searched && (
+                      <div className="mt-6 pt-6 border-t border-amber-100 dark:border-amber-900/50 space-y-3">
+                        <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest italic flex items-center gap-2">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                          </svg>
+                          联网搜索结果
+                        </p>
+                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                          {msg.searchContext.results.slice(0, 5).map((result, idx) => (
+                            <a 
+                              key={idx} 
+                              href={result.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="px-4 py-2 bg-amber-50/50 dark:bg-amber-900/20 rounded-xl text-[11px] font-medium text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-800/30 shadow-sm transition-all max-w-[200px]"
+                            >
+                              <span className="block truncate font-bold">{result.title}</span>
+                              <span className="block text-[9px] opacity-70 truncate">{result.url}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className={`mt-3 flex items-center gap-5 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 opacity-0 group-hover:opacity-100 transition-all ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                      <span className="font-mono">{new Date(msg.timestamp).toLocaleString('zh', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
@@ -494,11 +567,21 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
             {isLoading && (
               <div className="justify-start animate-in slide-in-from-left-4 flex">
                  <div className="bg-slate-100 dark:bg-slate-800 rounded-[1.5rem] rounded-tl-none px-8 py-5 flex items-center gap-5 border border-slate-200 dark:border-slate-700/50 shadow-sm">
-                    <div className="flex items-center gap-1">
-                      {[0,1,2,3,4].map(i => (
-                        <div key={i} className="w-0.5 bg-theme-light rounded-full animate-pulse"
-                          style={{ height: `${8 + (i % 3) * 4}px`, animationDelay: `${i * 0.1}s`, animationDuration: '0.8s' }} />
-                      ))}
+                    <div className="flex items-center gap-2">
+                      {isSearching && (
+                        <div className="flex items-center gap-2 mr-4">
+                          <svg className="w-5 h-5 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                          </svg>
+                          <span className="text-[11px] font-black uppercase tracking-[0.15em] text-amber-600 dark:text-amber-400">Searching...</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        {[0,1,2,3,4].map(i => (
+                          <div key={i} className="w-0.5 bg-theme-light rounded-full animate-pulse"
+                            style={{ height: `${8 + (i % 3) * 4}px`, animationDelay: `${i * 0.1}s`, animationDuration: '0.8s' }} />
+                        ))}
+                      </div>
                     </div>
                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Reasoning...</span>
                  </div>
@@ -554,12 +637,25 @@ const ChatBot: React.FC<ChatBotProps> = ({ instructions, onReset, fontSize = 15,
                   </button>
                 )}
               </div>
-              <button onClick={handleSend} aria-label={isLoading ? "停止生成" : "发送消息"} className="w-16 h-16 bg-theme text-white rounded-[2rem] shadow-2xl flex items-center justify-center transition-all active:scale-90 group/send shrink-0">
-                {isLoading
-                  ? <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                  : <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 translate-x-0.5 group-hover/send:translate-x-1 group-hover/send:-translate-y-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                }
-              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => handleSend(true)} 
+                  aria-label="发送并搜索" 
+                  className={`w-14 h-14 rounded-[1.8rem] shadow-xl flex items-center justify-center transition-all active:scale-90 shrink-0 ${isSearching ? 'bg-amber-500 animate-pulse' : 'bg-amber-500 hover:bg-amber-400'}`}
+                  title="联网搜索后发送"
+                >
+                  {isSearching 
+                    ? <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    : <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                  }
+                </button>
+                <button onClick={() => handleSend(false)} aria-label={isLoading ? "停止生成" : "发送消息"} className="w-16 h-16 bg-theme text-white rounded-[2rem] shadow-2xl flex items-center justify-center transition-all active:scale-90 group/send shrink-0">
+                  {isLoading
+                    ? <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                    : <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 translate-x-0.5 group-hover/send:translate-x-1 group-hover/send:-translate-y-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                  }
+                </button>
+              </div>
             </div>
             <div className="mt-4 flex justify-center"><p className="text-[9px] font-black text-slate-500 dark:text-slate-600 uppercase tracking-[0.4em] select-none">Powered by KbitAi-Pro Architecture Logic</p></div>
           </div>
