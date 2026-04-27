@@ -59,6 +59,7 @@ export interface ExtendedChatMessage extends ChatMessage {
   parts?: any[];
   contentId?: string;
   searchContext?: SearchContextData;
+  searchImages?: string[];
 }
 
 export interface ChatSession {

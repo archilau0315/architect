@@ -228,7 +228,12 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
       '2024', '2025', '最新', '今天', '现在', '最近', '最新消息', '最新动态',
       '趋势', '行情', '新闻', '天气', '股票', '价格', '政策', '发布',
       '排名', '数据', '统计', '报告', '研究', '分析', '对比',
-      '设计趋势', '行业案例', '素材参考', '外部资料', '实时信息'
+      '设计趋势', '行业案例', '素材参考', '外部资料', '实时信息',
+      '搜', '搜索', '查找', '查询', '搜一下',
+      '案例', '实例', '范例', '样板',
+      '参考', '资料', '素材', '灵感', '图片',
+      '宋式', '中式', '北欧', '极简', '欧式', '日式', '赛博朋克',
+      '建筑', '设计', '景观', '室内', '装修', '效果图'
     ];
     return searchKeywords.some(keyword => query.includes(keyword));
   };
@@ -549,39 +554,42 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
           {/* search button - only in chat mode */}
           {mode === 'chat' && (
             <button
-              onClick={() => handleSubmit(true)}
+              onClick={() => handleSubmit(shouldAutoSearch(text))}
               disabled={(!text.trim() && images.length === 0) || isLoading}
-              aria-label="联网搜索"
+              aria-label={isLoading ? "生成中" : "发送"}
               className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150
                 ${(!text.trim() && images.length === 0) || isLoading
                   ? 'cursor-not-allowed'
-                  : 'bg-amber-500/80 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/40'}`}
+                  : 'bg-blue-500/80 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40'}`}
               style={(!text.trim() && images.length === 0) || isLoading ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' } : undefined}
-              title="联网搜索后发送"
+              title={shouldAutoSearch(text) ? '发送并联网搜索' : '发送'}
             >
-              {isSearching || isLoading
-                ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
-                : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+              {isLoading
+                ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                : shouldAutoSearch(text)
+                  ? <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                  : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
               }
             </button>
           )}
 
-          {/* send button */}
-          <button
-            onClick={() => handleSubmit(false)}
-            disabled={(!text.trim() && images.length === 0) || isLoading}
-            aria-label={isLoading ? "生成中" : "发送"}
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150
-              ${(!text.trim() && images.length === 0) || isLoading
-                ? 'cursor-not-allowed'
-                : 'bg-blue-500/80 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40'}`}
-            style={(!text.trim() && images.length === 0) || isLoading ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' } : undefined}
-          >
-            {isLoading
-              ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-              : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
-            }
-          </button>
+          {mode !== 'chat' && (
+            <button
+              onClick={() => handleSubmit(false)}
+              disabled={(!text.trim() && images.length === 0) || isLoading}
+              aria-label={isLoading ? "生成中" : "发送"}
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-150
+                ${(!text.trim() && images.length === 0) || isLoading
+                  ? 'cursor-not-allowed'
+                  : 'bg-blue-500/80 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40'}`}
+              style={(!text.trim() && images.length === 0) || isLoading ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' } : undefined}
+            >
+              {isLoading
+                ? <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
+              }
+            </button>
+          )}
         </div>
       </div>
 

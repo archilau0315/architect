@@ -544,37 +544,32 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
           <div>{renderTextWithCode(msg.text, msg.type === 'error', t.common.copy, theme)}</div>
         )}
 
-        {/* search images */}
-        {msg.searchImages !== undefined && (
-          <div className="mt-4">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-              </svg>
-              <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">搜索图片</span>
-            </div>
-            {msg.searchImages.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {msg.searchImages.slice(0, 4).map((src, i) => (
-                  <img key={i} src={src} className="max-h-32 max-w-32 rounded-xl object-cover border border-white/10" loading="lazy" />
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-[12px] text-amber-600/60 dark:text-amber-400/60 bg-amber-50/30 dark:bg-amber-900/10 px-4 py-3 rounded-xl">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>图片搜索即将实现，敬请期待。</span>
-              </div>
-            )}
+{msg.searchImages && msg.searchImages.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {msg.searchImages.slice(0, 4).map((src, i) => (
+              <img 
+                key={i} 
+                src={src} 
+                className="max-h-32 max-w-32 rounded-xl object-cover border border-white/10 cursor-pointer hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-200" 
+                loading="lazy"
+                onClick={() => setFullscreenImg(src)}
+                title="点击放大查看"
+              />
+            ))}
           </div>
         )}
 
-        {/* user uploaded images */}
         {msg.type !== 'image' && msg.images && msg.images.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {msg.images.map((src, i) => (
-              <img key={i} src={src} className="max-h-48 rounded-xl object-cover border border-white/10" />
+              <img 
+                key={i} 
+                src={src} 
+                className="max-h-32 max-w-32 rounded-xl object-cover border border-white/10 cursor-pointer hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-200" 
+                loading="lazy"
+                onClick={() => setFullscreenImg(src)}
+                title="点击放大查看"
+              />
             ))}
           </div>
         )}
@@ -709,8 +704,9 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     }
 
     // add user bubble
-    if (!payload.silent) {
-      addMsg({ role: 'user', type: 'text', text: payload.text, images: payload.images.map(f => f.data) });
+    if (!payload.silent || payload.silent === undefined) {
+      const userImages = payload.images && payload.images.length > 0 ? payload.images.map(f => f.data) : undefined;
+      addMsg({ role: 'user', type: 'text', text: payload.text || '', images: userImages });
     }
 
     setIsLoading(true);
