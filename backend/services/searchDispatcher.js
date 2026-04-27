@@ -13,6 +13,27 @@ const OVERSEAS_CONTEXT_KEYWORDS = [
   '欧美建筑', '国际艺术', '海外设计', '哥特', '巴洛克', '包豪斯'
 ];
 
+const ARCHITECTURE_KEYWORDS = [
+  '建筑', '设计', '外观', '结构', '现代', '流线型', '公共建筑',
+  '博物馆', '剧院', '体育馆', '住宅', '商业', '办公', '文化中心',
+  '广场', '空间', '景观', '城市', '地标', '天际线', '外立面',
+  'architecture', 'building', 'design', 'urban', 'plaza', 'landscape'
+];
+
+const ARCHITECTS = [
+  '扎哈·哈迪德', 'Zaha Hadid',
+  '贝聿铭', 'I.M. Pei',
+  '隈研吾', 'Kengo Kuma',
+  '弗兰克·盖里', 'Frank Gehry',
+  '托马斯·赫斯维克', 'Thomas Heatherwick',
+  '诺曼·福斯特', 'Norman Foster',
+  '圣地亚哥·卡拉特拉瓦', 'Santiago Calatrava',
+  '安藤忠雄', 'Tadao Ando',
+  '赫尔佐格', '德梅隆', 'Herzog', 'de Meuron',
+  '库哈斯', 'Rem Koolhaas',
+  '莫舍·萨夫迪', 'Moshe Safdie'
+];
+
 class SearchDispatcher {
   constructor() {
     this.stats = {
@@ -47,6 +68,31 @@ class SearchDispatcher {
     } else {
       return 'default';
     }
+  }
+
+  detectDomain(query) {
+    const lowerQuery = query.toLowerCase();
+    
+    if (ARCHITECTURE_KEYWORDS.some(kw => lowerQuery.includes(kw.toLowerCase()))) {
+      return 'architecture';
+    }
+    
+    const artKeywords = ['艺术', 'art', 'painting', 'sculpture', 'artist', 'gallery'];
+    if (artKeywords.some(kw => lowerQuery.includes(kw.toLowerCase()))) {
+      return 'art';
+    }
+    
+    return 'general';
+  }
+
+  extractArchitects(query) {
+    const found = [];
+    ARCHITECTS.forEach(architect => {
+      if (query.includes(architect)) {
+        found.push(architect);
+      }
+    });
+    return found;
   }
 
   determineSearchSource(userTier, query) {
@@ -86,7 +132,46 @@ class SearchDispatcher {
   async completeSearch(query, userTier = 'free', options = {}) {
     this.stats.totalRequests++;
     
-    const { source, reason } = this.determineSearchSource(userTier, query);
+    console.log(`[Search] 原始查询: ${query}`);
+    
+    let enhancedQuery = query;
+    const domain = this.detectDomain(query);
+    const architects = this.extractArchitects(query);
+    
+    console.log(`[Search] 识别领域: ${domain}`);
+    console.log(`[Search] 识别建筑师: ${architects.join(', ') || '无'}`);
+    
+    if (domain === 'architecture') {
+      const architectureTerms = [
+        '建筑设计 实际照片',
+        '建筑外观 效果图', 
+        '现代建筑 外观',
+        '建筑摄影 实景',
+        'architectural photography',
+        'building exterior photo',
+        'modern architecture design',
+        'contemporary building'
+      ];
+      const randomPrefix = architectureTerms[Math.floor(Math.random() * architectureTerms.length)];
+      
+      let architectQuery = '';
+      if (architects.length > 0) {
+        architectQuery = ` ${architects.join(' ')}`;
+      }
+      
+      enhancedQuery = `${randomPrefix}${architectQuery} ${query} -图纸 -技术图 -CAD -平面图 -剖面图 -草图 -代码 -编程 -数据 -json -xml`;
+    } else if (domain === 'art') {
+      enhancedQuery = `艺术作品 绘画 实际照片 ${query} -图纸 -草图 -代码`;
+    } else {
+      if (!enhancedQuery.includes('实际照片') && !enhancedQuery.includes('actual photo')) {
+        enhancedQuery += ' 实际照片';
+      }
+    }
+    
+    console.log(`[Search] 增强查询: ${enhancedQuery}`);
+    
+    const timestamp = Date.now();
+    const { source, reason } = this.determineSearchSource(userTier, enhancedQuery);
     
     let primaryResult;
     let fallbackResult = null;
@@ -106,12 +191,13 @@ class SearchDispatcher {
     if (usedSource === 'tavily') {
       try {
         this.stats.tavilyRequests++;
-        console.log(`[Search] 使用Tavily搜索: ${query}`);
+        console.log(`[Search] 使用Tavily搜索`);
         
-        primaryResult = await tavilyService.search(query, {
+        primaryResult = await tavilyService.search(enhancedQuery, {
           max_results: options.max_results || 8,
           search_depth: 'advanced',
-          include_images: true
+          include_images: true,
+          timestamp: timestamp
         });
 
         if (primaryResult.success && primaryResult.data && primaryResult.data.results.length > 0) {
@@ -133,37 +219,73 @@ class SearchDispatcher {
         this.stats.baiduRequests++;
       }
       
-      console.log(`[Search] 使用百度搜索: ${query}`);
+      console.log(`[Search] 使用百度图片搜索`);
       
-      const imageResult = await baiduSearch.imageSearch(query, { max_results: options.max_results || 4 });
-      const webResult = await baiduSearch.search(query, { max_results: options.max_results || 4 });
-
-      const combinedResults = [];
-      const seenUrls = new Set();
-
-      if (webResult.success && webResult.data && webResult.data.results) {
-        for (const item of webResult.data.results) {
-          if (!seenUrls.has(item.url)) {
-            seenUrls.add(item.url);
-            combinedResults.push(item);
-          }
-        }
-      }
-
-      if (imageResult.success && imageResult.data && imageResult.data.results) {
-        for (const item of imageResult.data.results) {
-          if (!seenUrls.has(item.url)) {
-            seenUrls.add(item.url);
-            combinedResults.push(item);
-          }
-        }
-      }
-
-      const images = combinedResults.filter(r => r.imageUrl && r.imageUrl.startsWith('http')).map(r => {
-        const cleanUrl = r.imageUrl.trim().replace(/^[`'"]+|[`'"]+$/g, '');
-        return cleanUrl;
+      const imageResult = await baiduSearch.imageSearch(enhancedQuery, { 
+        max_results: options.max_results || 8
       });
 
+      const images = [];
+      const invalidExtensions = ['.dwg', '.dxf', '.cad', '.svg', '.pdf', '.json', '.xml', '.txt'];
+      
+      if (imageResult.success && imageResult.data && imageResult.data.results) {
+        console.log(`[Search] 原始图片数量: ${imageResult.data.results.length}`);
+        
+        for (const item of imageResult.data.results) {
+          if (item.imageUrl && item.imageUrl.startsWith('http')) {
+            const cleanUrl = item.imageUrl.trim().replace(/^[`'"]+|[`'"]+$/g, '');
+            
+            const hasInvalidExt = invalidExtensions.some(ext => cleanUrl.toLowerCase().includes(ext));
+            
+            const isTechDoc = cleanUrl.toLowerCase().includes('cad') || 
+                             cleanUrl.toLowerCase().includes('technical') ||
+                             cleanUrl.toLowerCase().includes('blueprint') ||
+                             cleanUrl.toLowerCase().includes('drawing') ||
+                             cleanUrl.toLowerCase().includes('sketch') ||
+                             cleanUrl.toLowerCase().includes('code') ||
+                             cleanUrl.toLowerCase().includes('python') ||
+                             cleanUrl.toLowerCase().includes('github');
+            
+            if (!hasInvalidExt && !isTechDoc) {
+              images.push(cleanUrl);
+            } else {
+              console.log(`[Search] 过滤图片: ${cleanUrl.substring(0, 50)}... (原因: ${hasInvalidExt ? '无效扩展名' : '技术图纸/代码'})`);
+            }
+          }
+        }
+      }
+
+      console.log(`[Search] 过滤后图片数量: ${images.length}`);
+      
+      if (images.length === 0) {
+        console.log(`[Search] 过滤后无图片，尝试备用搜索`);
+        const backupQueries = [
+          '现代建筑设计 外观照片',
+          '建筑效果图 实景',
+          '城市地标建筑 图片',
+          'architecture building exterior photo',
+          'modern architecture photography'
+        ];
+        
+        for (const backupQuery of backupQueries) {
+          const backupResult = await baiduSearch.imageSearch(backupQuery, { max_results: 4 });
+          if (backupResult.success && backupResult.data && backupResult.data.results) {
+            for (const item of backupResult.data.results) {
+              if (item.imageUrl && item.imageUrl.startsWith('http')) {
+                const cleanUrl = item.imageUrl.trim();
+                const hasInvalidExt = invalidExtensions.some(ext => cleanUrl.toLowerCase().includes(ext));
+                if (!hasInvalidExt) {
+                  images.push(cleanUrl);
+                }
+              }
+            }
+          }
+          if (images.length >= 4) break;
+        }
+      }
+
+      console.log(`[Search] 最终图片数量: ${images.length}`);
+      
       return {
         success: true,
         searched: true,
@@ -171,10 +293,10 @@ class SearchDispatcher {
         source: usedSource,
         result: {
           answer: '',
-          results: combinedResults,
+          results: [],
           images: images
         },
-        context: this.buildContext(combinedResults),
+        context: `搜索到 ${images.length} 张相关图片`,
         images: images
       };
     } catch (error) {

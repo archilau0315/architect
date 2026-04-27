@@ -703,9 +703,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       }
     }
 
-    // add user bubble
-    if (!payload.silent || payload.silent === undefined) {
-      const userImages = payload.images && payload.images.length > 0 ? payload.images.map(f => f.data) : undefined;
+    // add user bubble (show when: not silent OR no images OR has images to display)
+    const hasImages = payload.images && payload.images.length > 0;
+    if (!payload.silent || payload.silent === undefined || hasImages) {
+      const userImages = hasImages ? payload.images.map(f => f.data) : undefined;
       addMsg({ role: 'user', type: 'text', text: payload.text || '', images: userImages });
     }
 
@@ -734,10 +735,65 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             return { name: f.name, type: mimeType, mimeType: mimeType, data: f.data };
           });
 
+          // 检测是否需要图像分析和搜索
+          const txt = payload.text.toLowerCase();
+          const needsImageAnalysis = payload.images.length > 0 && (
+            txt.includes('分析') || txt.includes('解析') || txt.includes('识别') ||
+            txt.includes('analyze') || txt.includes('analy') || txt.includes('identify') ||
+            txt.includes('search') || txt.includes('搜索') || txt.includes('similar') ||
+            txt.includes('相关') || txt.includes('案例') || txt.includes('cases')
+          );
+
           // 执行联网搜索
           let searchContext = '';
           let searchImages: string[] = [];
-          if (payload.useSearch) {
+          let imageAnalysisResult = '';
+          
+          if (needsImageAnalysis && payload.images.length > 0) {
+            try {
+              updateLast({ type: 'thinking', text: '正在分析图像...' });
+              // 调用图像分析服务
+              const analysisResponse = await fetch('/api/analyze/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  images: payload.images.map(img => ({
+                    data: img.data,
+                    type: img.type
+                  })),
+                  prompt: payload.text
+                }),
+                signal
+              });
+              const analysisData = await analysisResponse.json();
+              if (analysisData.success) {
+                imageAnalysisResult = analysisData.analysis || '';
+                
+                // 如果分析结果包含关键词，执行搜索
+                if (analysisData.keywords && analysisData.keywords.length > 0) {
+                  updateLast({ type: 'thinking', text: '正在搜索相关信息...' });
+                  const searchQuery = analysisData.search_query || analysisData.keywords.join(' ');
+                  const searchResponse = await fetch('/api/search/web', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: searchQuery, force: true }),
+                    signal
+                  });
+                  const searchData = await searchResponse.json();
+                  if (searchData.success && searchData.searched) {
+                    if (searchData.context) {
+                      searchContext = searchData.context;
+                    }
+                    if (searchData.images && Array.isArray(searchData.images)) {
+                      searchImages = searchData.images;
+                    }
+                  }
+                }
+              }
+            } catch (analysisErr) {
+              console.error('[Image Analysis] 图像分析失败:', analysisErr);
+            }
+          } else if (payload.useSearch) {
             try {
               updateLast({ type: 'thinking', text: '正在联网搜索...' });
               const searchResponse = await fetch('/api/search/web', {
@@ -760,8 +816,14 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             }
           }
 
-          // 构建最终提示词（包含搜索上下文）
-          const enhancedText = searchContext ? `${searchContext}\n\n用户问题: ${finalText}` : finalText;
+          // 构建最终提示词（包含图像分析和搜索上下文）
+          let enhancedText = finalText;
+          if (imageAnalysisResult) {
+            enhancedText = `图像分析结果：\n${imageAnalysisResult}\n\n用户问题：${finalText}`;
+          }
+          if (searchContext) {
+            enhancedText = `${searchContext}\n\n${enhancedText}`;
+          }
           
           const res = await gemini.chat(enhancedText, chatHistoryRef.current, 'FAST', files, instructions, modelConfig, signal);
           const text = res?.text || '';

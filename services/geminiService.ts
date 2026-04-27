@@ -599,6 +599,70 @@ export const GeminiService = {
     return err.message || "未知 API 错误";
   },
 
+  async analyzeImageWithKeywords(images: Array<{data: string, type: string}>, prompt: string, instructions?: any, modelConfig?: any, signal?: AbortSignal): Promise<{analysis: string, keywords: string[]}> {
+    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash" : "gemini-1.5-flash";
+    const requestedModel = getModelName(modelConfig, defaultModel);
+    const { ai, modelId, node } = getAI(modelConfig, requestedModel);
+    
+    const systemInstruction = instructions?.VISUAL_ANALYST || DEFAULT_SYSTEM_PRESETS.VISUAL_ANALYST;
+    const analysisPrompt = `请分析以下图像，并提取最相关的关键词。
+
+用户问题：${prompt}
+
+分析要求：
+1. 详细分析图像内容，包括构图、材质、光影、领域特征等
+2. 提取5-10个最能代表图像内容的关键词
+3. 输出格式：先输出详细分析，然后在最后以 "关键词：[" 开头，"]" 结尾的格式列出关键词`;
+
+    const parts: any[] = [];
+    parts.push({ text: analysisPrompt });
+
+    // 处理图像数据
+    for (const img of images) {
+      try {
+        const compressedImage = await this.compressImage(img.data, 1024, 0.85);
+        const imageData = compressedImage.split(",")[1];
+        parts.push({ inlineData: { mimeType: img.type || "image/jpeg", data: imageData } });
+      } catch (e) {
+        console.error("图像压缩失败:", e);
+      }
+    }
+
+    try {
+      const genConfig: any = {
+        systemInstruction: systemInstruction,
+        maxOutputTokens: 2048,
+      };
+      if (modelId?.includes("gemini-3")) {
+        genConfig.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+      }
+      
+      const response = await ai.models.generateContent({
+        model: modelId!,
+        contents: parts,
+        config: genConfig,
+      });
+      
+      this.reportTokens(response.usageMetadata);
+      const text = response.text || '';
+      
+      // 提取关键词
+      const keywordMatch = text.match(/关键词：\[(.*?)\]/);
+      let keywords: string[] = [];
+      if (keywordMatch && keywordMatch[1]) {
+        keywords = keywordMatch[1].split(',').map(k => k.trim()).filter(k => k);
+      }
+      
+      // 移除关键词部分，保留纯分析内容
+      const analysis = text.replace(/关键词：\[.*?\]/, '').trim();
+      
+      return { analysis, keywords };
+    } catch (err: any) {
+      console.error("图像分析失败:", err);
+      throw new Error(this.formatError(err));
+    }
+  },
+
   async compressImage(dataUrl: string, maxSize: number = 1024, quality: number = 0.85): Promise<string> {
     return new Promise((resolve) => {
       const img = new Image();

@@ -134,6 +134,10 @@ app.use('/api/upload', uploadRoutes);
 const searchRoutes = require('./routes/search');
 app.use('/api/search', searchRoutes);
 
+// 图像分析路由
+const analyzeRoutes = require('./routes/analyze');
+app.use('/api/analyze', analyzeRoutes);
+
 // 兼容旧路由：/api/ph8/* 仍然可用
 // 后续可以逐步迁移到 /api/gateway/ph8/*
 

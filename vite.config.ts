@@ -38,6 +38,18 @@ export default defineConfig(({ mode }) => {
             secure: true,
             timeout: 30000
           },
+          '/api/analyze': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            secure: true,
+            timeout: 30000
+          },
+          '/api/search': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            secure: true,
+            timeout: 30000
+          },
           '/api/ph8/user-info': {
             target: 'http://localhost:3002',
             changeOrigin: true,
