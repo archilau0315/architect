@@ -26,10 +26,8 @@ export const getCurrentUserId = (): string => {
  */
 export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  // 【修复】生产环境使用空字符串前缀，生成的URL如：
-  //   /api/ph8/openai/v1/images/generations → 匹配 www.kbitai.com.cn Nginx的 location /api/ph8/ 规则（第113行）
-  //   而非 /architect/api/ph8/...（会被SPA规则拦截返回405）或 https://api.kbitai.com.cn/...（跨域CORS错误）
-  const base = '';
+  // 开发环境使用 /architect 前缀，生产环境使用后端API地址
+  const base = isDev ? '/architect' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {
