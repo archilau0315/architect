@@ -156,4 +156,37 @@ router.post('/reset-stats', async (req, res) => {
   }
 });
 
+router.post('/similar', authenticateToken, async (req, res) => {
+  try {
+    const { image, max_results = 8 } = req.body;
+
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '图片数据不能为空'
+      });
+    }
+
+    const baiduImageSearch = require('../services/baiduImageSearchService');
+    const base64Data = baiduImageSearch.convertToBase64(image);
+
+    if (!base64Data) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的图片格式'
+      });
+    }
+
+    const result = await baiduImageSearch.searchSimilarImage(base64Data, { max_results });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Similar Image API] 错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '服务器错误'
+    });
+  }
+});
+
 module.exports = router;

@@ -747,48 +747,27 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           // 执行联网搜索
           let searchContext = '';
           let searchImages: string[] = [];
-          let imageAnalysisResult = '';
           
-          if (needsImageAnalysis && payload.images.length > 0) {
+          if (payload.images.length > 0) {
             try {
-              updateLast({ type: 'thinking', text: '正在分析图像...' });
-              // 调用图像分析服务
-              const analysisResponse = await fetch('/api/analyze/image', {
+              updateLast({ type: 'thinking', text: '正在分析图像并搜索相似图片...' });
+              console.log('[Search] Calling similar image search API...');
+              const analysisResponse = await fetch('/api/search/similar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                  images: payload.images.map(img => ({
-                    data: img.data,
-                    type: img.type
-                  })),
-                  prompt: payload.text
+                  image: payload.images[0]?.data,
+                  max_results: 8
                 }),
                 signal
               });
               const analysisData = await analysisResponse.json();
-              if (analysisData.success) {
-                imageAnalysisResult = analysisData.analysis || '';
-                
-                // 如果分析结果包含关键词，执行搜索
-                if (analysisData.keywords && analysisData.keywords.length > 0) {
-                  updateLast({ type: 'thinking', text: '正在搜索相关信息...' });
-                  const searchQuery = analysisData.search_query || analysisData.keywords.join(' ');
-                  const searchResponse = await fetch('/api/search/web', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: searchQuery, force: true }),
-                    signal
-                  });
-                  const searchData = await searchResponse.json();
-                  if (searchData.success && searchData.searched) {
-                    if (searchData.context) {
-                      searchContext = searchData.context;
-                    }
-                    if (searchData.images && Array.isArray(searchData.images)) {
-                      searchImages = searchData.images;
-                    }
-                  }
-                }
+              console.log('[Search] Similar image search response:', analysisData);
+              if (analysisData.success && analysisData.data) {
+                searchImages = analysisData.data.images || [];
+                console.log('[Search] Found similar images:', searchImages.length);
+              } else {
+                console.log('[Search] Similar image search failed:', analysisData.error);
               }
             } catch (analysisErr) {
               console.error('[Image Analysis] 图像分析失败:', analysisErr);
@@ -816,11 +795,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             }
           }
 
-          // 构建最终提示词（包含图像分析和搜索上下文）
+          // 构建最终提示词（包含搜索上下文）
           let enhancedText = finalText;
-          if (imageAnalysisResult) {
-            enhancedText = `图像分析结果：\n${imageAnalysisResult}\n\n用户问题：${finalText}`;
-          }
           if (searchContext) {
             enhancedText = `${searchContext}\n\n${enhancedText}`;
           }
