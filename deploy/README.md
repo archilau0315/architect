@@ -134,6 +134,19 @@ ENCRYPTION_KEY=your-32-char-encryption-key
 
 # 调试模式
 APP_DEBUG=false
+
+# PH8 网关配置（AI模型调用）
+PH8_API_KEY=your_ph8_api_key
+PH8_GATEWAY_URL=https://ph8.co
+PH8_ENABLED=true
+
+# Tavily Search API（海外联网搜索）
+TAVILY_API_KEY=your_tavily_api_key
+
+# 百度图像搜索 API（以图搜图）
+BAIDU_APP_ID=your_baidu_app_id
+BAIDU_API_KEY=your_baidu_api_key
+BAIDU_SECRET_KEY=your_baidu_secret_key
 ```
 
 ### 5.2 生成密钥
@@ -173,9 +186,30 @@ openssl rand -hex 16
 | GET | /api/routing/models | 获取可用模型 |
 | POST | /api/routing/check-quota | 检查配额 |
 
+### 6.4 搜索接口
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | /api/search/web | 联网搜索（文本搜索） |
+| POST | /api/search/similar | 以图搜图（相似图片搜索） |
+
 ---
 
-## 七、授权口令
+## 七、联网搜索功能
+
+### 7.1 双搜索源系统
+- **国内用户**：百度搜索（自动降级兜底）
+- **海外用户**：Tavily Search（Pro用户专用）
+
+### 7.2 以图搜图
+当用户上传底图时，系统自动调用百度相似图片搜索 API，返回与底图风格相似的设计案例图片。
+
+### 7.3 搜索触发
+- 用户上传图片时自动触发
+- 无需手动开关
+
+---
+
+## 八、授权口令
 
 | 口令 | 等级 | 有效期 |
 |------|------|--------|
@@ -188,7 +222,7 @@ openssl rand -hex 16
 
 ---
 
-## 八、访问地址汇总
+## 九、访问地址汇总
 
 | 功能 | 地址 |
 |------|------|
@@ -199,7 +233,7 @@ openssl rand -hex 16
 
 ---
 
-## 九、默认账号
+## 十、默认账号
 
 | 类型 | 账号 | 密码 |
 |------|------|------|
@@ -209,7 +243,7 @@ openssl rand -hex 16
 
 ---
 
-## 十、联系支持
+## 十一、联系支持
 
 - **公司**: 天津匡形无界智能科技有限公司
 - **域名**: www.kbitai.com.cn
