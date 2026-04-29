@@ -334,15 +334,27 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     return true;
   };
 
+  // 检测当前主题
+  const savedTheme = localStorage.getItem('architect-theme-mode');
+  const isDark = savedTheme !== 'light';
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-[pulse_4s_ease-in-out_infinite]" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-[pulse_4s_ease-in-out_infinite_1s]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-20 right-20 w-2 h-2 bg-white/20 rounded-full animate-ping" />
-        <div className="absolute bottom-32 left-24 w-1.5 h-1.5 bg-indigo-400/30 rounded-full animate-ping delay-500" />
-      </div>
+      {/* 背景优雅退晕渐变 - 纯蓝色系 */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: isDark
+            ? `
+              radial-gradient(ellipse 100% 80% at 30% 30%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),
+              radial-gradient(ellipse 80% 60% at 70% 70%, rgba(59, 130, 246, 0.12) 0%, transparent 50%)
+            `
+            : `
+              radial-gradient(ellipse 120% 100% at 50% 40%, rgba(59, 130, 246, 0.15) 0%, transparent 65%),
+              radial-gradient(ellipse 80% 60% at 30% 60%, rgba(99, 102, 241, 0.1) 0%, transparent 50%)
+            `
+        }}
+      />
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-10 animate-[fadeInUp_0.6s_ease-out]">

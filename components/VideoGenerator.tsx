@@ -277,16 +277,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       return;
     }
 
-    if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        if (window.confirm("视频生成任务需要绑定 Paid API Key。是否立即前往绑定？")) {
-          await window.aistudio.openSelectKey();
-        } else {
-          return;
-        }
-      }
-    }
+    // 视频生成走 PH8 后端代理，不需要前端检查 API Key
 
     setIsGenerating(true);
     setProgress(0);
@@ -368,8 +359,10 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         }
       }, 500);
     } catch (err: any) {
+      console.error('[VideoGenerator] 生成失败:', err);
       if (err.name !== 'AbortError') {
-        alert(`视频生成失败，请稍后重试`); // [安全修复] 不暴露原始错误信息
+        const errorHint = err?.message || err?.error?.message || '未知错误';
+        alert(`视频生成失败：${errorHint}\n\n详细信息已打印到 F12 控制台`);
       }
     } finally {
       setIsGenerating(false);

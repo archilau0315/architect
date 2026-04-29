@@ -2303,15 +2303,15 @@ ${colorMappingDescription}
   },
 
   async generateVideo(prompt: string, assets: string[], aspectRatio: string, instructions: any, signal?: AbortSignal, lastVideo?: any, engineId?: string, onProgress?: (progress: number) => void, videoOptions?: { resolution: string; duration: number; camerafixed: boolean; seed: number | null }) {
-    const requestedModel = engineId || 'SeeDance-1.0PF';
-    const { ai, modelId, node, apiKey } = getAI(undefined, requestedModel); 
+    // 确定要使用的模型 ID（实际发送给 API 的模型标识）
+    const remoteModelId = engineId || 'doubao-seedance-1-0-pro-fast-251015';
     
-    // 如果是第三方非 Google 节点，使用 ph8 视频 API
-    if (node && node.provider !== "Google Cloud") {
-      console.log(`[Video Gateway] Using ph8 Video API for ${node.provider}`);
+    // 如果 useThirdPartyGateway 为 true，强制使用 PH8 网关
+    // 这确保视频生成不依赖前端 API Key，直接通过后端代理转发
+    if (useThirdPartyGateway) {
+      console.log(`[Video Gateway] Using PH8 Video API (forced mode)`);
       try {
-        const proxiedUrl = getProxiedUrl(node.url);
-        const remoteModelId = node.remoteModelId || engineId || requestedModel;
+        const proxiedUrl = getProxiedUrl('https://ph8.co');
         
         console.log(`[Video Gateway] Model: ${remoteModelId}, Endpoint: ${proxiedUrl}/videos`);
         
@@ -2581,6 +2581,134 @@ ${colorMappingDescription}
       }
     }
 
+    // 开发者模式：使用 getAI 查找配置（此时可能没有开启 useThirdPartyGateway）
+    const requestedModel = engineId || 'SeeDance-1.0PF';
+    const { ai, modelId, node } = getAI(undefined, requestedModel);
+    
+    // 如果有有效的第三方节点，使用 PH8 视频 API
+    if (node && node.provider !== "Google Cloud") {
+      console.log(`[Video Gateway] Using PH8 Video API via getAI for ${node.provider}`);
+      try {
+        const proxiedUrl = getProxiedUrl(node.url);
+        const nodeModelId = node.remoteModelId || remoteModelId;
+        
+        console.log(`[Video Gateway] Model: ${nodeModelId}, Endpoint: ${proxiedUrl}/videos`);
+        
+        // 构建请求体
+        const opt = videoOptions || {};
+        const requestBody: any = {
+          model: nodeModelId,
+          prompt: prompt,
+          duration: opt.duration ?? 5,
+          resolution: (opt.resolution === '720p' || opt.resolution === '1080p') ? opt.resolution : '1080p',
+          ratio: aspectRatio === '9:16' ? '9:16' : aspectRatio === '1:1' ? '1:1' : '16:9',
+          watermark: false
+        };
+        if (opt.camerafixed === true) {
+          requestBody.camerafixed = true;
+        }
+        if (typeof opt.seed === 'number' && opt.seed > 0) {
+          requestBody.seed = Math.floor(opt.seed);
+        }
+        if (assets.length > 0 && assets[0]) {
+          requestBody.image = assets[0];
+        }
+        
+        // 创建视频任务
+        const createResponse = await fetch(`${proxiedUrl}/videos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal
+        });
+
+        const responseText = await createResponse.text().catch(() => '');
+        let task: any = null;
+        
+        try {
+          task = JSON.parse(responseText);
+        } catch (e) {
+          // 解析失败
+        }
+        
+        if (task && task.id && (task.status === 'queued' || task.status === 'in_progress' || task.status === 'completed')) {
+          console.log(`[Video Gateway] Task created successfully:`, task.id);
+        } else if (!createResponse.ok) {
+          throw new Error(`Gateway Error (${createResponse.status}): ${responseText || createResponse.statusText}`);
+        }
+        
+        if (!task || !task.id) {
+          throw new Error(`Gateway returned invalid response: ${responseText}`);
+        }
+        const videoId = task.id;
+        
+        // 轮询任务状态
+        let status = task.status;
+        let progress = task.progress || 0;
+        let retryCount = 0;
+        const maxRetries = 60;
+        
+        if (task.url || task.video_url || task.content_url || task.data?.url) {
+          const videoUrl = task.url || task.video_url || task.content_url || task.data?.url;
+          return { url: videoUrl, videoRef: videoId };
+        }
+        
+        while ((status === "in_progress" || status === "queued") && retryCount < maxRetries) {
+          if (signal?.aborted) throw new Error("AbortError");
+          
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          retryCount++;
+          
+          try {
+            const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
+            let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {});
+            
+            if (!statusResponse.ok) {
+              statusResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {});
+            }
+            
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json();
+              if (statusData && statusData.id) {
+                status = statusData.status;
+                progress = statusData.progress || progress;
+                onProgress?.(Math.min(progress, 95));
+                
+                if (status === "failed") {
+                  throw new Error(statusData.error?.message || "Video generation failed");
+                }
+                
+                if (status === "completed") {
+                  const videoUrl = statusData.url || statusData.video_url || statusData.content_url ||
+                                  statusData.output?.url || statusData.data?.url;
+                  if (videoUrl) {
+                    return { url: videoUrl, videoRef: videoId };
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.log(`[Video Gateway] Status check error, retrying...`);
+          }
+        }
+        
+        throw new Error(`Video generation timeout after ${maxRetries} retries`);
+        
+      } catch (err: any) {
+        let errorMessage = "视频生成失败";
+        if (err.message.includes("Gateway Error")) {
+          errorMessage = `视频生成失败：${err.message}`;
+        } else if (err.message === "AbortError") {
+          errorMessage = "视频生成已取消";
+        } else {
+          errorMessage = `视频生成失败：${err.message}`;
+        }
+        throw new Error(errorMessage);
+      }
+    }
+
+    // 兜底：使用 Google SDK（仅在开发者模式下且没有配置第三方节点时）
+    console.log(`[Video Gateway] Falling back to Google SDK`);
     const config: any = {
       numberOfVideos: 1,
       aspectRatio: (aspectRatio === '16:9' || aspectRatio === '9:16') ? aspectRatio : '16:9',

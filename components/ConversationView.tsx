@@ -1047,13 +1047,31 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-8 text-center select-none px-4 relative">
-            {/* 背景光晕 */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-96 h-96 rounded-full bg-indigo-500/5 blur-3xl" />
-            </div>
+            {/* 背景光晕 - 暗/亮模式优雅退晕渐变 */}
+            <div 
+              className="absolute inset-0 pointer-events-none" 
+              style={{
+                background: theme === 'dark'
+                  ? `
+                    radial-gradient(ellipse 100% 80% at 50% 40%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+                    radial-gradient(ellipse 80% 60% at 50% 60%, rgba(59, 130, 246, 0.1) 0%, transparent 50%)
+                  `
+                  : `
+                    radial-gradient(ellipse 120% 100% at 50% 30%, rgba(59, 130, 246, 0.12) 0%, transparent 70%),
+                    radial-gradient(ellipse 100% 80% at 50% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 60%)
+                  `
+              }} 
+            />
             {/* logo */}
             <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl scale-150" />
+              <div 
+                className="absolute inset-0 scale-[2]"
+                style={{
+                  background: theme === 'dark'
+                    ? 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0.08) 30%, transparent 70%)'
+                    : 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.06) 30%, transparent 70%)'
+                }}
+              />
               <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-2xl shadow-indigo-500/30 ring-1 ring-white/10">
                 <img src="/public/archi01.png" className="w-full h-full object-cover" alt="Kbit" />
               </div>
