@@ -411,7 +411,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleVerify}
                   disabled={isVerifying}
-                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isVerifying ? (
                     <span className="flex items-center justify-center gap-2">
@@ -509,7 +509,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isLoggingIn ? (
                     <span className="flex items-center justify-center gap-2">
@@ -649,7 +649,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleRegister}
                   disabled={isRegistering}
-                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
+                  className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isRegistering ? (
                     <span className="flex items-center justify-center gap-2">
