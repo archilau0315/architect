@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Layout from './components/Layout.tsx';
 import ConversationView from './components/ConversationView.tsx';
+import VideoGenerator from './components/VideoGenerator.tsx';
 import SettingsPanel from './components/SettingsPanel.tsx';
 import InviteVerify from './components/InviteVerify.tsx';
 import { VersionRecord, UserPreferences, CustomModel, CreativeDomain, UserTier, ConversationMode, AppTab } from './types.ts';
@@ -69,6 +70,10 @@ const App: React.FC = () => {
   const [betaDailyUsed, setBetaDailyUsed] = useState(0);
   const [showBetaBanner, setShowBetaBanner] = useState(false);
 
+  // 等级过期提示
+  const [showTierExpiredModal, setShowTierExpiredModal] = useState(false);
+  const [tierExpiryInfo, setTierExpiryInfo] = useState<{ previous: string; message: string } | null>(null);
+
   const [versionHistory, setVersionHistory] = useState<VersionRecord[]>([]);
   const [currentInstructions, setCurrentInstructions] = useState(DEFAULT_SYSTEM_PRESETS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -102,6 +107,11 @@ const App: React.FC = () => {
   const [chatKey, setChatKey] = useState(0);
   const [analyzeKey, setAnalyzeKey] = useState(0); // kept for compatibility
   const [videoKey, setVideoKey] = useState(0);
+  // 视频回写：工作台生成后回写到聊天气泡
+  const [pendingVideoMessage, setPendingVideoMessage] = useState<{ url: string; prompt: string } | null>(null);
+  const handleVideoGenerated = (result: { url: string; prompt: string }) => {
+    setPendingVideoMessage(result);
+  };
   const [isSystemVisible, setIsSystemVisible] = useState(false);
   const [useThirdPartyGateway, setUseThirdPartyGateway] = useState(true);
   const [usePromptEnhance, setUsePromptEnhance] = useState(true);
@@ -166,10 +176,23 @@ const App: React.FC = () => {
             savedTier = data.data.tier as UserTier;
             localStorage.setItem(USER_TIER_KEY, savedTier);
             // 同步后端积分数据
-            if (data.data.daily_points !== undefined) {
+            if (data.data.points) {
+              setDailyPoints(data.data.points.daily || 0);
+              setPurchasedPoints(data.data.points.purchased || 0);
+              setTotalConsumedPoints(data.data.points.totalConsumed || 0);
+            } else if (data.data.daily_points !== undefined) {
               setDailyPoints(data.data.daily_points);
               setPurchasedPoints(data.data.purchased_points || 0);
               setTotalConsumedPoints(data.data.total_consumed_points || 0);
+            }
+            // 检测等级是否已过期降级
+            if (data.data.tierExpired && data.data.previousTier) {
+              const tierLabels: Record<string, string> = { beta: '内测用户', basic: '基础级', pro: 'PRO级', plus: 'PLUS级' };
+              setTierExpiryInfo({
+                previous: data.data.previousTier,
+                message: `您的${tierLabels[data.data.previousTier] || data.data.previousTier}会员已到期，已自动降级为免费用户。`
+              });
+              setShowTierExpiredModal(true);
             }
             console.log('[初始化] 从后端获取用户等级:', savedTier);
           } else {
@@ -181,6 +204,8 @@ const App: React.FC = () => {
         setUserTier(savedTier);
 
         // 从后端获取实时余额和消耗数据
+        let backendSynced = false; // 标记后端数据是否已同步成功
+
         const fetchBalance = async () => {
           try {
             const session = localStorage.getItem('architect-invite-session');
@@ -199,11 +224,27 @@ const App: React.FC = () => {
             });
             const result = await response.json();
             if (result.success && result.data) {
-              const { points } = result.data;
-              // 正确同步每日积分和购买积分
+              const { points, tier, tierExpired, previousTier } = result.data;
+              // 正确同步每日积分和购买积分（后端数据优先）
               setDailyPoints(points.daily || 0);
               setPurchasedPoints(points.purchased || 0);
               setTotalConsumedPoints(points.total_consumed || 0);
+              backendSynced = true; // 标记：后端已提供真实数据
+
+              // 检测等级过期
+              if (tierExpired && tier && previousTier && tier === 'free') {
+                const tierLabels: Record<string, string> = { beta: '内测用户', basic: '基础级', pro: 'PRO级', plus: 'PLUS级' };
+                setUserTier('free');
+                localStorage.setItem(USER_TIER_KEY, 'free');
+                if (!showTierExpiredModal) {
+                  setTierExpiryInfo({
+                    previous: previousTier,
+                    message: `您的${tierLabels[previousTier] || previousTier}会员已到期，已自动降级为免费用户。`
+                  });
+                  setShowTierExpiredModal(true);
+                }
+              }
+
               console.log('[余额同步] 每日积分:', points.daily, '购买积分:', points.purchased, '总消耗:', points.total_consumed);
             }
           } catch (error) {
@@ -231,42 +272,44 @@ const App: React.FC = () => {
           setShowBetaBanner(true);
         }
 
-        // Points Initialization
-        const today = new Date().toDateString();
-        const savedPointsData = localStorage.getItem(POINTS_KEY);
-        if (savedPointsData) {
-          const { daily, purchased, lastReset } = JSON.parse(savedPointsData);
-          
-          // Beta 用户特殊处理：确保注册赠送积分
-          if (savedTier === 'beta' && (!purchased || purchased < 1000)) {
-            setPurchasedPoints(1000);
-            setDailyPoints(200);
-            setLastResetDate(today);
-            savePoints(200, 1000, today);
-          } else {
-            setPurchasedPoints(purchased || 0);
-            if (lastReset === today) {
-              setDailyPoints(daily);
-              setLastResetDate(lastReset);
-            } else {
-              const newDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
-              setDailyPoints(newDaily);
+        // Points Initialization — 仅作为兜底：后端未返回数据时才使用 localStorage/默认值
+        if (!backendSynced) {
+          const today = new Date().toDateString();
+          const savedPointsData = localStorage.getItem(POINTS_KEY);
+          if (savedPointsData) {
+            const { daily, purchased, lastReset } = JSON.parse(savedPointsData);
+            
+            // Beta 用户兜底：确保注册赠送积分（daily=0，由后端定时任务重置）
+            if (savedTier === 'beta' && (!purchased || purchased < 1000)) {
+              setPurchasedPoints(1000);
+              setDailyPoints(0);
               setLastResetDate(today);
-              savePoints(newDaily, purchased || 0, today);
+              savePoints(0, 1000, today);
+            } else {
+              setPurchasedPoints(purchased || 0);
+              if (lastReset === today) {
+                setDailyPoints(daily);
+                setLastResetDate(lastReset);
+              } else {
+                const newDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
+                setDailyPoints(newDaily);
+                setLastResetDate(today);
+                savePoints(newDaily, purchased || 0, today);
+              }
             }
-          }
-        } else {
-          // 新用户初始化
-          if (savedTier === 'beta') {
-            setDailyPoints(200);
-            setPurchasedPoints(1000);
-            setLastResetDate(today);
-            savePoints(200, 1000, today);
           } else {
-            const initialDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
-            setDailyPoints(initialDaily);
-            setLastResetDate(today);
-            savePoints(initialDaily, 0, today);
+            // 新用户兜底初始化（daily=0，由后端定时任务重置）
+            if (savedTier === 'beta') {
+              setDailyPoints(0);
+              setPurchasedPoints(1000);
+              setLastResetDate(today);
+              savePoints(0, 1000, today);
+            } else {
+              // 新用户兜底：daily=0，由后端定时任务按等级重置
+              setDailyPoints(0);
+              setLastResetDate(today);
+              savePoints(0, 0, today);
+            }
           }
         }
         
@@ -638,9 +681,10 @@ const App: React.FC = () => {
   const handleInviteVerified = (userData: { email: string; tier: string; points: number }) => {
     setUserTier(userData.tier as UserTier);
     setNeedsInviteVerify(false);
-    setDailyPoints(200);
+    // [修复] 注册时每日积分为0，由后端定时任务在凌晨按等级重置
+    setDailyPoints(0);
     setPurchasedPoints(userData.points || 1000);
-    savePoints(200, userData.points || 1000, new Date().toDateString());
+    savePoints(0, userData.points || 1000, new Date().toDateString());
   };
 
   if (needsInviteVerify === null) {
@@ -671,7 +715,7 @@ const App: React.FC = () => {
       onOpenSettings={() => setIsSettingsOpen(true)}
       currentModelName={dynamicModelName}
       modelStatus={modelStatus}
-      dailyUsage={totalConsumedPoints}
+      dailyUsage={Math.max(0, (TIER_CONFIG[userTier as keyof typeof TIER_CONFIG]?.daily || 200) - dailyPoints)}
       balance={dailyPoints + purchasedPoints}
       activeSessionId={activeSessionId}
       onSessionChange={(id, mode) => {
@@ -684,7 +728,24 @@ const App: React.FC = () => {
       preferences={preferences}
       onPreferencesChange={handlePreferencesChange}
     >
-      {/* ── Gemini-style conversation ── */}
+      {/* ── 动态漫游导演工作台（video tab）── */}
+      {activeTab === 'video' ? (
+        <VideoGenerator
+          instructions={currentInstructions}
+          onReset={() => { setVideoKey(k => k + 1); }}
+          onBack={() => setActiveTab('chat')}
+          onVideoGenerated={handleVideoGenerated}
+          fontSize={preferences.promptFontSize}
+          userTier={userTier}
+          points={{ daily: dailyPoints, purchased: purchasedPoints }}
+          onConsumePoints={handleConsumePoints}
+          useThirdPartyGateway={useThirdPartyGateway}
+          isDeveloperMode={isDeveloperMode}
+          language={preferences.language}
+          key={videoKey}
+        />
+      ) : (
+      /* ── Gemini-style conversation ── */
       <ConversationView
         key={architectKey}
         modelConfig={activeModel}
@@ -699,7 +760,11 @@ const App: React.FC = () => {
         language={preferences.language}
         theme={preferences.theme}
         userTier={userTier}
+        pendingVideoMessage={pendingVideoMessage}
+        onClearPendingVideo={() => setPendingVideoMessage(null)}
+        onModeChange={(mode) => { if (mode === 'video') setActiveTab('video'); }}
       />
+      )}
 
       <SettingsPanel 
         isOpen={isSettingsOpen}
@@ -731,6 +796,25 @@ const App: React.FC = () => {
     {toast && (
       <div style={{position:'fixed',bottom:'2rem',left:'50%',transform:'translateX(-50%)',background:'rgba(30,30,40,0.95)',color:'#fff',padding:'0.75rem 1.5rem',borderRadius:'0.75rem',zIndex:9999,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',fontSize:'14px',maxWidth:'90vw',textAlign:'center'}}>
         {toast}
+      </div>
+    )}
+
+    {/* 等级到期降级提示 */}
+    {showTierExpiredModal && tierExpiryInfo && (
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:99999}} onClick={() => setShowTierExpiredModal(false)}>
+        <div style={{background:'#1a1a2e',borderRadius:'1rem',padding:'2rem',maxWidth:'420px',width:'90%',color:'#e2e8f0',boxShadow:'0 20px 60px rgba(0,0,0,0.5)',border:'1px solid rgba(239,68,68,0.3)'}} onClick={e => e.stopPropagation()}>
+          <div style={{fontSize:'2.5rem',textAlign:'center',marginBottom:'0.75rem'}}>⚠️</div>
+          <h3 style={{textAlign:'center',color:'#f87171',marginBottom:'0.75rem',fontSize:'1.15rem'}}>会员等级已到期</h3>
+          <p style={{textAlign:'center',lineHeight:'1.6',color:'#94a3b8',fontSize:'0.9rem',marginBottom:'1.5rem'}}>{tierExpiryInfo.message}</p>
+          <div style={{display:'flex',gap:'0.75rem',justifyContent:'center'}}>
+            <button onClick={() => { setShowTierExpiredModal(false); setIsSettingsOpen(true); }} style={{flex:1,padding:'0.65rem 1rem',borderRadius:'0.5rem',border:'1px solid #3b82f6',background:'#2563eb',color:'#fff',cursor:'pointer',fontWeight:500}}>
+              购买会员
+            </button>
+            <button onClick={() => setShowTierExpiredModal(false)} style={{flex:1,padding:'0.65rem 1rem',borderRadius:'0.5rem',border:'1px solid #475569',background:'transparent',color:'#94a3b8',cursor:'pointer',fontWeight:500}}>
+              我知道了
+            </button>
+          </div>
+        </div>
       </div>
     )}
     </>

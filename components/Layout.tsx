@@ -242,7 +242,18 @@ const Layout: React.FC<LayoutProps> = ({
       if (e.key === COMPANY_LOGO_KEY && e.newValue) setCompanyLogoUrl(e.newValue);
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+
+    // 监听头像变更事件（管控中心/登录页更换头像时实时同步）
+    const onAvatarChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setAvatarUrl(detail);
+    };
+    window.addEventListener('avatarChanged', onAvatarChanged as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('avatarChanged', onAvatarChanged as EventListener);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -523,7 +534,10 @@ const Layout: React.FC<LayoutProps> = ({
               {/* 积分 */}
               <div className="flex flex-col items-end shrink-0 text-[9px] font-mono leading-tight">
                 <span className={`font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>{balance.toLocaleString()}</span>
-                <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
+                <span className="flex items-center gap-0.5">
+                  <span className="text-[7px] opacity-40">已用</span>
+                  <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
+                </span>
               </div>
               {/* 主题 + 设置 */}
               <button onClick={toggleTheme} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title={preferences?.lightMode ? '切换深色模式' : '切换亮色模式'}>

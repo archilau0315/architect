@@ -14,7 +14,7 @@ exports.getUserInfo = async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT id, email, nickname, user_tier, daily_points, purchased_points, updated_at FROM kbit_users WHERE id = ?',
+      'SELECT id, email, nickname, user_tier, daily_points, purchased_points, tier_expires_at, updated_at FROM kbit_users WHERE id = ?',
       [userId]
     );
     
@@ -23,8 +23,26 @@ exports.getUserInfo = async (req, res) => {
     }
     
     const user = users[0];
+    let effectiveTier = user.user_tier;
+    let tierExpired = false;
+
+    // 实时检查等级是否过期
+    if (effectiveTier !== 'free' && user.tier_expires_at) {
+      const expiryDate = new Date(user.tier_expires_at);
+      if (expiryDate <= new Date()) {
+        // 过期 → 立即降级为 free
+        await db.query(
+          `UPDATE kbit_users SET user_tier = 'free', tier_expires_at = NULL, daily_points = 200, updated_at = NOW() WHERE id = ?`,
+          [userId]
+        );
+        tierExpired = true;
+        effectiveTier = 'free';
+        console.log(`[getUserInfo] 用户 ${userId} 等级已过期(${user.user_tier}→free)，已降级`);
+      }
+    }
+    
     const today = new Date().toISOString().split('T')[0];
-    const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];
+    const dailyQuota = tierDailyQuota[effectiveTier] || tierDailyQuota['free'];
     
     if (user.updated_at !== today) {
       await db.query(
@@ -37,7 +55,9 @@ exports.getUserInfo = async (req, res) => {
       userId: user.id,
       email: user.email,
       nickname: user.nickname,
-      tier: user.user_tier,
+      tier: effectiveTier,
+      tierExpired: tierExpired,
+      previousTier: tierExpired ? user.user_tier : null,
       totalPoints: user.daily_points + user.purchased_points,
       dailyQuota: dailyQuota,
       dailyUsed: 0,
@@ -59,7 +79,7 @@ exports.getQuota = async (req, res) => {
   
   try {
     const [users] = await db.query(
-      'SELECT daily_points, purchased_points, total_consumed_points, last_reset_date, user_tier FROM kbit_users WHERE id = ?',
+      'SELECT daily_points, purchased_points, total_consumed_points, last_reset_date, user_tier, tier_expires_at FROM kbit_users WHERE id = ?',
       [userId]
     );
     
@@ -68,11 +88,29 @@ exports.getQuota = async (req, res) => {
     }
     
     const user = users[0];
+    let effectiveTier = user.user_tier;
+    let tierExpired = false;
+
+    // 实时检查等级是否过期
+    if (effectiveTier !== 'free' && user.tier_expires_at) {
+      const expiryDate = new Date(user.tier_expires_at);
+      if (expiryDate <= new Date()) {
+        // 过期 → 立即降级为 free
+        await db.query(
+          `UPDATE kbit_users SET user_tier = 'free', tier_expires_at = NULL, daily_points = 200, updated_at = NOW() WHERE id = ?`,
+          [userId]
+        );
+        tierExpired = true;
+        effectiveTier = 'free';
+        user.daily_points = 200; // 降级后 daily_points 重置为免费额度
+        console.log(`[getQuota] 用户 ${userId} 等级已过期(${user.user_tier}→free)，已降级`);
+      }
+    }
     
     // 检查是否需要重置每日积分
     const today = new Date().toISOString().split('T')[0];
     if (user.last_reset_date !== today) {
-      const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];
+      const dailyQuota = tierDailyQuota[effectiveTier] || tierDailyQuota['free'];
       
       await db.query(
         'UPDATE kbit_users SET daily_points = ?, last_reset_date = ?, daily_used = 0 WHERE id = ?',
@@ -86,7 +124,10 @@ exports.getQuota = async (req, res) => {
             daily: dailyQuota,
             purchased: user.purchased_points,
             total_consumed: user.total_consumed_points || 0
-          }
+          },
+          tier: effectiveTier,
+          tierExpired: tierExpired,
+          previousTier: tierExpired ? user.user_tier : null
         }
       });
     }
@@ -98,7 +139,10 @@ exports.getQuota = async (req, res) => {
           daily: user.daily_points,
           purchased: user.purchased_points,
           total_consumed: user.total_consumed_points || 0
-        }
+        },
+        tier: effectiveTier,
+        tierExpired: tierExpired,
+        previousTier: tierExpired ? user.user_tier : null
       }
     });
   } catch (err) {

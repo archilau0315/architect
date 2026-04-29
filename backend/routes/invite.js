@@ -9,7 +9,7 @@ const { verifyAdminToken } = require('../middleware/adminAuth');
 // 生成邀请码（仅管理员）
 // [安全修复] 添加管理员认证，防止任何人批量生成高价值邀请码刷积分
 router.post('/generate', verifyAdminToken, async (req, res) => {
-  const { count = 1, pointsBonus = 1000, expiresInDays = 30, createdBy = 'admin' } = req.body;
+  const { count = 1, pointsBonus = 1000, expiresInDays = 30, createdBy = 'admin', tier = 'beta' } = req.body;
   
   try {
     const codes = [];
@@ -19,10 +19,10 @@ router.post('/generate', verifyAdminToken, async (req, res) => {
     for (let i = 0; i < count; i++) {
       const code = generateInviteCode();
       await db.query(
-        'INSERT INTO invite_codes (code, created_by, points_bonus, expires_at) VALUES (?, ?, ?, ?)',
-        [code, createdBy, pointsBonus, expiresAt]
+        'INSERT INTO invite_codes (code, created_by, points_bonus, tier, expires_at) VALUES (?, ?, ?, ?, ?)',
+        [code, createdBy, pointsBonus, tier, expiresAt]
       );
-      codes.push({ code, pointsBonus, expiresAt });
+      codes.push({ code, pointsBonus, tier, expiresAt });
     }
     
     res.json({ success: true, codes });
@@ -104,9 +104,13 @@ router.post('/register', async (req, res) => {
     const bcrypt = require('bcrypt');
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const userTier = inviteCode.tier || 'beta';
+
+    // [修复] 注册时 daily_points 初始为 0，不预给每日配额
+    // 每日积分由凌晨定时任务 resetDailyUsage() 按等级自动重置
     await db.query(
-      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, 1, NOW(), NOW())',
-      [email, passwordHash, nickname || email.split('@')[0], 'free', inviteCode.points_bonus]
+      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, status, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, 1, NOW(), NOW())',
+      [email, passwordHash, nickname || email.split('@')[0], userTier, inviteCode.points_bonus]
     );
 
     // 获取新创建的用户ID
@@ -147,7 +151,7 @@ router.post('/register', async (req, res) => {
       user: {
         userId,
         email,
-        tier: 'beta',
+        tier: userTier,
         totalPoints: inviteCode.points_bonus
       }
     });

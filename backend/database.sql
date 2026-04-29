@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS invite_codes (
   max_uses INT DEFAULT 1 COMMENT '最大使用次数',
   current_uses INT DEFAULT 0 COMMENT '当前使用次数',
   points_bonus INT DEFAULT 1000 COMMENT '赠送积分',
+  tier VARCHAR(16) DEFAULT 'beta' COMMENT '用户等级(free/beta/basic/pro/plus)',
   status ENUM('active', 'used', 'expired') DEFAULT 'active' COMMENT '状态',
   expires_at TIMESTAMP NULL COMMENT '过期时间',
   used_at TIMESTAMP NULL COMMENT '使用时间',

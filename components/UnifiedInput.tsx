@@ -93,12 +93,12 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
 
   // 视频生成参数
   const VIDEO_MODELS = [
-    { id: 'KbitVeo-speed',    label: 'SeeDance-1.0F', ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],         duration: '5s / 10s',          images: '最多1张',  remoteModelId: 'doubao-seedance-1-0-pro-fast-251015' },
-    { id: 'KbitVeo-normal',   label: 'SeeDance-1.5',  ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/6s/8s/12s',      images: '最多2张',  remoteModelId: 'doubao-seedance-1-5-pro-251215' },
-    { id: 'KbitVeo-standard', label: 'SeeDance-2.0',  ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0', supportsVideo: true },
-    { id: 'KbitVeo-pro',      label: 'SeeDance-2F',   ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'], duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0-fast', supportsVideo: true },
+    { id: 'SeeDance-1.0PF',   label: 'SeeDance-1.0PF', ratios: ['16:9', '9:16', '1:1'],          duration: '5s / 10s',          images: '最多1张',  remoteModelId: 'doubao-seedance-1-0-pro-fast-251015' },
+    { id: 'SeeDance-1.5',     label: 'SeeDance-1.5',  ratios: ['16:9', '9:16', '1:1'],          duration: '4s/6s/8s/12s',      images: '最多2张',  remoteModelId: 'doubao-seedance-1-5-pro-251215' },
+    { id: 'SeeDance-2.0',     label: 'SeeDance-2.0',  ratios: ['16:9', '9:16', '1:1'],          duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0', supportsVideo: true },
+    { id: 'SeeDance-2.0F',    label: 'SeeDance-2.0F', ratios: ['16:9', '9:16', '1:1'],          duration: '4s/8s/12s/15s',     images: '最多9张',  remoteModelId: 'doubao-seedance-2-0-fast', supportsVideo: true },
   ];
-  const [videoModel, setVideoModel] = useState('KbitVeo-speed');
+  const [videoModel, setVideoModel] = useState('SeeDance-1.0PF');
   const [videoRatio, setVideoRatio] = useState('16:9');
   const currentVideoModel = VIDEO_MODELS.find(m => m.id === videoModel) || VIDEO_MODELS[0];
 

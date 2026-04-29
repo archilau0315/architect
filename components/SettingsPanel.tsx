@@ -242,14 +242,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">日积分</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
                 <p className="text-xl font-semibold text-amber-400">200</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">每日可用</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">日余额</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
                 <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">今日可用</p>
@@ -266,7 +266,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">日积分</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
                 <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">每日: {formatNumber(tierLimits.daily)}</p>

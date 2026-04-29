@@ -3,6 +3,72 @@ const router = express.Router();
 const ph8TokenService = require('../services/ph8TokenService');
 
 /**
+ * 获取当前用户信息（含等级过期状态）
+ * GET /api/ph8/user-info
+ */
+router.get('/user-info', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] || req.query.userId;
+    if (!userId || userId === 'guest') {
+      return res.json({ success: true, data: { tier: 'free', tierExpired: false } });
+    }
+
+    // 查询用户信息（包含 tier_expires_at）
+    const db = require('../db');
+    const [users] = await db.query(
+      `SELECT id, email, nickname, user_tier, daily_points, purchased_points, 
+              total_consumed_points, tier_expires_at, last_reset_date
+       FROM kbit_users WHERE id = ?`,
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.json({ success: true, data: { tier: 'free', tierExpired: false } });
+    }
+
+    const user = users[0];
+    let effectiveTier = user.user_tier;
+    let tierExpired = false;
+
+    // 实时检查等级是否过期
+    if (effectiveTier !== 'free' && user.tier_expires_at) {
+      const expiryDate = new Date(user.tier_expires_at);
+      if (expiryDate <= new Date()) {
+        // 过期 → 立即降级为 free
+        await db.query(
+          `UPDATE kbit_users SET user_tier = 'free', tier_expires_at = NULL, daily_points = 200, updated_at = NOW() WHERE id = ?`,
+          [userId]
+        );
+        tierExpired = true;
+        effectiveTier = 'free';
+        console.log(`[user-info] 用户 ${userId} 等级已过期(${user.user_tier}→free)，已降级`);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        userId: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        tier: effectiveTier,
+        tierExpired: tierExpired,
+        previousTier: tierExpired ? user.user_tier : null,
+        tierExpiresAt: effectiveTier === 'free' ? null : user.tier_expires_at,
+        points: {
+          daily: user.daily_points,
+          purchased: user.purchased_points,
+          totalConsumed: user.total_consumed_points || 0
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[PH8 User-Info] 获取失败:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+/**
  * 获取当前用户余额
  * GET /api/ph8/balance
  * 返回数据同时包含积分和Token（从 ph8_token_usage 表实时统计）

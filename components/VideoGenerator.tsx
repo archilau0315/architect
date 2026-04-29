@@ -11,6 +11,8 @@ import { getTranslation } from '../i18n/locales.ts';
 interface VideoGeneratorProps {
   instructions: typeof DEFAULT_SYSTEM_PRESETS;
   onReset: () => void;
+  onBack?: () => void;
+  onVideoGenerated?: (result: { url: string; prompt: string }) => void;
   fontSize?: number;
   userTier?: UserTier;
   points: { daily: number; purchased: number };
@@ -55,20 +57,28 @@ const incrementDownloadCount = (): number => {
   return newCount;
 };
 
-const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false, language = 'zh-CN' }) => {
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, onBack, onVideoGenerated, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false, language = 'zh-CN' }) => {
   const t = getTranslation(language);
   const isDeveloper = userTier === 'pro' || userTier === 'plus' || isDeveloperMode;
   const effectiveTier = (isDeveloperMode ? 'dev' : userTier) as UserTier | 'dev';
   const [prompt, setPrompt] = useState('');
   const [assets, setAssets] = useState<string[]>([]);
+  const [originalAssets, setOriginalAssets] = useState<string[]>([]); // 裁剪前原始底图
+  const [lockedAssets, setLockedAssets] = useState<boolean[]>([]); // 每张底图独立锁定状态
   const [aspectRatio, setAspectRatio] = useState<string>('16:9');
-  const [selectedEngine, setSelectedEngine] = useState<string>('KbitVeo-speed');
-  
+  const [selectedEngine, setSelectedEngine] = useState<string>('SeeDance-1.0PF');
+
+  // 视频生成参数（API 可控）
+  const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>('1080p');
+  const [videoDuration, setVideoDuration] = useState<number>(5);
+  const [cameraFixed, setCameraFixed] = useState<boolean>(false);
+  const [videoSeed, setVideoSeed] = useState<number | null>(null);
+
   const engineToModelId: Record<string, string> = {
-    'KbitVeo-speed': 'doubao-seedance-2-0-fast',
-    'KbitVeo-normal': 'doubao-seedance-1-5-normal',
-    'KbitVeo-pro': 'doubao-seedance-2-0-pro',
-    'KbitVeo-standard': 'doubao-seedance-2-0',
+    'SeeDance-1.0PF': 'doubao-seedance-1-0-pro-fast-251015',
+    'SeeDance-1.5': 'doubao-seedance-1-5-pro-251215',
+    'SeeDance-2.0F': 'doubao-seedance-2-0-fast',
+    'SeeDance-2.0': 'doubao-seedance-2-0',
   };
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -78,6 +88,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [lastVideoRef, setLastVideoRef] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('解算引擎运行中');
+  const [referenceVideos, setReferenceVideos] = useState<string[]>([]);
 
   // 根据用户等级决定预览视频源
   // free 用户：预览已烧录水印的视频，右键保存也是带水印的
@@ -140,8 +151,14 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         const data = JSON.parse(saved);
         setPrompt(data.prompt || '');
         setAssets(data.assets || []);
+        setOriginalAssets(data.originalAssets || data.assets || []); // 兼容旧数据
+        setLockedAssets(data.lockedAssets || (data.assets || []).map(() => true)); // 兼容旧数据，默认全锁
         setAspectRatio(data.aspectRatio || '16:9');
         if (data.selectedEngine) setSelectedEngine(data.selectedEngine);
+        if (data.videoResolution) setVideoResolution(data.videoResolution);
+        if (typeof data.videoDuration === 'number') setVideoDuration(data.videoDuration);
+        if (typeof data.cameraFixed === 'boolean') setCameraFixed(data.cameraFixed);
+        if (data.videoSeed !== undefined) setVideoSeed(data.videoSeed);
       } catch (e) { console.error("Restore workbench failed", e); }
     }
   }, []);
@@ -156,9 +173,23 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
   }, [capabilities, aspectRatio, selectedEngine, currentEngineDetails]);
 
+  // 当视频比例改变时，自动将所有已上传底图重新裁剪到新比例
+  useEffect(() => {
+    if (originalAssets.length === 0) return;
+    let cancelled = false;
+    const recrop = async () => {
+      const cropped = await Promise.all(
+        originalAssets.map(orig => GeminiService.cropImageToRatio(orig, aspectRatio))
+      );
+      if (!cancelled) setAssets(cropped);
+    };
+    recrop();
+    return () => { cancelled = true; };
+  }, [aspectRatio]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     try {
-      const data = { prompt, assets, aspectRatio, selectedEngine, videoUrl, lastVideoRef };
+      const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
       // 捕获 QuotaExceededError 溢出错误，防止崩溃
@@ -169,24 +200,29 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
     if (files.length > 0) {
+      const newOriginalAssets = [...originalAssets];
       const newAssets = [...assets];
       for (const file of files) {
-        if (newAssets.length >= 9) break;
+        if (newOriginalAssets.length >= 9) break;
         const dataUrl = await new Promise<string>((res) => {
           const r = new FileReader();
           r.onload = () => res(r.result as string);
           r.readAsDataURL(file);
         });
+        // 先压缩到 1024（保留原始比例，存入 originalAssets）
         const compressed = await GeminiService.compressImage(dataUrl);
-        newAssets.push(compressed);
+        newOriginalAssets.push(compressed);
+        // 再按当前视频比例裁剪（存入 assets，用于发送 API）
+        const cropped = await GeminiService.cropImageToRatio(compressed, aspectRatio);
+        newAssets.push(cropped);
       }
+      setOriginalAssets(newOriginalAssets);
       setAssets(newAssets);
+      setLockedAssets(prev => [...prev, ...newOriginalAssets.map(() => true)]); // 新上传默认锁定
       setLastVideoRef(null);
     }
     e.target.value = '';
   };
-
-  const [referenceVideos, setReferenceVideos] = useState<string[]>([]);
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -210,7 +246,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
 
   const removeAsset = (index: number) => {
     setAssets(prev => prev.filter((_, i) => i !== index));
+    setOriginalAssets(prev => prev.filter((_, i) => i !== index));
+    setLockedAssets(prev => prev.filter((_, i) => i !== index));
     setLastVideoRef(null);
+  };
+
+  // 切换单张底图的锁定状态
+  const toggleAssetLock = (index: number) => {
+    setLockedAssets(prev => {
+      const next = [...prev];
+      next[index] = !next[index];
+      return next;
+    });
   };
 
   // Token 到积分的换算比例：1 积分 = 100 token
@@ -269,7 +316,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           } else if (p < 35) {
             setStatusText('正在构建3D模型...');
           } else if (p < 55) {
-            setStatusText('正在计算光影...');
+           setStatusText('正在计算光影...');
           } else if (p < 75) {
             setStatusText('正在渲染帧序列...');
           } else if (p < 95) {
@@ -277,13 +324,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           } else {
             setStatusText('即将完成...');
           }
-        }
+        },
+        { resolution: videoResolution, duration: videoDuration, camerafixed: cameraFixed, seed: videoSeed }
       );
       setProgress(100);
       if (blobUrlRef.current?.startsWith('blob:')) URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = result.url.startsWith('blob:') ? result.url : null;
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
+      // 回写：通知父组件将视频成果写入聊天气泡
+      if (onVideoGenerated) {
+        onVideoGenerated({ url: result.url, prompt: finalPrompt });
+      }
       setProgress(100);
 
       // 自动生成水印版本供普通下载使用
@@ -328,6 +380,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     if (window.confirm("确定要重置当前导播台吗？")) {
       localStorage.removeItem(STORAGE_KEY);
       setAssets([]);
+      setOriginalAssets([]);
+      setLockedAssets([]);
       setPrompt('');
       setVideoUrl(null);
       setLastVideoRef(null);
@@ -444,22 +498,47 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
   };
 
-  const AssetSlot = ({ current, onRemove, onUpload, index, style }: any) => (
+  const AssetSlot = ({ current, isLocked, onToggleLock, onRemove, onUpload, index, style }: any) => {
+    const displayRatio = (current && isLocked) ? aspectRatio : '16:9';
+    return (
     <div
       style={style}
       className={`w-full aspect-square rounded-xl border ${current ? 'border-blue-500/30' : 'border-white/[0.06]'} bg-white/[0.03] flex flex-col overflow-hidden transition-all shrink-0`}
     >
       <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.05]">
         <span className="text-[9px] font-medium text-white/30 uppercase tracking-widest">{index !== undefined ? `分镜 ${index + 1}` : '待上传'}</span>
-        {current && onRemove && (
-          <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="w-5 h-5 flex items-center justify-center rounded text-white/30 hover:text-white/70 hover:bg-white/8 transition-all">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        {current ? (
+          /* 锁开关：点击切换锁定状态 */
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleLock?.(index); }}
+            className={`w-5 h-5 flex items-center justify-center rounded transition-all ${
+              isLocked
+                ? 'text-amber-400/70 bg-amber-500/10 hover:bg-amber-500/20'
+                : 'text-white/25 bg-white/[0.04] hover:text-white/50 hover:bg-white/8'
+            }`}
+            title={isLocked ? '已锁定 - 跟随比例裁剪' : '未锁定 - 默认 16:9'}
+          >
+            {isLocked ? (
+              /* 锁闭图标 */
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a4 4 0 014 4v2h1a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2v-8a2 2 0 012-2h1V6a4 4 0 014-4zm0 2a2 2 0 00-2 2v2h4V6a2 2 0 00-2-2z"/></svg>
+            ) : (
+              /* 锁开图标 */
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 118 0v4"/></svg>
+            )}
           </button>
-        )}
+        ) : null}
       </div>
       <div className={`flex-1 relative flex items-center justify-center group ${onUpload ? 'cursor-pointer' : ''}`} onClick={onUpload || undefined}>
         {current ? (
-          <img src={current} className="w-full h-full object-cover" />
+          <>
+            <img src={current} className="w-full h-full object-cover" />
+            {/* 比例标签：锁闭显示当前比例，锁开显示默认 16:9 */}
+            <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 backdrop-blur-sm rounded text-[8px] font-mono font-semibold select-none pointer-events-none transition-colors ${
+              isLocked ? 'bg-black/60 text-blue-400/90' : 'bg-white/10 text-white/40'
+            }`}>
+              {displayRatio}
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center opacity-20 group-hover:opacity-50 transition-opacity">
             <svg className="w-5 h-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -468,14 +547,29 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="w-full h-full space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between border-b border-white/[0.06] pb-4">
-        <div className="space-y-0.5">
-          <h3 className="text-xl font-semibold text-white/90">动态漫游导演 <span className="text-white/30 font-normal text-base">Motion Director</span></h3>
-          <p className="text-[10px] font-medium text-white/25 uppercase tracking-widest">Sequence-Based Spatial Walkthrough Engine</p>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button type="button" onClick={onBack}
+              className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl
+                bg-white/[0.03] border border-white/[0.08] text-white/35
+                hover:text-blue-400 hover:bg-blue-500/8 hover:border-blue-500/25
+                transition-all duration-200 active:scale-95"
+              title="返回对话">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          <div className="space-y-0.5">
+            <h3 className="text-xl font-semibold text-white/90">动态漫游导演 <span className="text-white/30 font-normal text-base">Motion Director</span></h3>
+            <p className="text-[10px] font-medium text-white/25 uppercase tracking-widest">Sequence-Based Spatial Walkthrough Engine</p>
+          </div>
         </div>
         <button onClick={handleLocalReset} className="min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-white/40 hover:text-white/70 hover:bg-white/8 transition-all active:scale-95">重置导播台</button>
       </div>
@@ -491,6 +585,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                     key={`asset-${i}`} 
                     index={i} 
                     current={img} 
+                    isLocked={lockedAssets[i] ?? true}
+                    onToggleLock={toggleAssetLock}
                     onRemove={() => removeAsset(i)} 
                     style={{ animationDelay: `${i * 80}ms` }}
                   />
@@ -508,7 +604,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
             <input type="file" ref={videoInputRef} onChange={handleVideoUpload} accept="video/mp4,video/quicktime" multiple className="hidden" />
 
-            {(selectedEngine === 'KbitVeo-standard' || selectedEngine === 'KbitVeo-pro') && (
+            {(selectedEngine === 'SeeDance-2.0' || selectedEngine === 'SeeDance-2.0F') && (
               <div className="space-y-2">
                 <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">参考视频 / Ref Video (Max 3 · MP4/MOV · 2–15s)</label>
                 <div className="flex flex-wrap gap-2">
@@ -568,7 +664,105 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                 <span className="text-[10px] font-medium text-white/30 uppercase tracking-widest">预计时长</span>
                 <span className="text-[11px] font-medium text-blue-400">{currentEngineDetails.duration}</span>
               </div>
-            </div>
+
+              {/* 比例选择器：仅显示当前引擎支持的比例 */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">画面比例 / Aspect Ratio</label>
+                <div className="flex flex-wrap gap-2">
+                  {currentEngineDetails.supportedRatios.map((ratio) => (
+                    <button
+                      key={ratio}
+                      type="button"
+                      onClick={() => setAspectRatio(ratio)}
+                      className={`px-3.5 py-2 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95 ${
+                        aspectRatio === ratio
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-sm shadow-blue-500/10'
+                          : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/70 hover:border-white/20 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              </div>
+
+              {/* ===== 高级参数面板（API 可控）===== */}
+              <div className="space-y-3 pt-1">
+                <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">高级参数 / Advanced</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 分辨率 */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] text-white/25 font-medium uppercase tracking-wider">清晰度</span>
+                    <div className="flex gap-1.5">
+                      {(['720p', '1080p'] as const).map(r => (
+                        <button key={r} type="button" onClick={() => setVideoResolution(r)}
+                          className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-all active:scale-95 ${
+                            videoResolution === r
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40'
+                              : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/70 hover:border-white/20'
+                          }`}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 时长 */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] text-white/25 font-medium uppercase tracking-wider">时长</span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[4, 5, 6, 8, 10, 12].map(d => (
+                        <button key={d} type="button" onClick={() => setVideoDuration(d)}
+                          className={`px-2 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-all active:scale-95 ${
+                            videoDuration === d
+                              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/40'
+                              : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/70 hover:border-white/20'
+                          }`}>
+                          {d}s
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => setVideoDuration(-1)}
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 ${
+                          videoDuration === -1
+                            ? 'bg-purple-500/15 text-purple-400 border border-purple-500/40'
+                            : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/70 hover:border-white/20'
+                        }`}>
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {/* 镜头固定 + 种子值：单行排列 */}
+                <div className="flex items-center gap-4 px-1">
+                  {/* 镜头固定 Toggle */}
+                  <button type="button" onClick={() => setCameraFixed(v => !v)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium transition-all active:scale-95 ${
+                      cameraFixed
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                        : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/60 hover:border-white/15'
+                    }`}>
+                    {/* Toggle 指示器 */}
+                    <span className={`relative w-7 h-4 rounded-full transition-colors ${cameraFixed ? 'bg-amber-500/50' : 'bg-white/15'}`}>
+                      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all ${cameraFixed ? 'left-3.5' : 'left-0.5'}`} />
+                    </span>
+                    定镜模式
+                  </button>
+                  {/* 种子值输入 */}
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-[9px] text-white/25 font-medium uppercase tracking-wider shrink-0">种子</span>
+                    <input type="number" value={videoSeed ?? ''} onChange={(e) => {
+                      const v = e.target.value;
+                      setVideoSeed(v === '' ? null : parseInt(v, 10));
+                    }} placeholder="随机"
+                      className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white/70 outline-none focus:border-white/20 placeholder-white/20 transition-all" />
+                    {videoSeed !== null && (
+                      <button type="button" onClick={() => setVideoSeed(null)} className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
             <div className="space-y-3">
               <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">分镜描述 (Prompt)</label>

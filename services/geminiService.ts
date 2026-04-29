@@ -700,6 +700,73 @@ export const GeminiService = {
     });
   },
 
+  /**
+   * 将图片居中裁剪为目标比例（用于视频底图与目标比例对齐）
+   * @param dataUrl 原始图片的 base64 data URL
+   * @param targetRatio 目标比例，如 "16:9"、"9:16"、"1:1"、"4:3"、"3:4"、"21:9"
+   * @param maxSize 裁剪后最大边长（默认 1024，匹配视频 API 要求）
+   * @param quality 输出 JPEG 质量
+   * @returns 裁剪后的 base64 data URL
+   */
+  cropImageToRatio(dataUrl: string, targetRatio: string, maxSize: number = 1024, quality: number = 0.92): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const srcW = img.width;
+        const srcH = img.height;
+
+        // 解析目标比例
+        const [rw, rh] = targetRatio.split(':').map(Number);
+        if (!rw || !rh || rw <= 0 || rh <= 0) {
+          console.warn('[cropImageToRatio] 无效比例:', targetRatio, '返回原图');
+          resolve(dataUrl);
+          return;
+        }
+        const targetAspect = rw / rh;
+        const srcAspect = srcW / srcH;
+
+        // 计算裁剪区域（居中裁剪）
+        let cropX = 0, cropY = 0, cropW = srcW, cropH = srcH;
+        if (srcAspect > targetAspect) {
+          // 原图更宽 → 裁左右
+          cropW = Math.round(srcH * targetAspect);
+          cropX = Math.round((srcW - cropW) / 2);
+        } else if (srcAspect < targetAspect) {
+          // 原图更高 → 裁上下
+          cropH = Math.round(srcW / targetAspect);
+          cropY = Math.round((srcH - cropH) / 2);
+        }
+
+        // 缩放到目标尺寸
+        let outW = cropW, outH = cropH;
+        if (outW > maxSize || outH > maxSize) {
+          if (outW > outH) {
+            outH = Math.round(outH * (maxSize / outW));
+            outW = maxSize;
+          } else {
+            outW = Math.round(outW * (maxSize / outH));
+            outH = maxSize;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = outW;
+        canvas.height = outH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(dataUrl); return; }
+
+        // 先裁剪再绘制到输出画布
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+
+        const result = canvas.toDataURL("image/jpeg", quality);
+        console.log(`[cropImageToRatio] ${srcW}x${srcH} → 裁为${targetRatio} → ${outW}x${outH}`);
+        resolve(result);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  },
+
   async applyWatermark(base64: string): Promise<string> {
     return new Promise((resolve) => {
       const img = new Image();
@@ -2151,42 +2218,27 @@ ${colorMappingDescription}
             duration = '5-15s';
           }
           
-          // 格式化标签
-          let formattedLabel = modelId;
-          // 对于 KbitVeo 系列模型，设置显示标签
-          if (modelId.startsWith('KbitVeo-')) {
-            // 提取模型类型（speed、normal、pro、master、standard）
-            const modelType = modelId.split('-').find(part => 
-              ['speed', 'normal', 'pro', 'master', 'standard'].includes(part.toLowerCase())
-            ) || 'speed';
-            // 特殊处理模型标签
-            if (modelType === 'speed') {
-              formattedLabel = 'SeeDance-1.0F';
-            } else if (modelType === 'normal') {
-              formattedLabel = 'SeeDance-1.5';
-            } else if (modelType === 'standard') {
-              formattedLabel = 'SeeDance-2.0';
-            } else if (modelType === 'pro') {
-              formattedLabel = 'SeeDance-2F';
-            } else {
-              // 其他模型保持原有格式
-              formattedLabel = 'KbitVeo-' + modelType.toLowerCase();
-            }
-          }
+          // 格式化标签（直接作为统一引擎 ID）
+          let engineId: string = modelId;
+          if (modelId === 'KbitVeo-speed') { engineId = 'SeeDance-1.0PF'; }
+          else if (modelId === 'KbitVeo-normal') { engineId = 'SeeDance-1.5'; }
+          else if (modelId === 'KbitVeo-standard') { engineId = 'SeeDance-2.0'; }
+          else if (modelId === 'KbitVeo-pro') { engineId = 'SeeDance-2.0F'; }
+          else if (modelId === 'KbitVeo-master') { engineId = 'SeeDance-Master'; }
           
           const descMap: Record<string, string> = {
-            'KbitVeo-speed': '单图·最长10s',
-            'KbitVeo-normal': '双图·最长12s',
-            'KbitVeo-standard': '9图+视频·最长15s',
-            'KbitVeo-pro': '9图+视频·最长15s·快速',
+            'SeeDance-1.0PF': '单图·最长10s',
+            'SeeDance-1.5': '双图·最长12s',
+            'SeeDance-2.0': '9图+视频·最长15s',
+            'SeeDance-2.0F': '9图+视频·最长15s·快速',
           };
           dynamicEngines.push({
-            id: modelId,
-            label: formattedLabel,
-            desc: descMap[modelId] || node?.description || `Gateway: ${node?.provider || 'ph8.co'}`,
+            id: engineId,
+            label: engineId,
+            desc: descMap[engineId] || node?.description || `Gateway: ${node?.provider || 'ph8.co'}`,
             supportedRatios: assetCount >= 2 ? ['16:9'] : supportedRatios,
             duration: duration,
-            supportsVideoUpload: modelId === 'KbitVeo-standard' || modelId === 'KbitVeo-pro',
+            supportsVideoUpload: engineId === 'SeeDance-2.0' || engineId === 'SeeDance-2.0F',
             isFrozen: modelId === 'KbitVeo-master'
           });
         }
@@ -2201,32 +2253,32 @@ ${colorMappingDescription}
     if (engines.length === 0) {
       engines = [
         {
-          id: 'KbitVeo-speed',
-          label: 'SeeDance-1.0F',
+          id: 'SeeDance-1.0PF',
+          label: 'SeeDance-1.0PF',
           desc: '单图·最长10s',
-          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+          supportedRatios: ['16:9', '9:16', '1:1'],
           duration: '5s / 10s'
         },
         {
-          id: 'KbitVeo-normal',
+          id: 'SeeDance-1.5',
           label: 'SeeDance-1.5',
           desc: '双图·最长12s',
-          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          supportedRatios: ['16:9', '9:16', '1:1'],
           duration: '4s / 6s / 8s / 12s'
         },
         {
-          id: 'KbitVeo-standard',
+          id: 'SeeDance-2.0',
           label: 'SeeDance-2.0',
           desc: '9图+视频·最长15s',
-          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          supportedRatios: ['16:9', '9:16', '1:1'],
           duration: '4s / 8s / 12s / 15s',
           supportsVideoUpload: true
         },
         {
-          id: 'KbitVeo-pro',
-          label: 'SeeDance-2F',
+          id: 'SeeDance-2.0F',
+          label: 'SeeDance-2.0F',
           desc: '9图+视频·最长15s·快速',
-          supportedRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+          supportedRatios: ['16:9', '9:16', '1:1'],
           duration: '4s / 8s / 12s / 15s',
           supportsVideoUpload: true
         },
@@ -2250,8 +2302,8 @@ ${colorMappingDescription}
     };
   },
 
-  async generateVideo(prompt: string, assets: string[], aspectRatio: string, instructions: any, signal?: AbortSignal, lastVideo?: any, engineId?: string, onProgress?: (progress: number) => void) {
-    const requestedModel = engineId || 'KbitVeo-speed';
+  async generateVideo(prompt: string, assets: string[], aspectRatio: string, instructions: any, signal?: AbortSignal, lastVideo?: any, engineId?: string, onProgress?: (progress: number) => void, videoOptions?: { resolution: string; duration: number; camerafixed: boolean; seed: number | null }) {
+    const requestedModel = engineId || 'SeeDance-1.0PF';
     const { ai, modelId, node, apiKey } = getAI(undefined, requestedModel); 
     
     // 如果是第三方非 Google 节点，使用 ph8 视频 API
@@ -2263,15 +2315,24 @@ ${colorMappingDescription}
         
         console.log(`[Video Gateway] Model: ${remoteModelId}, Endpoint: ${proxiedUrl}/videos`);
         
-        // 构建请求体
+        // 构建请求体（使用 UI 传入的参数，带默认值兜底）
+        const opt = videoOptions || {};
         const requestBody: any = {
           model: remoteModelId,
           prompt: prompt,
-          duration: 5,
-          resolution: "1080p",
-          ratio: aspectRatio === '9:16' ? '9:16' : aspectRatio === '21:9' ? '21:9' : '16:9',
+          duration: opt.duration ?? 5,
+          resolution: (opt.resolution === '720p' || opt.resolution === '1080p') ? opt.resolution : '1080p',
+          ratio: aspectRatio === '9:16' ? '9:16' : aspectRatio === '1:1' ? '1:1' : '16:9',
           watermark: false
         };
+        // 镜头固定：默认动态镜头
+        if (opt.camerafixed === true) {
+          requestBody.camerafixed = true;
+        }
+        // 种子值：用于复现生成结果
+        if (typeof opt.seed === 'number' && opt.seed > 0) {
+          requestBody.seed = Math.floor(opt.seed);
+        }
         
         // 如果有图片（i2v 模式）
         if (assets.length > 0 && assets[0]) {

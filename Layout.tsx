@@ -14,6 +14,7 @@ interface LayoutProps {
   credits: number;
   userTier: string;
   modelStatus: 'connected' | 'assigning' | 'error';
+  todayUsed?: number;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -27,7 +28,8 @@ const Layout: React.FC<LayoutProps> = ({
   currentModelName,
   credits,
   userTier,
-  modelStatus
+  modelStatus,
+  todayUsed = 0,
 }) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
@@ -57,6 +59,27 @@ const Layout: React.FC<LayoutProps> = ({
         document.documentElement.classList.remove('light');
       }
     } catch (err) { console.warn(err); }
+  }, []);
+
+  // 监听头像变更事件（管控中心/登录页更换头像时实时同步）
+  useEffect(() => {
+    const handleAvatarChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setAvatarUrl(detail);
+    };
+    window.addEventListener('avatarChanged', handleAvatarChange as EventListener);
+
+    // 跨 Tab 同步
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AVATAR_KEY && e.newValue) setAvatarUrl(e.newValue);
+      if (e.key === COMPANY_LOGO_KEY && e.newValue) setCompanyLogoUrl(e.newValue);
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('avatarChanged', handleAvatarChange as EventListener);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const toggleTheme = () => {

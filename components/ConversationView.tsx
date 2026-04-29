@@ -66,6 +66,8 @@ interface ConversationViewProps {
   instructions: any;
   points: { daily: number; purchased: number };
   onConsumePoints: (n: number) => Promise<boolean>;
+  pendingVideoMessage?: { url: string; prompt: string } | null;
+  onClearPendingVideo?: () => void;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;
   showPresetPanel?: boolean;
@@ -73,6 +75,7 @@ interface ConversationViewProps {
   language?: Language;
   theme?: string;
   userTier?: UserTier;
+  onModeChange?: (mode: ConversationMode) => void;
 }
 
 const gemini = GeminiService;
@@ -637,14 +640,18 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const ConversationView: React.FC<ConversationViewProps> = ({
-  modelConfig, domain, instructions, points, onConsumePoints, useThirdPartyGateway, isDeveloperMode,
-  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark', userTier = 'free'
+  modelConfig, domain, instructions, points, onConsumePoints, pendingVideoMessage, onClearPendingVideo, useThirdPartyGateway, isDeveloperMode,
+  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark', userTier = 'free', onModeChange
 }) => {
   const t = getTranslation(language);
   // [修复] 基于用户等级判断是否为付费用户（PRO/PLUS 或开发者模式均可）
   const isDeveloper = userTier === 'pro' || userTier === 'plus' || isDeveloperMode;
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, setMode] = useState<ConversationMode>('chat');
+  const handleModeChange = (m: ConversationMode) => {
+    setMode(m);
+    if (m === 'video') onModeChange?.(m);
+  };
   const [isLoading, setIsLoading] = useState(false);
   const [inpaintImage, setInpaintImage] = useState<string | null>(null);
   const [showStylePicker, setShowStylePicker] = useState(false);
@@ -667,6 +674,19 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const addMsg = (msg: Omit<Message, 'id' | 'timestamp'>) =>
     setMessages(prev => [...prev, { ...msg, id: uid(), timestamp: Date.now() }]);
 
+  // ── 视频回写：工作台生成完成后自动写入聊天气泡 ──
+  useEffect(() => {
+    if (!pendingVideoMessage?.url) return;
+    // 追加一条"系统消息"标记的视频结果
+    addMsg({
+      role: 'assistant',
+      type: 'video',
+      videoUrl: pendingVideoMessage.url,
+      text: `🎬 已在动态漫游导演中生成视频\n${pendingVideoMessage.prompt ? `> ${pendingVideoMessage.prompt.slice(0, 120)}${pendingVideoMessage.prompt.length > 120 ? '...' : ''}` : ''}`
+    });
+    onClearPendingVideo?.();
+  }, [pendingVideoMessage]);
+
   const updateLast = (patch: Partial<Message>) =>
     setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { ...m, ...patch } : m));
 
@@ -685,7 +705,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     } else if (payload.mode === 'chat') {
       inferredMode = 'chat';
     }
-    if (inferredMode !== mode) setMode(inferredMode);
+    if (inferredMode !== mode) handleModeChange(inferredMode);
     const effectivePayload = { ...payload, mode: inferredMode };
     // 如果选择了大师风格或预设标签，将其添加到提示词中
     let finalText = payload.text;
@@ -1052,7 +1072,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
               ].map(s => {
                 const Icon = MODE_ICONS[s.icon as ConversationMode];
                 return (
-                  <button key={s.mode} onClick={() => setMode(s.mode)}
+                  <button key={s.mode} onClick={() => handleModeChange(s.mode)}
                     className="flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl border text-[13px] font-medium transition-all duration-200 hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                     style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}>
                     <Icon className="w-4 h-4" />
@@ -1124,7 +1144,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             </div>
           </div>
         )}
-        <UnifiedInput ref={inputRef} mode={mode} onModeChange={setMode} onSubmit={handleSubmit} isLoading={isLoading} language={language} onUpscale={handleUpscaleDirect} />
+        <UnifiedInput ref={inputRef} mode={mode} onModeChange={handleModeChange} onSubmit={handleSubmit} isLoading={isLoading} language={language} onUpscale={handleUpscaleDirect} />
       </div>
 
       {/* ── 预设风格面板（双击领域按钮触发） ── */}

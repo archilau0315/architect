@@ -367,15 +367,111 @@ async function getUserUsageHistory(userId, limit = 50, offset = 0) {
 }
 
 /**
+ * 检查并处理用户等级到期自动降级
+ * 将 tier_expires_at < NOW() 的非 free 用户降级为 free
+ * @returns {Promise<Object>} { downgraded: number, skipped: number }
+ */
+async function checkTierExpiry() {
+  try {
+    // 1. 查找所有已到期且仍是非 free 等级的用户
+    const [expiredUsers] = await db.query(
+      `SELECT id, email, nickname, user_tier, tier_expires_at 
+       FROM kbit_users 
+       WHERE tier_expires_at IS NOT NULL 
+         AND tier_expires_at < NOW() 
+         AND user_tier != 'free'
+         AND status = 1`
+    );
+
+    if (expiredUsers.length === 0) {
+      console.log('[等级到期] 无到期用户需要降级');
+      return { downgraded: 0, skipped: 0 };
+    }
+
+    let downgradedCount = 0;
+    for (const user of expiredUsers) {
+      // 执行降级：tier → free, 清空到期时间, daily_points 重置为免费额度
+      await db.query(
+        `UPDATE kbit_users 
+         SET user_tier = 'free', 
+             tier_expires_at = NULL,
+             daily_points = 200,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [user.id]
+      );
+      console.log(`[等级到期] 用户 ${user.email} (${user.user_tier}→free) 已降级，原到期时间: ${user.tier_expires_at}`);
+      downgradedCount++;
+    }
+
+    console.log(`[等级到期] 本次共降级 ${downgradedCount}/${expiredUsers.length} 个用户`);
+    return { downgraded: downgradedCount, skipped: expiredUsers.length - downgradedCount };
+  } catch (err) {
+    console.error('[等级到期] 检查失败:', err);
+    return { downgraded: 0, skipped: 0 };
+  }
+}
+
+/**
+ * 实时检查单个用户的等级是否过期（供 API 调用时使用）
+ * 如果过期则立即降级并返回新等级
+ * @param {number|string} userId - 用户ID
+ * @returns {Promise<{ expired: boolean, previousTier: string, currentTier: string } | null>}
+ */
+async function checkUserTierExpiry(userId) {
+  try {
+    const [users] = await db.query(
+      `SELECT id, user_tier, tier_expires_at FROM kbit_users WHERE id = ?`,
+      [userId]
+    );
+
+    if (users.length === 0) return null;
+
+    const user = users[0];
+
+    // free 等级或无到期时间的用户不需要检查
+    if (user.user_tier === 'free' || !user.tier_expires_at) {
+      return { expired: false, previousTier: user.user_tier, currentTier: user.user_tier };
+    }
+
+    // 检查是否过期
+    const expiryDate = new Date(user.tier_expires_at);
+    if (expiryDate <= new Date()) {
+      // 过期 → 立即降级
+      await db.query(
+        `UPDATE kbit_users 
+         SET user_tier = 'free', 
+             tier_expires_at = NULL,
+             daily_points = 200,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [userId]
+      );
+      console.log(`[等级到期-实时] 用户ID ${userId} (${user.user_tier}→free) 已即时降级`);
+      return { expired: true, previousTier: user.user_tier, currentTier: 'free' };
+    }
+
+    return { expired: false, previousTier: user.user_tier, currentTier: user.user_tier };
+  } catch (err) {
+    console.error('[等级到期-实时] 检查失败:', err);
+    return null;
+  }
+}
+
+/**
  * 重置每日使用计数
  * @returns {Promise<boolean>}
  */
 async function resetDailyUsage() {
   try {
+    // 先执行等级到期降级检查
+    await checkTierExpiry();
+
+    // 再重置每日积分
     await db.query(
       `UPDATE kbit_users SET daily_points = CASE WHEN user_tier = 'free' THEN 200 WHEN user_tier = 'beta' THEN 200 WHEN user_tier = 'basic' THEN 400 WHEN user_tier = 'pro' THEN 1500 WHEN user_tier = 'plus' THEN 2000 ELSE 200 END, updated_at = NOW()`
     );
-    console.log('[PH8 Token] 每日使用计数已重置');
+    console.log('[PH8 Token] 每日使用计数已重置（含等级到期检查）');
     return true;
   } catch (err) {
     console.error('[PH8 Token] 重置每日计数失败:', err);
@@ -436,6 +532,8 @@ module.exports = {
   getUserBalance,
   getUserUsageStats,
   getUserUsageHistory,
+  checkTierExpiry,       // 新增：批量检查到期降级
+  checkUserTierExpiry,    // 新增：单用户实时到期检查
   resetDailyUsage,
   resetMonthlyUsage,
   logApiCall
