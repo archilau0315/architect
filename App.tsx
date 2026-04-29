@@ -37,12 +37,13 @@ const setItemDebounced = (key: string, value: string, delay: number = 300) => {
   debouncedLocalStorageWrites.set(key, timer);
 };
 
+// [标准化] 用户等级配置 - 系统单一事实来源
 const TIER_CONFIG = {
-  free: { daily: 100, label: '免费用户' },
+  free: { daily: 200, label: '免费用户' },
   beta: { daily: 200, label: '内测用户', total: 1000 },
-  basic: { daily: 350, label: '基础级' },
-  pro: { daily: 1200, label: 'PRO 级' },
-  plus: { daily: 1800, label: 'PLUS 级' }
+  basic: { daily: 400, label: '基础级' },
+  pro: { daily: 1500, label: 'PRO 级' },
+  plus: { daily: 2000, label: 'PLUS 级' }
 };
 
 const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD ?? null;
@@ -58,8 +59,8 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
-  // Points State
-  const [dailyPoints, setDailyPoints] = useState(150);
+  // Points State - 默认使用 free 等级的 200 积分
+  const [dailyPoints, setDailyPoints] = useState(200);
   const [purchasedPoints, setPurchasedPoints] = useState(0);
   const [lastResetDate, setLastResetDate] = useState('');
   

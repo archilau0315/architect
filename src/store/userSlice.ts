@@ -16,7 +16,7 @@ interface UserState {
 
 const initialState: UserState = {
   tier: 'free',
-  dailyPoints: 150,
+  dailyPoints: 200,
   purchasedPoints: 0,
   lastResetDate: '',
   betaTotalPoints: 1000,

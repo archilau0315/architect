@@ -64,12 +64,12 @@ CREATE TABLE IF NOT EXISTS `kbit_tiers` (
   UNIQUE KEY `uk_tier_code` (`tier_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户等级配置表';
 
--- 初始化等级配置
+-- [标准化] 用户等级配置初始化 - 系统单一事实来源
 INSERT INTO `kbit_tiers` (`tier_code`, `tier_name`, `daily_points`, `max_resolution`, `daily_image_limit`, `daily_video_limit`, `daily_chat_limit`, `monthly_token_quota`, `watermark_free_downloads`, `features`, `price_monthly`, `price_quarterly`, `price_yearly`, `sort_order`) VALUES
-('free', '免费用户', 100, '1K', 10, 0, 50, 50000, 0, '{"video": false, "hd_download": false, "priority_support": false}', 0.00, 0.00, 0.00, 1),
-('basic', '基础级', 350, '2K', 50, 5, 200, 200000, 10, '{"video": true, "hd_download": true, "priority_support": false}', 39.00, 99.00, 399.00, 2),
-('pro', 'PRO级', 800, '4K', 200, 16, 500, 500000, 50, '{"video": true, "hd_download": true, "priority_support": true}', 89.00, 229.00, 899.00, 3),
-('plus', 'PLUS级', 1800, '4K', 999, 50, 999, 2000000, 999, '{"video": true, "hd_download": true, "priority_support": true, "api_access": true}', 199.00, 499.00, 1999.00, 4);
+('free', '免费用户', 200, '1K', 10, 0, 50, 6000, 0, '{"video": false, "hd_download": false, "priority_support": false}', 0.00, 0.00, 0.00, 1),
+('basic', '基础级', 400, '2K', 50, 5, 200, 12000, 10, '{"video": true, "hd_download": true, "priority_support": false}', 0.00, 0.00, 0.00, 2),
+('pro', 'PRO级', 1500, '4K', 200, 16, 500, 45000, 50, '{"video": true, "hd_download": true, "priority_support": true}', 0.00, 0.00, 0.00, 3),
+('plus', 'PLUS级', 2000, '4K', 999, 50, 999, 60000, 999, '{"video": true, "hd_download": true, "priority_support": true, "api_access": true}', 0.00, 0.00, 0.00, 4);
 
 -- ============================================
 -- 3. 订阅记录表

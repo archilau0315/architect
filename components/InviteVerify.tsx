@@ -350,7 +350,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
             <img src="/public/archi01.png" alt="KBITAI" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-black text-white italic tracking-wide mb-2 px-1">
-            KBITAI <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Architect</span>
+            KBITAI <span className="text-indigo-400">Architect</span>
           </h1>
           <p className="text-indigo-300/60 text-sm font-medium tracking-widest uppercase">
             首席图像架构师 · 内测版
@@ -411,7 +411,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleVerify}
                   disabled={isVerifying}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isVerifying ? (
                     <span className="flex items-center justify-center gap-2">
@@ -429,15 +429,12 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
 
               <div className="mt-8 space-y-4">
                 <div className="pt-6 border-t border-white/10">
-                  <p className="text-center text-slate-500 text-xs">
-                    还没有邀请码？
-                    <button 
-                      onClick={() => setShowApplication(true)}
-                      className="text-indigo-400 hover:text-indigo-300 ml-1 underline transition-colors"
-                    >
-                      申请内测
-                    </button>
-                  </p>
+                  <button 
+                    onClick={() => setShowApplication(true)}
+                    className="w-full py-3 bg-white/8 border border-indigo-500/30 rounded-xl text-indigo-400 font-bold text-sm hover:bg-indigo-500/20 hover:border-indigo-500/50 hover:text-indigo-300 transition-all duration-300 shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20"
+                  >
+                    还没有邀请码？申请内测
+                  </button>
                 </div>
                 <div className="pt-4 border-t border-white/10">
                   <button
@@ -445,7 +442,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                       setShowLoginForm(true);
                       setShowRegister(false);
                     }}
-                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-all duration-300 hover:border-white/20 hover:scale-[1.01] active:scale-[0.99]"
+                    className="w-full py-3 bg-white/8 border border-white/20 rounded-2xl text-white font-bold text-sm hover:bg-white/15 transition-all duration-300 hover:border-white/40 hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-black/20 hover:shadow-black/30"
                   >
                     已有账号？直接登录
                   </button>
@@ -512,7 +509,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isLoggingIn ? (
                     <span className="flex items-center justify-center gap-2">
@@ -534,7 +531,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                     setShowLoginForm(false);
                     setShowRegister(false);
                   }}
-                  className="w-full text-sm transition-colors duration-200 text-slate-500 hover:text-white"
+                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 font-medium text-sm hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
                 >
                   ← 返回邀请码验证
                 </button>
@@ -652,7 +649,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 <button
                   onClick={handleRegister}
                   disabled={isRegistering}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full py-4 bg-gradient-to-r from-slate-700 via-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
                 >
                   {isRegistering ? (
                     <span className="flex items-center justify-center gap-2">
@@ -672,14 +669,14 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                 {error === '该邮箱已注册' && (
                   <button
                     onClick={() => setShowLoginForm(true)}
-                    className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-white font-medium text-sm hover:bg-white/10 transition-all duration-300 hover:border-white/20"
+                    className="w-full py-3 bg-white/8 border border-white/20 rounded-2xl text-white font-bold text-sm hover:bg-white/15 transition-all duration-300 hover:border-white/40 hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-black/20 hover:shadow-black/30"
                   >
                     已有账号？点击登录
                   </button>
                 )}
                 <button
                   onClick={() => setShowRegister(false)}
-                  className="w-full text-slate-500 text-sm hover:text-white transition-colors duration-200"
+                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 font-medium text-sm hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
                 >
                   ← 返回修改邀请码
                 </button>

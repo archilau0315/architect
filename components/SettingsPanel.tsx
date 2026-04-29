@@ -155,32 +155,35 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     return labels[tier] || '免费版';
   };
 
+  // [标准化] 用户等级权益 - 系统单一事实来源
   const getTierBenefits = (tier: string) => {
     const benefits: Record<string, string[]> = {
-      'beta': ['注册赠送1000积分体验金', '每日可用200积分', '图像生成、图像分析、对话等功能全开放', '视频生成可体验（不支持下载）', '优先体验新功能'],
-      'pro': ['每日 300K 积分额度', '每月 9M 积分额度', '视频无水印下载（5次/日）', '优先体验新功能'],
-      'plus': ['每日 1M 积分额度', '每月 30M 积分额度', '视频无水印下载（无限）', '专属客服支持'],
-      'dev': ['无限积分额度', '开发者API访问', '优先技术支持', '内测功能抢先体验']
+      'free': ['每日 200 积分额度', '基础图像生成', '基础对话功能'],
+      'beta': ['注册赠送1000积分体验金', '每日 200 积分额度', '图像生成、图像分析、对话等功能全开放', '图片无水印下载（无限）', '视频生成可体验（不支持下载）', '优先体验新功能'],
+      'basic': ['每日 400 积分额度', '图像生成增强', '视频生成功能', '图片无水印下载（10次/日）', '优先体验新功能'],
+      'pro': ['每日 1,500 积分额度', '图片无水印下载（50次/日）', '视频无水印下载（5次/日）', '优先体验新功能'],
+      'plus': ['每日 2,000 积分额度', '图片无水印下载（无限）', '视频无水印下载（无限）', '专属客服支持'],
+      'dev': ['无限积分额度', '图片无水印下载（无限）', '视频无水印下载（无限）', '开发者API访问', '优先技术支持', '内测功能抢先体验']
     };
-    return benefits[tier] || ['每日 10K 积分额度', '每月 300K 积分额度', '基础图像生成'];
+    return benefits[tier] || benefits['free'];
   };
 
+  // [标准化] 用户等级配额 - 系统单一事实来源
   const getTierLimits = (tier: string) => {
     const limits: Record<string, { daily: number; monthly: number }> = {
-      'free': { daily: 10000, monthly: 300000 },
-      'beta': { daily: 50000, monthly: 1500000 },
-      'basic': { daily: 100000, monthly: 3000000 },
-      'pro': { daily: 300000, monthly: 9000000 },
-      'plus': { daily: 1000000, monthly: 30000000 },
+      'free': { daily: 200, monthly: 6000 },
+      'beta': { daily: 200, monthly: 6000 },
+      'basic': { daily: 400, monthly: 12000 },
+      'pro': { daily: 1500, monthly: 45000 },
+      'plus': { daily: 2000, monthly: 60000 },
       'dev': { daily: 999999999, monthly: 999999999 }
     };
     return limits[tier] || limits['free'];
   };
 
+  // [标准化] 数值格式化 - 不使用K/M后缀，直接显示完整数字
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
-    return num.toString();
+    return num.toLocaleString();
   };
 
   const renderAccount = () => {

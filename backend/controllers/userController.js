@@ -1,4 +1,8 @@
 const db = require('../db');
+const tierConfig = require('../config/tierConfig');
+
+// [标准化] 用户等级每日积分配置 - 从中心配置导入
+const tierDailyQuota = tierConfig.tierDailyQuota;
 
 // 获取用户信息
 exports.getUserInfo = async (req, res) => {
@@ -20,6 +24,7 @@ exports.getUserInfo = async (req, res) => {
     
     const user = users[0];
     const today = new Date().toISOString().split('T')[0];
+    const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];
     
     if (user.updated_at !== today) {
       await db.query(
@@ -34,9 +39,9 @@ exports.getUserInfo = async (req, res) => {
       nickname: user.nickname,
       tier: user.user_tier,
       totalPoints: user.daily_points + user.purchased_points,
-      dailyQuota: 100,
+      dailyQuota: dailyQuota,
       dailyUsed: 0,
-      dailyRemaining: 100
+      dailyRemaining: user.daily_points
     });
   } catch (err) {
     console.error(err);
@@ -67,14 +72,6 @@ exports.getQuota = async (req, res) => {
     // 检查是否需要重置每日积分
     const today = new Date().toISOString().split('T')[0];
     if (user.last_reset_date !== today) {
-      // 根据用户等级重置每日积分
-      const tierDailyQuota = {
-        'free': 200,
-        'beta': 200,
-        'basic': 400,
-        'pro': 1500,
-        'plus': 2000
-      };
       const dailyQuota = tierDailyQuota[user.user_tier] || tierDailyQuota['free'];
       
       await db.query(

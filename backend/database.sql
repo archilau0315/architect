@@ -176,12 +176,12 @@ CREATE TABLE IF NOT EXISTS monitoring_logs (
 -- INSERT INTO admins (username, password_hash, role) VALUES 
 -- ('admin', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'super');
 
--- 初始化系统配置
+-- [标准化] 初始化系统配置 - 用户等级每日积分
 INSERT INTO system_configs (config_key, config_value, description) VALUES
-('daily_quota_free', '100', '免费用户每日额度'),
+('daily_quota_free', '200', '免费用户每日额度'),
 ('daily_quota_beta', '200', '内测用户每日额度'),
-('daily_quota_basic', '500', '基础用户每日额度'),
-('daily_quota_pro', '1000', '专业用户每日额度'),
+('daily_quota_basic', '400', '基础用户每日额度'),
+('daily_quota_pro', '1500', '专业用户每日额度'),
 ('daily_quota_plus', '2000', '高级用户每日额度'),
 ('points_per_token', '0.01', '每Token消耗积分'),
 ('invite_bonus', '1000', '邀请注册奖励积分')

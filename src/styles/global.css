@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* 全局样式 - 从 index.html 内联迁移 */
 :root {
   --indigo-glow: rgba(79, 70, 229, 0.4);
