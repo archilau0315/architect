@@ -823,7 +823,7 @@ export const GeminiService = {
     }
   },
 
-  async generateImage(prompt: string, config: ImageGenerationConfig, isComposite: boolean, baseRefs: string[], slotARefs: string[], slotBRefs: string[], styleRefs: string[], maskB?: string, inpaintPrompt?: string, maskA?: string, instructions?: any, modelConfig?: any, signal?: AbortSignal, domain?: CreativeDomain, baseRefsOriginalSizes?: {width: number, height: number}[], isUpscale?: boolean) {
+  async generateImage(prompt: string, config: ImageGenerationConfig, isComposite: boolean, baseRefs: string[], slotARefs: string[], slotBRefs: string[], styleRefs: string[], maskB?: string, inpaintPrompt?: string, maskA?: string, instructions?: any, modelConfig?: any, signal?: AbortSignal, domain?: CreativeDomain, baseRefsOriginalSizes?: {width: number, height: number}[], isUpscale?: boolean, donorRefs?: string[]) {
     let model = getModelName(modelConfig, "gemini-3.1-flash-image-preview");
     const tier = config.modelTier || "FAST";
     const size = config.imageSize;
@@ -1012,6 +1012,36 @@ The attached image IS the source material for this upscale operation.`;
       
       console.log("[语义遮盖] 已将遮罩叠加到底图，发送合成图+语义提示词");
       console.log("[语义遮盖] 提示词:", semanticInpaintPrompt.substring(0, 100) + "...");
+      
+      // 如果有供体图像，添加供体参考
+      if (donorRefs && donorRefs.length > 0) {
+        console.log(`[供体/受体] 添加 ${donorRefs.length} 张供体图像`);
+        parts.push({ text: "参考供体图像（提取此图内容用于填充）:" });
+        for (const donorRef of donorRefs) {
+          if (donorRef.includes(",")) {
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: await compress(donorRef, true) } });
+          }
+        }
+        
+        // 如果有供体遮罩，添加供体遮罩
+        if (maskA && maskA.includes(",")) {
+          parts.push({ text: "供体遮罩（提取此区域内容）:" });
+          parts.push({ inlineData: { mimeType: "image/png", data: maskA.split(",")[1] } });
+        }
+        
+        // 更新提示词，加入供体提取指令
+        parts[0] = { 
+          text: `请从供体图像提取内容，填充到目标图片的${colorDescription}：${inpaintInstruction}
+
+【重要要求】
+1. 仔细分析供体图像的内容、风格和细节
+2. 将供体图像的相关内容提取并融合到目标图片的标记区域
+3. 图片中其他所有区域必须保持完全不变
+4. 不要在最终结果中显示任何标记或遮罩
+5. 新生成的内容应与周围区域的亮度和色调保持一致
+6. 输出一张完整的、自然的图片` + STATIC_QUALITY_SUFFIX 
+        };
+      }
     } 
     // 核心逻辑对位：基因重组 (A->B Synthesis)
     else if (isComposite) {

@@ -825,10 +825,25 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       // ── IMAGE ─────────────────────────────────────────────────────────────
       else if (m === 'architect') {
         updateLast({ type: 'thinking', text: t.buttons.generatingImage });
-        const baseRefs = payload.images.map(f => f.data);
+        
+        // 分离供体和受体图像
+        const donorImages = payload.images.filter((f: any) => f.role === 'donor');
+        const recipientImages = payload.images.filter((f: any) => f.role === 'recipient');
+        const normalImages = payload.images.filter((f: any) => !f.role);
+        
+        // 构建底图列表：受体优先，其次是普通图像
+        const baseRefs = [...recipientImages, ...normalImages].map(f => f.data);
+        const donorRefs = donorImages.map(f => f.data);
+        
+        // 获取遮罩信息
+        const maskA = donorImages[0]?.maskDataUrl;
+        const maskB = recipientImages[0]?.maskDataUrl;
+        
         const config = payload.imageConfig || { aspectRatio: '1:1', imageSize: '1K', modelTier: 'FAST', imageCount: 1 };
-        // 读取锁定seed（重跑时从payload.lockedSeed传入，首次生图从config.seed传入）
         const forcedSeed = (payload as any).lockedSeed || config.seed || undefined;
+        
+        console.log(`[Donor/Recipient] 供体: ${donorImages.length}张, 受体: ${recipientImages.length}张, 普通: ${normalImages.length}张`);
+        
         const imgResult: any = await gemini.generateImage(
           finalText,
           {
@@ -838,10 +853,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({
             imageCount: config.imageCount,
             temperature: 1.0,
             top_p: 0.95,
-            seed: forcedSeed  // 传递固定seed（有值=锁定，undefined=随机）
+            seed: forcedSeed
           },
-          false, baseRefs, [], [], [], undefined, undefined, undefined,
-          instructions, modelConfig, signal, domain
+          false, baseRefs, [], [], [], maskB, finalText, maskA,
+          instructions, modelConfig, signal, domain, undefined, undefined,
+          donorImages.length > 0 ? donorRefs : undefined
         );
         // 防御性解构：兼容旧版(返回数组)和新版({images, seeds})两种格式
         let imgList: string[];
