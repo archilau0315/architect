@@ -90,17 +90,31 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     const canvas = maskCanvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     
+    let clientX: number, clientY: number;
     if ('touches' in e) {
       const touch = e.touches[0];
-      return {
-        x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-        y: (touch.clientY - rect.top) * (canvas.height / rect.height),
-      };
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
     }
     
+    const canvasCenterX = rect.left + rect.width / 2;
+    const canvasCenterY = rect.top + rect.height / 2;
+    
+    const relativeX = clientX - canvasCenterX;
+    const relativeY = clientY - canvasCenterY;
+    
+    const scaledX = relativeX / zoom;
+    const scaledY = relativeY / zoom;
+    
+    const imageX = scaledX + canvas.width / 2;
+    const imageY = scaledY + canvas.height / 2;
+    
     return {
-      x: (e.clientX - rect.left) * (canvas.width / rect.width),
-      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+      x: Math.max(0, Math.min(canvas.width, imageX)),
+      y: Math.max(0, Math.min(canvas.height, imageY)),
     };
   };
 
@@ -392,16 +406,19 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   };
 
   const handleClose = () => {
-    if (role !== null) {
-      const mask = maskCanvasRef.current?.toDataURL('image/png');
-      if (mask) onSaveMask(mask, role);
+    if (role !== null && maskCanvasRef.current) {
+      const mask = maskCanvasRef.current.toDataURL('image/png');
+      if (mask && mask !== 'data:image/png;base64,') {
+        onSaveMask(mask, role);
+      }
     }
     onClose();
   };
 
   const handleSubmit = () => {
     if (!imageLoaded) return;
-    const mask = maskCanvasRef.current!.toDataURL('image/png');
+    if (!maskCanvasRef.current) return;
+    const mask = maskCanvasRef.current.toDataURL('image/png');
     if (role !== null) onSaveMask(mask, role);
     onSubmit(mask, prompt.trim(), role ?? 'donor');
   };

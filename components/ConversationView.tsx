@@ -833,7 +833,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         
         // 构建底图列表：受体优先，其次是普通图像
         const baseRefs = [...recipientImages, ...normalImages].map(f => f.data);
-        const donorRefs = donorImages.map(f => f.data);
+        const donorRefs = donorImages.length > 0 ? donorImages.map(f => f.data) : undefined;
         
         // 获取遮罩信息
         const maskA = donorImages[0]?.maskDataUrl;
@@ -857,7 +857,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           },
           false, baseRefs, [], [], [], maskB, finalText, maskA,
           instructions, modelConfig, signal, domain, undefined, undefined,
-          donorImages.length > 0 ? donorRefs : undefined
+          donorRefs
         );
         // 防御性解构：兼容旧版(返回数组)和新版({images, seeds})两种格式
         let imgList: string[];

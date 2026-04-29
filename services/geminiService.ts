@@ -140,7 +140,12 @@ const overlayMaskOnBaseImage = async (baseImageDataUrl: string, maskDataUrl: str
         
         // 2. 在底图上叠加遮罩（半透明）
         ctx.globalAlpha = opacity;
-        ctx.drawImage(maskImg, 0, 0, baseImg.width, baseImg.height);
+        if (maskImg.width === baseImg.width && maskImg.height === baseImg.height) {
+          ctx.drawImage(maskImg, 0, 0);
+        } else {
+          console.warn(`[语义遮盖] 遮罩尺寸不匹配: 遮罩 ${maskImg.width}x${maskImg.height}, 底图 ${baseImg.width}x${baseImg.height}`);
+          ctx.drawImage(maskImg, 0, 0, baseImg.width, baseImg.height);
+        }
         ctx.globalAlpha = 1.0;
         
         // 3. 输出为 JPEG
@@ -944,7 +949,8 @@ The attached image IS the source material for this upscale operation.`;
       console.log("[放大模式] 已准备放大请求，目标尺寸:", size, ", 底图已附加到 parts");
     }
     // 核心逻辑对位：局部重绘 (Normal Mode Inpainting) - 语义遮盖方式
-    else if (maskB && baseRefs.length > 0 && (baseRefs[0].includes(",") || baseRefs[0].startsWith("data:"))) {
+    // 【BUG修复】当存在供体图像时，优先进入供体/受体模式，不走语义遮盖
+    else if (maskB && baseRefs.length > 0 && (baseRefs[0].includes(",") || baseRefs[0].startsWith("data:")) && (!Array.isArray(donorRefs) || donorRefs.length === 0)) {
       hasBaseImage = true;
       
       // 在压缩之前获取原始图像的尺寸
@@ -972,11 +978,23 @@ The attached image IS the source material for this upscale operation.`;
       }
       
       // 检测遮罩中存在的颜色
-      const detectedColors = await detectMaskColors(maskB);
-      console.log(`[语义遮盖] 检测到 ${detectedColors.length} 种颜色: ${detectedColors.map(c => c.name).join(', ')}`);
+      let detectedColors: { name: string; count: number }[] = [];
+      try {
+        detectedColors = await detectMaskColors(maskB);
+        console.log(`[语义遮盖] 检测到 ${detectedColors.length} 种颜色: ${detectedColors.map(c => c.name).join(', ')}`);
+      } catch (e) {
+        console.warn("[语义遮盖] 颜色检测失败，使用默认描述", e);
+        detectedColors = [{ name: '彩色', count: 0 }];
+      }
       
       // 语义遮盖方式：把遮罩叠加到底图上，生成一张合成图
-      const overlayedImage = await overlayMaskOnBaseImage(baseRefs[0], maskB, 0.35);
+      let overlayedImage: string;
+      try {
+        overlayedImage = await overlayMaskOnBaseImage(baseRefs[0], maskB, 0.35);
+      } catch (e) {
+        console.error("[语义遮盖] 遮罩叠加失败，使用原始底图", e);
+        overlayedImage = baseRefs[0];
+      }
       const compressedOverlay = await compress(overlayedImage, true);
       
       const inpaintInstruction = inpaintPrompt || prompt;
@@ -1012,37 +1030,61 @@ The attached image IS the source material for this upscale operation.`;
       
       console.log("[语义遮盖] 已将遮罩叠加到底图，发送合成图+语义提示词");
       console.log("[语义遮盖] 提示词:", semanticInpaintPrompt.substring(0, 100) + "...");
+    } 
+    // 核心逻辑对位：供体/受体模式 (Donor -> Recipient)
+    else if (donorRefs && Array.isArray(donorRefs) && donorRefs.length > 0 && baseRefs.length > 0) {
+      console.log(`[供体/受体] 进入供体-受体模式，供体: ${donorRefs.length}张, 受体: ${baseRefs.length}张`);
       
-      // 如果有供体图像，添加供体参考
-      if (donorRefs && donorRefs.length > 0) {
-        console.log(`[供体/受体] 添加 ${donorRefs.length} 张供体图像`);
-        parts.push({ text: "参考供体图像（提取此图内容用于填充）:" });
-        for (const donorRef of donorRefs) {
-          if (donorRef.includes(",")) {
-            parts.push({ inlineData: { mimeType: "image/jpeg", data: await compress(donorRef, true) } });
+      // 添加受体图像
+      parts.push({ text: "目标图像（在此图上进行修改）:" });
+      for (const baseRef of baseRefs) {
+        if (baseRef.includes(",")) {
+          try {
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: await compress(baseRef, true) } });
+          } catch (e) {
+            console.warn("[供体/受体] 受体图像压缩失败，跳过:", e);
           }
         }
-        
-        // 如果有供体遮罩，添加供体遮罩
-        if (maskA && maskA.includes(",")) {
-          parts.push({ text: "供体遮罩（提取此区域内容）:" });
-          parts.push({ inlineData: { mimeType: "image/png", data: maskA.split(",")[1] } });
+      }
+      
+      // 添加受体遮罩
+      if (maskB && maskB.includes(",")) {
+        parts.push({ text: "受体遮罩（目标修改区域）:" });
+        parts.push({ inlineData: { mimeType: "image/png", data: maskB.split(",")[1] } });
+      }
+      
+      // 添加供体图像
+      parts.push({ text: "参考供体图像（提取此图内容用于填充）:" });
+      for (const donorRef of donorRefs) {
+        if (donorRef.includes(",")) {
+          try {
+            const compressed = await compress(donorRef, true);
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: compressed } });
+          } catch (e) {
+            console.warn("[供体/受体] 供体图像压缩失败，跳过:", e);
+          }
         }
-        
-        // 更新提示词，加入供体提取指令
-        parts[0] = { 
-          text: `请从供体图像提取内容，填充到目标图片的${colorDescription}：${inpaintInstruction}
+      }
+      
+      // 添加供体遮罩
+      if (maskA && maskA.includes(",")) {
+        parts.push({ text: "供体遮罩（提取此区域内容）:" });
+        parts.push({ inlineData: { mimeType: "image/png", data: maskA.split(",")[1] } });
+      }
+      
+      // 构建供体-受体融合提示词
+      const donorRecipientPrompt = `请从供体图像提取内容，填充到目标图像的指定区域：${inpaintPrompt || prompt}
 
 【重要要求】
 1. 仔细分析供体图像的内容、风格和细节
-2. 将供体图像的相关内容提取并融合到目标图片的标记区域
-3. 图片中其他所有区域必须保持完全不变
+2. 将供体图像的相关内容提取并融合到目标图像的标记区域
+3. 图像中其他所有区域必须保持完全不变
 4. 不要在最终结果中显示任何标记或遮罩
 5. 新生成的内容应与周围区域的亮度和色调保持一致
-6. 输出一张完整的、自然的图片` + STATIC_QUALITY_SUFFIX 
-        };
-      }
-    } 
+6. 输出一张完整的、自然的图片` + STATIC_QUALITY_SUFFIX;
+      
+      parts.unshift({ text: donorRecipientPrompt });
+    }
     // 核心逻辑对位：基因重组 (A->B Synthesis)
     else if (isComposite) {
       parts.push({ text: `Merge features from A into B following this directive: ${prompt}${STATIC_QUALITY_SUFFIX}` });
@@ -1106,6 +1148,30 @@ The attached image IS the source material for this upscale operation.`;
         // 简化的建筑渲染工作流：直接传递线稿和语义分割图
         // 第三方网关会使用 image 字段传递底图，更容易保持一致
         
+        // 解析用户自定义颜色-材质映射
+        const parseColorMapping = (input: string): Record<string, string> => {
+          const mapping: Record<string, string> = {};
+          const regex = /(红色|蓝色|绿色|黄色|紫色|白色|黑色|粉色|橙色|青色|灰色)=([^,，。；;]+)/g;
+          let match;
+          while ((match = regex.exec(input)) !== null) {
+            mapping[match[1]] = match[2].trim();
+          }
+          return mapping;
+        };
+        
+        // 获取用户自定义颜色-材质映射（无默认配置）
+        const userMapping = parseColorMapping(prompt);
+        
+        // 验证：必须至少定义一种颜色映射
+        if (Object.keys(userMapping).length === 0) {
+          throw new Error('建筑渲染模式要求在提示词中显式定义颜色-材质映射。请使用格式：红色=材质名称, 绿色=材质名称...\n支持的颜色：红色、蓝色、绿色、黄色、紫色、白色、黑色、粉色、橙色、青色、灰色');
+        }
+        
+        // 构建颜色映射描述
+        const colorMappingDescription = Object.entries(userMapping)
+          .map(([color, material]) => `• ${color}区域 = ${material}`)
+          .join('\n');
+        
         // 构建建筑渲染提示词
         const architecturalPrompt = `${prompt}
 
@@ -1113,14 +1179,12 @@ The attached image IS the source material for this upscale operation.`;
 
 【重要说明】
 - 第一张图片是线稿/草图，必须严格遵循其轮廓、位置、形状
-- 第二张图片是语义分割图，按颜色区域分配材质：
-  • 红色/粉色区域 = 砖墙、混凝土墙面
-  • 绿色区域 = 草地、植被、景观绿化
-  • 蓝色区域 = 天空、水面、玻璃幕墙
-  • 黄色/橙色区域 = 木材、地面铺装
-  • 紫色区域 = 金属材质、屋顶
-  • 白色/灰色区域 = 混凝土、石材
-  • 黑色区域 = 阴影、暗部区域
+- 第二张图片是语义分割图，按以下用户定义的颜色区域分配材质：
+${colorMappingDescription}
+
+【颜色映射规则】
+- 仅使用用户在提示词中明确定义的颜色-材质映射
+- 未定义的颜色区域将保持原样或使用AI默认处理
 
 【绝对约束】
 - 输出必须与底图完全一致
@@ -1324,6 +1388,11 @@ The attached image IS the source material for this upscale operation.`;
         
         // 检测是否是 inpainting 模式（有底图且有遮罩）
         const isInpaintingMode = imageParts.length >= 2 && maskB && !isUpscale && !isComposite;
+        
+        // 【BUG修复】检测是否是供体-受体模式（只有 donorRefs 时触发）
+        const isDonorRecipientMode = Array.isArray(donorRefs) && donorRefs.length > 0 && baseRefs.length > 0 && !maskB && !isComposite;
+        
+        console.log(`[图像生成模式] isInpaintingMode: ${isInpaintingMode}, isDonorRecipientMode: ${isDonorRecipientMode}, donorRefs: ${donorRefs?.length || 0}, baseRefs: ${baseRefs.length}`);
         
         // 为每张图片发送单独请求，确保不同 seed
         for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
