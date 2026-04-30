@@ -60,7 +60,7 @@ exports.getUserInfo = async (req, res) => {
       previousTier: tierExpired ? user.user_tier : null,
       totalPoints: user.daily_points + user.purchased_points,
       dailyQuota: dailyQuota,
-      dailyUsed: 0,
+      dailyUsed: Math.max(0, dailyQuota - user.daily_points),
       dailyRemaining: user.daily_points
     });
   } catch (err) {
@@ -109,9 +109,9 @@ exports.getQuota = async (req, res) => {
     
     // 检查是否需要重置每日积分
     const today = new Date().toISOString().split('T')[0];
+    const dailyQuota = tierDailyQuota[effectiveTier] || tierDailyQuota['free'];
+    
     if (user.last_reset_date !== today) {
-      const dailyQuota = tierDailyQuota[effectiveTier] || tierDailyQuota['free'];
-      
       await db.query(
         'UPDATE kbit_users SET daily_points = ?, last_reset_date = ?, daily_used = 0 WHERE id = ?',
         [dailyQuota, today, userId]
@@ -123,6 +123,8 @@ exports.getQuota = async (req, res) => {
           points: {
             daily: dailyQuota,
             purchased: user.purchased_points,
+            daily_used: 0,
+            daily_quota: dailyQuota,
             total_consumed: user.total_consumed_points || 0
           },
           tier: effectiveTier,
@@ -132,12 +134,16 @@ exports.getQuota = async (req, res) => {
       });
     }
     
+    const dailyUsed = Math.max(0, dailyQuota - user.daily_points);
+    
     res.json({
       success: true,
       data: {
         points: {
           daily: user.daily_points,
           purchased: user.purchased_points,
+          daily_used: dailyUsed,
+          daily_quota: dailyQuota,
           total_consumed: user.total_consumed_points || 0
         },
         tier: effectiveTier,

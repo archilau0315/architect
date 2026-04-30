@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AppTab } from './types.ts';
+import { UserAvatar } from './components/UserAvatar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,22 +32,17 @@ const Layout: React.FC<LayoutProps> = ({
   modelStatus,
   todayUsed = 0,
 }) => {
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [versionClickCount, setVersionClickCount] = useState(0);
   
-  const avatarInputRef = useRef<HTMLInputElement>(null);
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   
-  const AVATAR_KEY = 'user-architect-avatar-v120-locked';
   const COMPANY_LOGO_KEY = 'kbit-company-logo-v120-locked';
   const THEME_KEY = 'architect-theme-v120';
 
   useEffect(() => {
     try {
-      const savedAvatar = localStorage.getItem(AVATAR_KEY);
-      if (savedAvatar) setAvatarUrl(savedAvatar);
       const savedLogo = localStorage.getItem(COMPANY_LOGO_KEY);
       if (savedLogo) setCompanyLogoUrl(savedLogo);
       const savedTheme = localStorage.getItem(THEME_KEY);
@@ -61,23 +57,14 @@ const Layout: React.FC<LayoutProps> = ({
     } catch (err) { console.warn(err); }
   }, []);
 
-  // 监听头像变更事件（管控中心/登录页更换头像时实时同步）
+  // 监听公司 logo 变更事件
   useEffect(() => {
-    const handleAvatarChange = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail) setAvatarUrl(detail);
-    };
-    window.addEventListener('avatarChanged', handleAvatarChange as EventListener);
-
-    // 跨 Tab 同步
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === AVATAR_KEY && e.newValue) setAvatarUrl(e.newValue);
       if (e.key === COMPANY_LOGO_KEY && e.newValue) setCompanyLogoUrl(e.newValue);
     };
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      window.removeEventListener('avatarChanged', handleAvatarChange as EventListener);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -134,11 +121,7 @@ const Layout: React.FC<LayoutProps> = ({
       <nav className="w-full md:w-80 h-auto md:h-screen sticky top-0 bg-white dark:bg-slate-900 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 p-8 flex flex-col gap-10 z-50 shadow-2xl transition-all duration-500 overflow-y-auto custom-scrollbar shrink-0">
         <div className="flex flex-col gap-6 select-none">
           <div className="flex items-center justify-between gap-3">
-            <div onClick={() => avatarInputRef.current?.click()} className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-2xl ring-2 ring-slate-100 dark:ring-white/5 border border-slate-200 dark:border-slate-700 cursor-pointer overflow-hidden shrink-0 transition-all hover:scale-105 active:scale-95 group relative">
-              {avatarUrl ? <img src={avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-theme to-theme-dark flex items-center justify-center"><span className="text-white text-[12px] font-black tracking-tighter">ARCHI</span></div>}
-              <div className="absolute inset-0 bg-theme/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><span className="text-[8px] text-white font-black uppercase">Edit Logo</span></div>
-            </div>
-            <input type="file" ref={avatarInputRef} onChange={(e) => handleFileChange(e, setAvatarUrl, AVATAR_KEY)} accept="image/*" className="hidden" />
+            <UserAvatar size="md" editable className="shrink-0" />
             <div className="flex-1 flex flex-col items-center">
               <h1 className="text-[17px] font-black tracking-tight text-slate-900 dark:text-white italic leading-none mb-1.5 text-center whitespace-nowrap">首席图像架构师</h1>
               <p onClick={handleVersionClick} className="text-[8.5px] text-slate-400 dark:text-slate-600 font-black uppercase tracking-[0.25em] cursor-pointer">CORE <span className={`font-mono ${isDeveloper ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`}>V1.45</span></p>

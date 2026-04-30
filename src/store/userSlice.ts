@@ -12,6 +12,7 @@ interface UserState {
   totalConsumedPoints: number;
   lifetimeTokens: number;
   needsInviteVerify: boolean;
+  avatar: string | null;
 }
 
 const initialState: UserState = {
@@ -25,6 +26,7 @@ const initialState: UserState = {
   totalConsumedPoints: 0,
   lifetimeTokens: 0,
   needsInviteVerify: false,
+  avatar: null,
 };
 
 export const userSlice = createSlice({
@@ -60,6 +62,9 @@ export const userSlice = createSlice({
     },
     setNeedsInviteVerify: (state, action: PayloadAction<boolean>) => {
       state.needsInviteVerify = action.payload;
+    },
+    setAvatar: (state, action: PayloadAction<string | null>) => {
+      state.avatar = action.payload;
     },
     consumePoints: (state, action: PayloadAction<number>) => {
       const amount = action.payload;
@@ -99,7 +104,8 @@ export const {
   setShowBetaBanner, 
   setTotalConsumedPoints, 
   setLifetimeTokens, 
-  setNeedsInviteVerify, 
+  setNeedsInviteVerify,
+  setAvatar, 
   consumePoints, 
   buyPoints 
 } = userSlice.actions;

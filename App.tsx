@@ -590,7 +590,8 @@ const App: React.FC = () => {
       (window as any).__consumePointsLock = true; // 加锁
       
       const session = localStorage.getItem('architect-invite-session');
-      const userId = session ? (JSON.parse(session).user_id || JSON.parse(session).email) : null;
+      const sessionData = session ? JSON.parse(session) : null;
+      const userId = sessionData ? (sessionData.user_id || sessionData.userId || sessionData.email) : null;
       if (!userId) return false;
 
       const res = await fetch('/api/user/consume', {
@@ -601,6 +602,7 @@ const App: React.FC = () => {
       const data = await res.json();
       if (!res.ok || !data.success) {
         showToast(data.error || '积分扣减失败');
+        (window as any).__consumePointsLock = false;
         return false;
       }
 
@@ -615,6 +617,28 @@ const App: React.FC = () => {
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
       setItemDebounced(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString(), 200); // [性能优化] 防抖写入
+
+      // [新增] 积分扣减成功后立即从后端刷新余额，确保数据同步
+      try {
+        const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
+        const balanceRes = await fetch(balanceUrl, {
+          headers: {
+            'Authorization': `Bearer ${sessionData.token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const balanceResult = await balanceRes.json();
+        if (balanceResult.success && balanceResult.data && balanceResult.data.points) {
+          const { daily, purchased } = balanceResult.data.points;
+          setDailyPoints(daily || 0);
+          setPurchasedPoints(purchased || 0);
+          savePoints(daily || 0, purchased || 0, lastResetDate);
+          console.log('[余额刷新] 积分扣减后同步后端数据:', { daily, purchased });
+        }
+      } catch (refreshError) {
+        console.warn('[余额刷新] 积分扣减后同步失败:', refreshError);
+      }
+
       (window as any).__consumePointsLock = false; // [Bug修复] 解锁防重放
       return true;
     } catch (err) {

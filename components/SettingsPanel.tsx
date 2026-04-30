@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { UserPreferences, CustomModel, VersionRecord, UserTier, AppTheme, Language } from '../types.ts';
 import SystemSpec from './SystemSpec.tsx';
 import { TERMS_OF_SERVICE } from '../legal/termsOfService.ts';
-import { AVATAR_KEY } from '../constants.ts';
 import { PRIVACY_POLICY } from '../legal/privacyPolicy.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { getTranslation } from '../i18n/locales.ts';
+import { UserAvatar } from './UserAvatar';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -65,52 +65,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [inputPassword, setInputPassword] = useState('');
   const [isPassVisible, setIsPassVisible] = useState(false);
-
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  // AVATAR_KEY imported from constants.ts
-
-  useEffect(() => {
-    const loadAvatar = () => {
-      try {
-        const savedAvatar = localStorage.getItem(AVATAR_KEY);
-        if (savedAvatar) {
-          setUserAvatar(savedAvatar);
-        }
-      } catch (e) {
-        console.error('Failed to load avatar:', e);
-      }
-    };
-    
-    loadAvatar();
-    
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === AVATAR_KEY && e.newValue) {
-        setUserAvatar(e.newValue);
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('图片大小不能超过 2MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        setUserAvatar(result);
-        localStorage.setItem(AVATAR_KEY, result);
-        window.dispatchEvent(new CustomEvent('avatarChanged', { detail: result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const getLoggedInUser = () => {
     try {
@@ -193,26 +147,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       return (
         <div className="max-w-md mx-auto space-y-6 py-4 animate-in slide-in-from-bottom-4 duration-500">
           <div className="text-center space-y-4 mb-6">
-            <div 
-              onClick={() => avatarInputRef.current?.click()}
-              className="inline-flex items-center justify-center w-24 h-24 bg-white/[0.06] rounded-2xl overflow-hidden cursor-pointer hover:scale-105 transition-all relative group border border-white/10"
-            >
-              {userAvatar ? (
-                <img src={userAvatar} alt="用户头像" className="w-full h-full object-cover" />
-              ) : (
-                <img src="/public/archi01.png" alt="默认头像" className="w-full h-full object-cover" />
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <span className="text-white text-[10px] font-medium uppercase tracking-wider">更换头像</span>
-              </div>
-            </div>
-            <input 
-              type="file" 
-              ref={avatarInputRef} 
-              onChange={handleAvatarChange} 
-              accept="image/*" 
-              className="hidden" 
-            />
+            <UserAvatar size="lg" editable />
             <div>
               <h3 className="text-lg font-semibold text-white/90">{loggedInUser.nickname || loggedInUser.email?.split('@')[0] || '内测用户'}</h3>
               <p className="text-xs text-white/30 font-mono">{loggedInUser.email}</p>
@@ -257,7 +192,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                 <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">积分余额</p>
                 <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily).toLocaleString()}</p>
@@ -266,8 +201,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日剩余</p>
                 <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
+                <div className="mt-2 pt-2 border-t border-white/[0.06]">
+                  <p className="text-[8px] text-white/20">剩余额度</p>
+                </div>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日已用</p>
+                <p className="text-xl font-semibold text-rose-400">{Math.max(0, tierLimits.daily - points.daily).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">每日: {formatNumber(tierLimits.daily)}</p>
                 </div>

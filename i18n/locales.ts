@@ -43,6 +43,8 @@ export interface Translations {
     rename: string;
     delete: string;
     todayConversations: string;
+    balance: string;
+    used: string;
   };
 
   // 标签页
@@ -257,6 +259,8 @@ export const translations: Record<Language, Translations> = {
       rename: '重命名',
       delete: '删除',
       todayConversations: '今日对话',
+      balance: '余额',
+      used: '已用',
     },
     tabs: {
       chat: '对话',
@@ -458,6 +462,8 @@ export const translations: Record<Language, Translations> = {
       rename: 'Rename',
       delete: 'Delete',
       todayConversations: 'Today\'s Conversations',
+      balance: 'Balance',
+      used: 'Used',
     },
     tabs: {
       chat: 'Chat',
@@ -658,6 +664,8 @@ export const translations: Record<Language, Translations> = {
       rename: '名前を変更',
       delete: '削除',
       todayConversations: '今日の会話',
+      balance: '残高',
+      used: '使用済',
     },
     tabs: {
       chat: 'チャット',
@@ -858,6 +866,8 @@ export const translations: Record<Language, Translations> = {
       rename: '이름 변경',
       delete: '삭제',
       todayConversations: '오늘의 대화',
+      balance: '잔액',
+      used: '사용',
     },
     tabs: {
       chat: '채팅',
@@ -1058,6 +1068,8 @@ export const translations: Record<Language, Translations> = {
       rename: 'Renombrar',
       delete: 'Eliminar',
       todayConversations: 'Conversaciones de Hoy',
+      balance: 'Saldo',
+      used: 'Usado',
     },
     tabs: {
       chat: 'Chat',
@@ -1258,6 +1270,8 @@ export const translations: Record<Language, Translations> = {
       rename: 'Renommer',
       delete: 'Supprimer',
       todayConversations: 'Conversations d\'Aujourd\'hui',
+      balance: 'Solde',
+      used: 'Utilisé',
     },
     tabs: {
       chat: 'Chat',
@@ -1458,6 +1472,8 @@ export const translations: Record<Language, Translations> = {
       rename: 'Umbenennen',
       delete: 'Löschen',
       todayConversations: 'Heutige Konversationen',
+      balance: 'Guthaben',
+      used: 'Verbraucht',
     },
     tabs: {
       chat: 'Chat',
@@ -1658,6 +1674,8 @@ export const translations: Record<Language, Translations> = {
       rename: 'Переименовать',
       delete: 'Удалить',
       todayConversations: 'Сегодняшние Беседы',
+      balance: 'Баланс',
+      used: 'Использовано',
     },
     tabs: {
       chat: 'Чат',

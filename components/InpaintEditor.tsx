@@ -42,6 +42,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
+  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -54,7 +55,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   const lastPoint = useRef<Point | null>(null);
   const velocity = useRef<number>(0);
 
-  const MIN_ZOOM = 1;
+  const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 4;
   
   const MIN_SAMPLE_DISTANCE = 2;
@@ -72,7 +73,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       canvas.height = maskCanvas.height = img.height;
       canvas.getContext('2d')!.drawImage(img, 0, 0);
       const mCtx = maskCanvas.getContext('2d')!;
-      mCtx.fillStyle = 'black';
+      mCtx.fillStyle = 'rgba(128, 128, 128, 0.3)';
       mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
       setOriginalImageSize({ width: img.width, height: img.height });
       setImageLoaded(true);
@@ -86,9 +87,15 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     setPan({ x: 0, y: 0 });
   }, []);
 
-  const getPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent) => {
-    const canvas = maskCanvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
+  const getPos = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent) => {
+    const canvas = maskCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    
+    const canvasRect = canvas.getBoundingClientRect();
     
     let clientX: number, clientY: number;
     if ('touches' in e) {
@@ -100,25 +107,27 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       clientY = e.clientY;
     }
     
-    const canvasCenterX = rect.left + rect.width / 2;
-    const canvasCenterY = rect.top + rect.height / 2;
+    const rectLeft = canvasRect.left + pan.x;
+    const rectTop = canvasRect.top + pan.y;
     
-    const relativeX = clientX - canvasCenterX;
-    const relativeY = clientY - canvasCenterY;
+    const scaleX = canvas.width / canvasRect.width;
+    const scaleY = canvas.height / canvasRect.height;
     
-    const scaledX = relativeX / zoom;
-    const scaledY = relativeY / zoom;
+    const imageX = (clientX - rectLeft) * scaleX;
+    const imageY = (clientY - rectTop) * scaleY;
     
-    const imageX = scaledX + canvas.width / 2;
-    const imageY = scaledY + canvas.height / 2;
+    const clampedX = Math.max(0, Math.min(canvas.width, imageX));
+    const clampedY = Math.max(0, Math.min(canvas.height, imageY));
+    
+    setCursorPos({ x: clampedX, y: clampedY });
     
     return {
-      x: Math.max(0, Math.min(canvas.width, imageX)),
-      y: Math.max(0, Math.min(canvas.height, imageY)),
+      x: clampedX,
+      y: clampedY,
     };
-  };
+  }, [pan]);
 
-  const drawLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, size: number) => {
+  const drawLine = useCallback((ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, size: number) => {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -142,9 +151,9 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     ctx.lineJoin = 'round';
     ctx.lineWidth = size;
     ctx.stroke();
-  };
+  }, []);
 
-  const drawSmoothStroke = (ctx: CanvasRenderingContext2D, points: Point[], size: number) => {
+  const drawSmoothStroke = useCallback((ctx: CanvasRenderingContext2D, points: Point[], size: number) => {
     if (points.length < 2) return;
     
     ctx.beginPath();
@@ -170,14 +179,14 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
     }
     ctx.fill();
-  };
+  }, []);
 
-  const getAdaptiveSampleDistance = (vel: number): number => {
+  const getAdaptiveSampleDistance = useCallback((vel: number): number => {
     const normalizedVel = Math.min(vel / 200, 1);
     return MIN_SAMPLE_DISTANCE + (MAX_SAMPLE_DISTANCE - MIN_SAMPLE_DISTANCE) * normalizedVel;
-  };
+  }, []);
 
-  const handleBrushStroke = (ctx: CanvasRenderingContext2D, newPoint: Point) => {
+  const handleBrushStroke = useCallback((ctx: CanvasRenderingContext2D, newPoint: Point) => {
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     
@@ -211,15 +220,15 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     ctx.fill();
     
     lastPoint.current = newPoint;
-  };
+  }, [color, brushSize, getAdaptiveSampleDistance, drawLine]);
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (zoom > 1) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      return;
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    try {
+      e.preventDefault();
+    } catch (err) {
+      // 被动事件监听器中无法调用 preventDefault，忽略此错误
     }
-
+    
     const pos = getPos(e);
     setIsDrawing(true);
     startPos.current = pos;
@@ -241,9 +250,15 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     } else {
       snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
     }
-  };
+  }, [getPos, tool, color, brushSize]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    try {
+      e.preventDefault();
+    } catch (err) {
+      // 被动事件监听器中无法调用 preventDefault，忽略此错误
+    }
+    
     if (isPanning) {
       const newX = e.clientX - panStart.x;
       const newY = e.clientY - panStart.y;
@@ -261,14 +276,18 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       handleBrushStroke(mCtx, newPoint);
     } else if (tool === 'lasso') {
       lassoPoints.current.push(pos);
-      mCtx.putImageData(snapshotRef.current!, 0, 0);
+      if (snapshotRef.current) {
+        mCtx.putImageData(snapshotRef.current, 0, 0);
+      }
       mCtx.strokeStyle = color;
       mCtx.lineWidth = 2;
       mCtx.beginPath();
       lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
       mCtx.stroke();
     } else {
-      mCtx.putImageData(snapshotRef.current!, 0, 0);
+      if (snapshotRef.current) {
+        mCtx.putImageData(snapshotRef.current, 0, 0);
+      }
       mCtx.fillStyle = color;
       if (tool === 'rect') {
         mCtx.fillRect(start.x, start.y, pos.x - start.x, pos.y - start.y);
@@ -282,7 +301,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
         mCtx.fill();
       }
     }
-  };
+  }, [isPanning, panStart, isDrawing, getPos, tool, color, brushSize, handleBrushStroke]);
 
   const handleMouseUp = useCallback(() => {
     if (isPanning) {
@@ -319,134 +338,218 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     setZoom(newZoom);
   }, [zoom]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      if (zoom > 1) {
-        setIsPanning(true);
-        setPanStart({ x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y });
-      } else {
-        const pos = getPos(e);
-        setIsDrawing(true);
-        startPos.current = pos;
-        const mCtx = maskCanvasRef.current!.getContext('2d')!;
-        
-        if (tool === 'brush') {
-          strokePoints.current = [{ x: pos.x, y: pos.y, timestamp: Date.now() }];
-          lastPoint.current = { x: pos.x, y: pos.y, timestamp: Date.now() };
-          velocity.current = 0;
-          
-          mCtx.fillStyle = color;
-          mCtx.beginPath();
-          mCtx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
-          mCtx.fill();
-        } else if (tool === 'lasso') {
-          snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
-          lassoPoints.current = [pos];
-        } else {
-          snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
-        }
-      }
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button === 0) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
-  }, [zoom, pan.x, pan.y, tool, color, brushSize]);
+  }, [pan]);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      if (isPanning) {
-        const newX = e.touches[0].clientX - panStart.x;
-        const newY = e.touches[0].clientY - panStart.y;
-        setPan({ x: newX, y: newY });
-      } else if (isDrawing) {
-        const pos = getPos(e);
-        const mCtx = maskCanvasRef.current!.getContext('2d')!;
-        const start = startPos.current!;
-
-        if (tool === 'brush') {
-          const newPoint = { x: pos.x, y: pos.y, timestamp: Date.now() };
-          handleBrushStroke(mCtx, newPoint);
-        } else if (tool === 'lasso') {
-          lassoPoints.current.push(pos);
-          mCtx.putImageData(snapshotRef.current!, 0, 0);
-          mCtx.strokeStyle = color;
-          mCtx.lineWidth = 2;
-          mCtx.beginPath();
-          lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
-          mCtx.stroke();
-        } else {
-          mCtx.putImageData(snapshotRef.current!, 0, 0);
-          mCtx.fillStyle = color;
-          if (tool === 'rect') {
-            mCtx.fillRect(start.x, start.y, pos.x - start.x, pos.y - start.y);
-          } else {
-            mCtx.beginPath();
-            mCtx.ellipse(
-              (start.x + pos.x) / 2, (start.y + pos.y) / 2,
-              Math.abs(pos.x - start.x) / 2, Math.abs(pos.y - start.y) / 2,
-              0, 0, Math.PI * 2
-            );
-            mCtx.fill();
-          }
-        }
-      }
-    }
-  }, [isPanning, isDrawing, panStart, tool, color, brushSize]);
-
-  const handleTouchEnd = useCallback(() => {
+  const handleContainerMouseUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
-    } else if (isDrawing) {
+    }
+  }, [isPanning]);
+
+  const handleContainerMouseLeave = useCallback(() => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+    if (isDrawing) {
       handleMouseUp();
     }
   }, [isPanning, isDrawing, handleMouseUp]);
 
-  const handleClear = () => {
-    const mCtx = maskCanvasRef.current!.getContext('2d')!;
-    mCtx.fillStyle = 'black';
-    mCtx.fillRect(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
-  };
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const pos = getPos(e);
+      setIsDrawing(true);
+      startPos.current = pos;
+      const mCtx = maskCanvasRef.current!.getContext('2d')!;
+      
+      if (tool === 'brush') {
+        strokePoints.current = [{ x: pos.x, y: pos.y, timestamp: Date.now() }];
+        lastPoint.current = { x: pos.x, y: pos.y, timestamp: Date.now() };
+        velocity.current = 0;
+        
+        mCtx.fillStyle = color;
+        mCtx.beginPath();
+        mCtx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
+        mCtx.fill();
+      } else if (tool === 'lasso') {
+        snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
+        lassoPoints.current = [pos];
+      } else {
+        snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
+      }
+    } else if (e.touches.length === 2) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const initialDistance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) + 
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      const initialZoom = zoom;
+      const handlePinch = (evt: TouchEvent) => {
+        if (evt.touches.length !== 2) return;
+        const t1 = evt.touches[0];
+        const t2 = evt.touches[1];
+        const distance = Math.sqrt(
+          Math.pow(t2.clientX - t1.clientX, 2) + 
+          Math.pow(t2.clientY - t1.clientY, 2)
+        );
+        const scale = distance / initialDistance;
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialZoom * scale));
+        setZoom(newZoom);
+      };
+      document.addEventListener('touchmove', handlePinch, { passive: false });
+      document.addEventListener('touchend', () => {
+        document.removeEventListener('touchmove', handlePinch);
+      }, { once: true });
+    }
+  }, [zoom, pan.x, pan.y, tool, color, brushSize, getPos]);
 
-  const handleClose = () => {
-    if (role !== null && maskCanvasRef.current) {
-      const mask = maskCanvasRef.current.toDataURL('image/png');
-      if (mask && mask !== 'data:image/png;base64,') {
-        onSaveMask(mask, role);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    try {
+      e.preventDefault();
+    } catch (err) {
+      // 被动事件监听器中无法调用 preventDefault，忽略此错误
+    }
+    if (e.touches.length === 1 && isDrawing) {
+      const pos = getPos(e);
+      const mCtx = maskCanvasRef.current!.getContext('2d')!;
+      const start = startPos.current!;
+
+      if (tool === 'brush') {
+        const newPoint = { x: pos.x, y: pos.y, timestamp: Date.now() };
+        handleBrushStroke(mCtx, newPoint);
+      } else if (tool === 'lasso') {
+        lassoPoints.current.push(pos);
+        if (snapshotRef.current) {
+          mCtx.putImageData(snapshotRef.current, 0, 0);
+        }
+        mCtx.strokeStyle = color;
+        mCtx.lineWidth = 2;
+        mCtx.beginPath();
+        lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
+        mCtx.stroke();
+      } else {
+        if (snapshotRef.current) {
+          mCtx.putImageData(snapshotRef.current, 0, 0);
+        }
+        mCtx.fillStyle = color;
+        if (tool === 'rect') {
+          mCtx.fillRect(start.x, start.y, pos.x - start.x, pos.y - start.y);
+        } else {
+          mCtx.beginPath();
+          mCtx.ellipse(
+            (start.x + pos.x) / 2, (start.y + pos.y) / 2,
+            Math.abs(pos.x - start.x) / 2, Math.abs(pos.y - start.y) / 2,
+            0, 0, Math.PI * 2
+          );
+          mCtx.fill();
+        }
       }
     }
-    onClose();
-  };
+  }, [isDrawing, getPos, tool, color, brushSize, handleBrushStroke]);
 
-  const handleSubmit = () => {
-    if (!imageLoaded) return;
-    if (!maskCanvasRef.current) return;
-    const mask = maskCanvasRef.current.toDataURL('image/png');
-    if (role !== null) onSaveMask(mask, role);
-    onSubmit(mask, prompt.trim(), role ?? 'donor');
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      canvasContainerRef.current?.requestFullscreen().catch(err => console.error(err));
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(err => console.error(err));
-      setIsFullscreen(false);
+  const handleTouchEnd = useCallback(() => {
+    if (isPanning) {
+      setIsPanning(false);
     }
-  };
+    
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    
+    if (tool === 'brush') {
+      strokePoints.current = [];
+      lastPoint.current = null;
+      velocity.current = 0;
+    }
+    
+    if (tool === 'lasso' && lassoPoints.current.length > 2) {
+      const mCtx = maskCanvasRef.current!.getContext('2d')!;
+      if (snapshotRef.current) mCtx.putImageData(snapshotRef.current, 0, 0);
+      mCtx.fillStyle = color;
+      mCtx.beginPath();
+      lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
+      mCtx.closePath();
+      mCtx.fill();
+      lassoPoints.current = [];
+    }
+    snapshotRef.current = null;
+  }, [isPanning, isDrawing, tool, color]);
+
+  const handleSaveMask = useCallback(() => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas || !role) return;
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = maskCanvas.width;
+    tempCanvas.height = maskCanvas.height;
+    const tempCtx = tempCanvas.getContext('2d')!;
+    
+    tempCtx.drawImage(maskCanvas, 0, 0);
+    
+    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 0 || data[i + 1] > 0 || data[i + 2] > 0) {
+        data[i] = 255;
+        data[i + 1] = 255;
+        data[i + 2] = 255;
+        data[i + 3] = 255;
+      }
+    }
+    
+    tempCtx.putImageData(imageData, 0, 0);
+    const maskDataUrl = tempCanvas.toDataURL('image/png');
+    
+    onSaveMask(maskDataUrl, role);
+  }, [role, onSaveMask]);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+    handleSaveMask();
+  }, [role, handleSaveMask]);
 
-  const toolBtn = (t: Tool, label: string) => (
-    <button key={t} onClick={() => setTool(t)}
-      className={`min-h-[36px] px-3 py-1 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${tool === t ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-      {label}
-    </button>
-  );
+  const handleSubmit = useCallback(() => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas || !role) return;
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = maskCanvas.width;
+    tempCanvas.height = maskCanvas.height;
+    const tempCtx = tempCanvas.getContext('2d')!;
+    
+    tempCtx.drawImage(maskCanvas, 0, 0);
+    
+    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 0 || data[i + 1] > 0 || data[i + 2] > 0) {
+        data[i] = 255;
+        data[i + 1] = 255;
+        data[i + 2] = 255;
+        data[i + 3] = 255;
+      }
+    }
+    
+    tempCtx.putImageData(imageData, 0, 0);
+    const maskDataUrl = tempCanvas.toDataURL('image/png');
+    
+    onSubmit(maskDataUrl, prompt, role);
+  }, [prompt, role, onSubmit]);
+
+  const handleClear = useCallback(() => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas) return;
+    const mCtx = maskCanvas.getContext('2d')!;
+    mCtx.fillStyle = 'rgba(128, 128, 128, 0.3)';
+    mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+  }, []);
 
   const toolLabels = language === 'zh-CN'
     ? { brush: '画笔', rect: '矩形', ellipse: '椭圆', lasso: '套索' }
@@ -472,7 +575,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isFullscreen ? "M6 18L18 6M6 6l12 12" : "M4 8V4m0 0h4m-4 0l5 5m1-5V4m0 0h4m-4 0L10 9M8 16H4m0 0v4m0-4l5-5M18 8h4m0 0v-4m0 4l-5-5M16 16h4m0 0v4m0-4l-5 5"} />
               </svg>
             </button>
-            <button onClick={handleClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all active:scale-95">
+            <button onClick={onClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-all active:scale-95">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -482,17 +585,28 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
 
         <div
           ref={canvasContainerRef}
-          className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-black/20 cursor-grab active:cursor-grabbing"
+          className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-black/20 cursor-crosshair"
           onWheel={handleWheel}
+          onMouseDown={handleContainerMouseDown}
+          onMouseUp={handleContainerMouseUp}
+          onMouseLeave={handleContainerMouseLeave}
+          style={{ cursor: isPanning ? 'grabbing' : tool === 'brush' ? 'crosshair' : 'grab' }}
         >
           <div
-            className="relative transition-transform duration-150 ease-out"
+            className="relative transition-transform duration-100 ease-out"
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
             }}
           >
-            <canvas ref={canvasRef} className="absolute inset-0" />
+            <canvas 
+              ref={canvasRef} 
+              className="relative block"
+              style={{
+                maxWidth: '100%',
+                maxHeight: isFullscreen ? '85vh' : '55vh',
+              }}
+            />
             <canvas
               ref={maskCanvasRef}
               onMouseDown={handleMouseDown}
@@ -502,9 +616,8 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className="relative opacity-50 hover:opacity-60 transition-opacity"
+              className="absolute top-0 left-0 cursor-crosshair"
               style={{
-                cursor: zoom > 1 ? 'grab' : (tool === 'brush' ? 'crosshair' : 'default'),
                 maxWidth: '100%',
                 maxHeight: isFullscreen ? '85vh' : '55vh',
               }}
@@ -547,50 +660,49 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-white/30 uppercase tracking-wide w-12">{language === 'zh-CN' ? '工具' : 'Tool'}</span>
-            {toolBtn('brush', toolLabels.brush)}
-            {toolBtn('rect', toolLabels.rect)}
-            {toolBtn('ellipse', toolLabels.ellipse)}
-            {toolBtn('lasso', toolLabels.lasso)}
-            <div className="w-px h-5 bg-white/10 mx-1" />
-            {COLORS.map(c => (
-              <button key={c.value} onClick={() => setColor(c.value)} title={c.label}
-                className={`w-6 h-6 rounded-full border-2 transition-all active:scale-95 ${color === c.value ? 'border-white/60 scale-110' : 'border-white/20'}`}
-                style={{ background: c.value }} />
+            {(Object.keys(toolLabels) as Tool[]).map(t => (
+              <button key={t} onClick={() => setTool(t)}
+                className={`min-h-[36px] px-4 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${tool === t ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
+                {toolLabels[t]}
+              </button>
             ))}
-            {tool === 'brush' && (
-              <>
-                <div className="w-px h-5 bg-white/10 mx-1" />
-                <input type="range" min="10" max="100" value={brushSize}
-                  onChange={e => setBrushSize(Number(e.target.value))}
-                  className="w-24 h-1.5 accent-white" />
-                <span className="text-[11px] font-mono text-white/30 w-8">{brushSize}px</span>
-              </>
-            )}
           </div>
 
-          <div className="flex items-start gap-2">
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-              placeholder={language === 'zh-CN' ? '描述遮罩区域要生成的内容（可选）… Shift+Enter 换行' : 'Describe what to generate (optional)... Shift+Enter for new line'}
-              rows={2}
-              className="flex-1 min-h-[64px] max-h-[140px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/80 placeholder-white/20 text-sm outline-none focus:border-white/20 transition-all resize-y leading-relaxed custom-scrollbar" />
-            <button onClick={handleClear}
-              className="self-end min-h-[40px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 text-sm font-medium hover:bg-white/8 hover:text-white/70 transition-all active:scale-95 whitespace-nowrap">
-              {t.common.clear || (language === 'zh-CN' ? '清除' : 'Clear')}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium text-white/30 uppercase tracking-wide w-12">{language === 'zh-CN' ? '颜色' : 'Color'}</span>
+            {COLORS.map(c => (
+              <button key={c.value} onClick={() => setColor(c.value)}
+                className={`w-8 h-8 rounded-full transition-all active:scale-95 ${color === c.value ? 'ring-2 ring-white/50 ring-offset-2 ring-offset-black/50' : ''}`}
+                style={{ backgroundColor: c.value }}
+                title={c.label}
+              />
+            ))}
+            <span className="text-[11px] font-medium text-white/30 uppercase tracking-wide w-12 ml-4">{language === 'zh-CN' ? '大小' : 'Size'}</span>
+            <input type="range" min={1} max={100} value={brushSize}
+              onChange={e => setBrushSize(Number(e.target.value))}
+              className="w-24 h-1.5 accent-blue-500" />
+            <span className="text-[11px] font-mono text-white/30 w-8">{brushSize}px</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={handleClear} className="min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70 transition-all active:scale-95 text-[12px] font-medium">
+              {language === 'zh-CN' ? '清除' : 'Clear'}
             </button>
-            <button onClick={handleClose}
-              className="self-end min-h-[40px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 text-sm font-medium hover:bg-white/8 hover:text-white/70 transition-all active:scale-95">
-              {t.common.close}
-            </button>
-            <button onClick={handleSubmit} disabled={!imageLoaded}
-              className="self-end min-h-[40px] px-5 rounded-lg bg-blue-500/80 text-white text-sm font-medium hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 whitespace-nowrap">
-              {t.buttons.generate}
+            <input
+              type="text"
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              placeholder={language === 'zh-CN' ? '描述您想要修改的内容（可选）' : 'Describe what you want to modify (optional)'}
+              className="flex-1 min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/80 placeholder-white/25 text-[12px] focus:outline-none focus:border-blue-500/50"
+            />
+            <button onClick={handleSubmit} disabled={!role}
+              className={`min-h-[36px] px-6 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${role ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600' : 'bg-white/[0.04] border border-white/[0.06] text-white/30 cursor-not-allowed'}`}>
+              {language === 'zh-CN' ? '提交修改' : 'Submit'}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { CustomModel, Point, Stroke, HistoryItem, CreativeDomain, UserTier, Lang
 import { getTranslation } from '../i18n/locales.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
+import { getTierConfig } from '../src/config/tierConfig.ts';
 
 interface ImageGeneratorProps {
   currentPrompt: string;
@@ -627,32 +628,37 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       indicesToDownload = generatedImages.map((_, i) => i);
     }
 
+    const tierConfig = getTierConfig(userTier || 'free');
+
     if (isPro) {
-      if (userTier === 'beta') {
-        window.alert("内测期间，无水印下载暂不可用。\n升级正式版即可解锁高清无水印下载。");
+      const watermarkFreeDownloads = tierConfig.imageWatermarkFreeDownloads;
+      
+      // 检查是否有权限进行无水印下载
+      if (watermarkFreeDownloads === 0) {
+        window.alert("权限不足：无水印下载仅限内测/付费用户（基础/PRO/PLUS）。免费用户请使用标准下载。");
         return;
       }
-      if (userTier === 'pro' || userTier === 'plus') {
+      
+      // 无限下载的情况（beta, plus, dev）
+      if (watermarkFreeDownloads === -1) {
         if (!window.confirm(`确认下载 ${indicesToDownload.length} 张无水印高清原片？\n(请遵守版权合规使用协议)`)) return;
         WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'pro' });
-      } else if (userTier === 'basic') {
-        const QUOTA_KEY = 'KBIT_BASIC_PRO_QUOTA';
+      } else {
+        // 有限配额的情况（basic, pro）
+        const QUOTA_KEY = `KBIT_${userTier?.toUpperCase()}_PRO_QUOTA`;
         const today = new Date().toDateString();
         const quotaData = JSON.parse(localStorage.getItem(QUOTA_KEY) || `{"date":"${today}","count":0}`);
         let currentCount = quotaData.date === today ? quotaData.count : 0;
 
-        if (currentCount >= 10) {
-          window.alert("今日 10 次基础版无水印配额已用完。升级 PRO/PLUS 可享无限下载。");
+        if (currentCount >= watermarkFreeDownloads) {
+          window.alert(`今日 ${watermarkFreeDownloads} 次无水印配额已用完。升级更高等级可享更多或无限下载。`);
           return;
         }
 
-        if (!window.confirm(`基础版每日无水印下载配额剩余：${9 - currentCount} 次。\n确认下载高清原片？`)) return;
+        if (!window.confirm(`每日无水印下载配额剩余：${watermarkFreeDownloads - currentCount} 次。\n确认下载高清原片？`)) return;
         
         localStorage.setItem(QUOTA_KEY, JSON.stringify({ date: today, count: currentCount + 1 }));
         WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'free_pro_quota' });
-      } else {
-        window.alert("权限不足：无水印下载仅限付费用户（基础/PRO/PLUS）。免费用户请使用标准下载。");
-        return;
       }
     } else {
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'standard' });

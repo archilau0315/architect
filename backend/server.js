@@ -204,6 +204,7 @@ adminRoutes.get('/beta-requests', adminController.getBetaRequests);
 adminRoutes.post('/beta-requests/:id/approve', adminController.approveBetaRequest);
 adminRoutes.post('/beta-requests/:id/reject', adminController.rejectBetaRequest);
 adminRoutes.post('/change-password', adminController.changePassword);
+adminRoutes.post('/manual-send-invite', adminController.manualSendInvite);
 
 app.use('/api/admin', adminRoutes);
 

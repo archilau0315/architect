@@ -82,6 +82,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   };
   const [isGenerating, setIsGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [previousVideoUrl, setPreviousVideoUrl] = useState<string | null>(null);
   const [watermarkedVideoUrl, setWatermarkedVideoUrl] = useState<string | null>(null);
   const [isWatermarkProcessing, setIsWatermarkProcessing] = useState(false);
   const [showEngineDropdown, setShowEngineDropdown] = useState(false); // [Bug修复] 补充缺失的状态声明
@@ -270,6 +271,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     return Math.ceil(25000 / TOKENS_PER_POINT); // 约 167 积分
   };
 
+  // 撤销功能：回退到上一次生成的视频
+  const handleUndo = () => {
+    if (!previousVideoUrl) return;
+    // 交换当前视频和上一次视频
+    const temp = videoUrl;
+    setVideoUrl(previousVideoUrl);
+    setPreviousVideoUrl(temp);
+    setWatermarkedVideoUrl(null);
+  };
+
   const handleGenerate = async () => {
     if (isGenerating) {
       abortControllerRef.current?.abort();
@@ -278,6 +289,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
 
     // 视频生成走 PH8 后端代理，不需要前端检查 API Key
+
+    // 保存当前视频作为上一次版本，用于撤销
+    if (videoUrl) {
+      setPreviousVideoUrl(videoUrl);
+    }
 
     setIsGenerating(true);
     setProgress(0);
@@ -319,7 +335,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         { resolution: videoResolution, duration: videoDuration, camerafixed: cameraFixed, seed: videoSeed }
       );
       setProgress(100);
-      if (blobUrlRef.current?.startsWith('blob:')) URL.revokeObjectURL(blobUrlRef.current);
+      // 注意：不要释放 blob URL！父组件会保留引用
+      // 现在使用 videoBlobService 管理 URL 的生命周期
       blobUrlRef.current = result.url.startsWith('blob:') ? result.url : null;
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
@@ -491,7 +508,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
   };
 
-  const AssetSlot = ({ current, isLocked, onToggleLock, onRemove, onUpload, index, style }: any) => {
+  const AssetSlot = ({ current, isLocked, onToggleLock, onUpload, index, style }: any) => {
     const displayRatio = (current && isLocked) ? aspectRatio : '16:9';
     return (
     <div
@@ -500,31 +517,35 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     >
       <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.05]">
         <span className="text-[9px] font-medium text-white/30 uppercase tracking-widest">{index !== undefined ? `分镜 ${index + 1}` : '待上传'}</span>
-        {current ? (
-          /* 锁开关：点击切换锁定状态 */
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleLock?.(index); }}
-            className={`w-5 h-5 flex items-center justify-center rounded transition-all ${
-              isLocked
-                ? 'text-amber-400/70 bg-amber-500/10 hover:bg-amber-500/20'
-                : 'text-white/25 bg-white/[0.04] hover:text-white/50 hover:bg-white/8'
-            }`}
-            title={isLocked ? '已锁定 - 跟随比例裁剪' : '未锁定 - 默认 16:9'}
-          >
-            {isLocked ? (
-              /* 锁闭图标 */
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a4 4 0 014 4v2h1a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2v-8a2 2 0 012-2h1V6a4 4 0 014-4zm0 2a2 2 0 00-2 2v2h4V6a2 2 0 00-2-2z"/></svg>
-            ) : (
-              /* 锁开图标 */
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 118 0v4"/></svg>
-            )}
-          </button>
-        ) : null}
       </div>
       <div className={`flex-1 relative flex items-center justify-center group ${onUpload ? 'cursor-pointer' : ''}`} onClick={onUpload || undefined}>
         {current ? (
           <>
             <img src={current} className="w-full h-full object-cover" />
+            {/* 悬停时显示操作按钮 */}
+            <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
+              <div className="flex items-center gap-2">
+                {onToggleLock && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleLock(index); }} 
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${
+                      isLocked 
+                        ? 'bg-blue-600 text-white border-transparent shadow-lg' 
+                        : 'bg-slate-800/80 text-white/60 border-transparent hover:text-white hover:bg-slate-700/80'
+                    }`}
+                    title={isLocked ? '已锁定 - 跟随比例裁剪' : '未锁定 - 默认 16:9'}
+                  >
+                    {isLocked ? (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M8 11V7a4 4 0 0 1 8 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* 锁定指示器：右上角小绿点 */}
+            {isLocked && <div className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full shadow-lg animate-pulse" />}
             {/* 比例标签：锁闭显示当前比例，锁开显示默认 16:9 */}
             <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 backdrop-blur-sm rounded text-[8px] font-mono font-semibold select-none pointer-events-none transition-colors ${
               isLocked ? 'bg-black/60 text-blue-400/90' : 'bg-white/10 text-white/40'
@@ -788,6 +809,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         </div>
 
         <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] flex flex-col items-center justify-center p-8 min-h-[500px] relative overflow-hidden">
+            {/* 生成中状态 */}
+            {isGenerating && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-20 animate-in fade-in">
+                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6" />
+                <p className="text-white/80 text-sm font-medium mb-2">{statusText}</p>
+                <div className="w-48 h-2 bg-white/20 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-white/50 text-xs mt-2">{progress}%</p>
+              </div>
+            )}
+            
             {videoUrl ? (
              <div className="w-full flex flex-col items-center gap-4 animate-in fade-in duration-300">
                 <div className={`relative rounded-xl overflow-hidden border border-white/10 ${aspectRatio === '9:16' ? 'h-[60vh]' : 'w-full'} shadow-2xl`}>
@@ -820,6 +853,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                     {t.tabs.video} {t.buttons.generate}
                   </div>
                   <div className="flex items-center gap-3">
+                    {/* 撤销按钮 */}
+                    <button 
+                      onClick={handleUndo}
+                      disabled={!previousVideoUrl}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[12px] font-semibold transition-all active:scale-95 ${previousVideoUrl ? 'bg-white/[0.08] border border-white/15 text-white/60 hover:bg-white/15 hover:text-white/80' : 'bg-white/[0.03] border border-white/[0.06] text-white/20 cursor-not-allowed'}`}
+                      title="回退上一版本"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      回退
+                    </button>
                     <button 
                       onClick={handleGenerate}
                       disabled={isGenerating}
@@ -860,9 +905,15 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                 )}
              </div>
            ) : (
-             <div className="flex flex-col items-center text-center opacity-10 select-none">
-                <svg className="w-24 h-24 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                <p className="text-sm font-medium text-white/30">等待生成</p>
+             <div className="flex flex-col items-center text-center opacity-30 select-none">
+                <div className="relative mb-6">
+                  <svg className="w-24 h-24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-12 h-12 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-white/50">等待生成</p>
+                <p className="text-xs text-white/30 mt-2">上传底图后点击"执行分镜动态解算"</p>
              </div>
            )}
         </div>

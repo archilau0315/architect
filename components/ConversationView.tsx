@@ -7,6 +7,7 @@ import InpaintEditor from './InpaintEditor.tsx';
 import { VideoPlayer } from './VideoPlayer.tsx';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
+import { videoBlobService } from '../services/videoBlobService.ts';
 import { getTranslation } from '../i18n/locales.ts';
 import type { Language } from '../i18n/locales.ts';
 import { MessageCircle, Image, Video, Download, RefreshCw, Copy, StopCircle, UserCircle, Palette, X, Lock, LockOpen } from 'lucide-react';
@@ -677,6 +678,12 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   // ── 视频回写：工作台生成完成后自动写入聊天气泡 ──
   useEffect(() => {
     if (!pendingVideoMessage?.url) return;
+    
+    // 将视频 URL 标记为持久保持，防止被过早释放
+    if (pendingVideoMessage.url.startsWith('blob:')) {
+      videoBlobService.markAsPersistent(pendingVideoMessage.url);
+    }
+    
     // 追加一条"系统消息"标记的视频结果
     addMsg({
       role: 'assistant',
@@ -909,6 +916,10 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         const assets = payload.images.map(f => f.data);
         const res: any = await gemini.generateVideo(finalText, assets, '16:9', instructions, signal);
         if (res?.url) {
+          // 将视频 URL 标记为持久保持
+          if (res.url.startsWith('blob:')) {
+            videoBlobService.markAsPersistent(res.url);
+          }
           // 立即显示原始视频
           updateLast({ type: 'video', videoUrl: res.url, text: undefined, rerunPayload: payload });
           

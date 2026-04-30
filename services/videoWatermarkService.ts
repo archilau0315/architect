@@ -1,6 +1,7 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { ContentIdService } from './contentIdService';
+import { videoBlobService } from './videoBlobService';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
@@ -94,7 +95,7 @@ export const VideoWatermarkUtils = {
       const data = await ffmpeg.readFile('output.mp4');
       
       const blob = new Blob([data], { type: 'video/mp4' });
-      const objectUrl = URL.createObjectURL(blob);
+      const objectUrl = videoBlobService.createObjectURL(blob, true);
       
       await ffmpeg.deleteFile('input.mp4');
       await ffmpeg.deleteFile('output.mp4');

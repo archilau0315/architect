@@ -533,9 +533,12 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
               {/* 积分 */}
               <div className="flex flex-col items-end shrink-0 text-[9px] font-mono leading-tight">
-                <span className={`font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>{balance.toLocaleString()}</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-[7px] opacity-40">{t.sidebar.balance}</span>
+                  <span className={`font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>{balance.toLocaleString()}</span>
+                </span>
                 <span className="flex items-center gap-0.5">
-                  <span className="text-[7px] opacity-40">已用</span>
+                  <span className="text-[7px] opacity-40">{t.sidebar.used}</span>
                   <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
                 </span>
               </div>

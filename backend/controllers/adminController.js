@@ -298,12 +298,53 @@ exports.getBetaRequests = async (req, res) => {
 // 审批内测申请
 exports.approveBetaRequest = async (req, res) => {
   try {
-    await db.query('UPDATE beta_applications SET status="approved", approved_at=NOW() WHERE id=?', [req.params.id]);
-    res.json({ success: true });
+    const [applications] = await db.query('SELECT * FROM beta_applications WHERE id=?', [req.params.id]);
+    if (applications.length === 0) {
+      return res.status(404).json({ error: '申请不存在' });
+    }
+
+    const application = applications[0];
+    if (application.status !== 'pending') {
+      return res.status(400).json({ error: '该申请已被处理' });
+    }
+
+    const inviteCode = generateInviteCode();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await db.query(
+      'INSERT INTO invite_codes (code, created_by, points_bonus, tier, expires_at) VALUES (?, ?, ?, ?, ?)',
+      [inviteCode, 'admin', 1000, 'beta', expiresAt]
+    );
+
+    await db.query(
+      'UPDATE beta_applications SET status="approved", invite_code=?, approved_at=NOW() WHERE id=?',
+      [inviteCode, req.params.id]
+    );
+
+    try {
+      const mailService = require('../services/mailService');
+      await mailService.sendInviteCode(application.email, inviteCode);
+      console.log(`[内测申请] 邀请码已发送至: ${application.email}`);
+    } catch (mailError) {
+      console.error('[内测申请] 邮件发送失败:', mailError);
+    }
+
+    res.json({ success: true, inviteCode });
   } catch (err) {
+    console.error('[审批内测申请 Error]', err);
     res.status(500).json({ error: '服务器错误' });
   }
 };
+
+function generateInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 // 拒绝内测申请
 exports.rejectBetaRequest = async (req, res) => {
@@ -599,5 +640,40 @@ exports.getLogUsers = async (req, res) => {
   } catch (err) {
     console.error('[Admin] getLogUsers error:', err);
     res.status(500).json({ error: '获取用户列表失败' });
+  }
+};
+
+// 手动发送邀请码
+exports.manualSendInvite = async (req, res) => {
+  try {
+    const { email, inviteCode } = req.body;
+
+    if (!email || !inviteCode) {
+      return res.status(400).json({ error: '请提供邮箱和邀请码' });
+    }
+
+    // 验证邀请码是否存在且有效
+    const [codeRows] = await db.query(
+      'SELECT * FROM invite_codes WHERE code = ?',
+      [inviteCode]
+    );
+
+    if (codeRows.length === 0) {
+      return res.status(400).json({ error: '邀请码不存在' });
+    }
+
+    // 发送邮件
+    const mailService = require('../services/mailService');
+    const sendResult = await mailService.sendInviteCode(email, inviteCode);
+
+    if (sendResult) {
+      console.log(`[手动发送邀请码] 已将邀请码 ${inviteCode} 发送至 ${email}`);
+      res.json({ success: true, message: '邀请码已发送' });
+    } else {
+      res.status(500).json({ error: '邮件发送失败' });
+    }
+  } catch (err) {
+    console.error('[Admin] manualSendInvite error:', err);
+    res.status(500).json({ error: '服务器错误', message: err.message });
   }
 };
