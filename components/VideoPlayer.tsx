@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Download, RefreshCw, Maximize2, Minimize2, Volume2, VolumeX, Pause, Play, SkipBack, SkipForward, Info } from 'lucide-react';
 
+const canDownloadOriginal = (tier: string | undefined, isDeveloper: boolean): boolean => {
+  if (isDeveloper) return true;
+  if (!tier) return false;
+  const allowedTiers = ['pro', 'plus', 'dev'];
+  return allowedTiers.includes(tier);
+};
+
 interface VideoPlayerProps {
   videoUrl: string;
   watermarkedVideoUrl?: string;
   isDeveloper: boolean;
+  userTier?: string;
   onRerun?: () => void;
   t: {
     buttons: {
@@ -34,9 +42,11 @@ export const VideoPlayer = ({
   videoUrl, 
   watermarkedVideoUrl, 
   isDeveloper, 
+  userTier,
   onRerun, 
   t
 }: VideoPlayerProps) => {
+  const hasOriginalAccess = canDownloadOriginal(userTier, isDeveloper);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -212,7 +222,7 @@ export const VideoPlayer = ({
   };
 
   const handleDownload = useCallback(async (withWatermark: boolean) => {
-    if (!withWatermark && !isDeveloper) {
+    if (!withWatermark && !hasOriginalAccess) {
       alert(t.buttons.unlockOriginal);
       return;
     }
@@ -240,7 +250,7 @@ export const VideoPlayer = ({
     a.href = url;
     a.download = `video_${withWatermark ? 'wm' : 'pro'}_${Date.now()}.mp4`;
     a.click();
-  }, [videoUrl, watermarkedVideoUrl, isDeveloper, t.buttons.unlockOriginal]);
+  }, [videoUrl, watermarkedVideoUrl, hasOriginalAccess, t.buttons.unlockOriginal]);
 
   return (
     <div className="video-container relative rounded-xl overflow-hidden border border-white/10 shadow-lg bg-black">

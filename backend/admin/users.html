@@ -462,7 +462,7 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points))}
+                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points) + parseFloat(user.bonus_points || 0))}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${user.total_consumed_points || 0}

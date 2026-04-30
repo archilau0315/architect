@@ -55,6 +55,15 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       setShowPasswordReset(true);
     }
     
+    const inviteCodeParam = urlParams.get('invite') || urlParams.get('code');
+    if (inviteCodeParam) {
+      const cleanCode = inviteCodeParam.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (cleanCode) {
+        setInviteCode(cleanCode);
+        setCodeStatus(/^[A-Z0-9]{6,12}$/.test(cleanCode) ? 'valid' : 'invalid');
+      }
+    }
+    
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === AVATAR_KEY && e.newValue) {
         setUserAvatar(e.newValue);
@@ -167,6 +176,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       if (data.success) {
         const sessionData = {
           email: data.user.email,
+          nickname: data.user.nickname || data.user.email.split('@')[0],
           tier: data.user.tier,
           points: data.user.totalPoints || 1000,
           userId: data.user.userId
@@ -206,8 +216,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       return;
     }
 
-    if (registerData.password.length < 6) {
-      setError('密码长度至少需要6位');
+    if (!validatePassword(registerData.password)) {
       return;
     }
 
@@ -256,6 +265,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       if (data.success) {
         const sessionData = {
           email: data.user.email,
+          nickname: data.user.nickname || data.user.email.split('@')[0],
           tier: data.user.tier,
           points: data.user.totalPoints,
           userId: data.user.userId
@@ -317,8 +327,8 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
     
     let strength = 0;
-    if (password.length >= 6) strength++;
-    if (password.length >= 10) strength++;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
     if (/[0-9]/.test(password)) strength++;
     if (/[^A-Za-z0-9]/.test(password)) strength++;
@@ -326,8 +336,18 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     const finalStrength = Math.min(strength, 3) as 0 | 1 | 2 | 3;
     setPasswordStrength(finalStrength);
     
-    if (password.length < 6) {
-      setPasswordError('密码长度至少需要6位');
+    if (password.length < 8) {
+      setPasswordError('密码长度至少需要8位');
+      return false;
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      setPasswordError('密码需要包含数字');
+      return false;
+    }
+    
+    if (!/[a-zA-Z]/.test(password)) {
+      setPasswordError('密码需要包含字母');
       return false;
     }
     setPasswordError('');

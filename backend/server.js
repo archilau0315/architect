@@ -45,6 +45,9 @@ const { verifyAdminToken } = require('./middleware/adminAuth');
 
 const app = express();
 
+// favicon.ico 处理（消除 404 警告）
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // [安全修复] 关键环境变量启动校验
 const criticalEnvCheck = () => {
   const required = ['JWT_SECRET'];
@@ -159,10 +162,13 @@ app.post('/api/auth/reset-password', authController.resetPassword);
 app.get('/api/user/info', validateUserIdParam, userController.getUserInfo);
 
 // 获取用户配额（供前端导航栏实时显示积分）
-app.get('/api/user/quota', userController.getQuota);
+app.get('/api/user/quota', validateUserIdParam, userController.getQuota);
 
 // 消耗积分
 app.post('/api/user/consume', validateUserIdParam, validateConsumePointsRequest, userController.consumePoints);
+
+// 更新用户昵称
+app.put('/api/user/nickname', userController.updateNickname);
 
 // ==================== 内容注册 API ====================
 

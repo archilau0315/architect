@@ -6,6 +6,7 @@ interface UserAvatarProps {
   editable?: boolean;
   className?: string;
   onAvatarChange?: (avatar: string | null) => void;
+  nickname?: string;
 }
 
 const SIZE_CLASSES = {
@@ -19,12 +20,23 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   size = 'md',
   editable = false,
   className = '',
-  onAvatarChange
+  onAvatarChange,
+  nickname
 }) => {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 获取昵称首字母
+  const getInitial = () => {
+    if (!nickname) return '未';
+    const first = nickname.trim()[0];
+    if (/[\u4e00-\u9fa5]/.test(first)) {
+      return first; // 中文直接显示
+    }
+    return first.toUpperCase();
+  };
 
   useEffect(() => {
     const savedAvatar = AvatarService.loadAvatar();
@@ -72,7 +84,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 
   const renderPlaceholder = () => (
     <div className={`${SIZE_CLASSES[size]} bg-gradient-to-br from-theme to-theme-dark rounded-full flex items-center justify-center text-white font-black`}>
-      {size === 'sm' || size === 'md' ? 'AI' : 'ARCH'}
+      {nickname ? getInitial() : '未'}
     </div>
   );
 

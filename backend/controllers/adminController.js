@@ -68,6 +68,10 @@ exports.login = async (req, res) => {
 // 获取用户列表
 exports.getUsers = async (req, res) => {
   try {
+    // 【新增】每次获取用户列表前先自动检查并降级过期用户
+    const ph8TokenService = require('../services/ph8TokenService');
+    await ph8TokenService.checkTierExpiry();
+    
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -82,7 +86,7 @@ exports.getUsers = async (req, res) => {
     if (status !== '') { where += ' AND status = ?'; params.push(parseInt(status)); }
 
     const [rows] = await db.query(
-      `SELECT id, email, nickname, user_tier, daily_points, purchased_points, total_consumed_points, tier_expires_at, status, last_login_at, created_at FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT id, email, nickname, user_tier, daily_points, purchased_points, bonus_points, total_consumed_points, tier_expires_at, status, last_login_at, created_at FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
     const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM kbit_users ${where}`, params);

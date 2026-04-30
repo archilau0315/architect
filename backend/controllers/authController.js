@@ -133,8 +133,16 @@ exports.resetPassword = async (req, res) => {
     return res.status(400).json({ error: '缺少必要参数' });
   }
   
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: '密码长度至少6位' });
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: '密码长度至少8位' });
+  }
+  
+  if (!/[0-9]/.test(newPassword)) {
+    return res.status(400).json({ error: '密码需要包含数字' });
+  }
+  
+  if (!/[a-zA-Z]/.test(newPassword)) {
+    return res.status(400).json({ error: '密码需要包含字母' });
   }
   
   try {

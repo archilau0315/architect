@@ -15,7 +15,7 @@ interface VideoGeneratorProps {
   onVideoGenerated?: (result: { url: string; prompt: string }) => void;
   fontSize?: number;
   userTier?: UserTier;
-  points: { daily: number; purchased: number };
+  points: { daily: number; purchased: number; bonus?: number };
   onConsumePoints: (amount: number) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;

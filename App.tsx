@@ -63,11 +63,8 @@ const App: React.FC = () => {
   // Points State - 默认使用 free 等级的 200 积分
   const [dailyPoints, setDailyPoints] = useState(200);
   const [purchasedPoints, setPurchasedPoints] = useState(0);
+  const [bonusPoints, setBonusPoints] = useState(0);
   const [lastResetDate, setLastResetDate] = useState('');
-  
-  // Beta User State
-  const [betaTotalPoints, setBetaTotalPoints] = useState(1000);
-  const [betaDailyUsed, setBetaDailyUsed] = useState(0);
   const [showBetaBanner, setShowBetaBanner] = useState(false);
 
   // 等级过期提示
@@ -213,21 +210,23 @@ const App: React.FC = () => {
 
             const sessionData = JSON.parse(session);
             if (!sessionData.token) return;
-            const userId = sessionData.user_id || sessionData.email;
+            const userId = sessionData.userId || sessionData.email;
 
             const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
             const response = await fetch(balanceUrl, {
               headers: {
                 'Authorization': `Bearer ${sessionData.token}`,
+                'x-user-id': userId,
                 'Content-Type': 'application/json'
               }
             });
             const result = await response.json();
             if (result.success && result.data) {
               const { points, tier, tierExpired, previousTier } = result.data;
-              // 正确同步每日积分和购买积分（后端数据优先）
+              // 正确同步每日积分、购买积分和赠送积分（后端数据优先）
               setDailyPoints(points.daily || 0);
               setPurchasedPoints(points.purchased || 0);
+              setBonusPoints(points.bonus || 0);
               setTotalConsumedPoints(points.total_consumed || 0);
               backendSynced = true; // 标记：后端已提供真实数据
 
@@ -281,10 +280,11 @@ const App: React.FC = () => {
             
             // Beta 用户兜底：确保注册赠送积分（daily=0，由后端定时任务重置）
             if (savedTier === 'beta' && (!purchased || purchased < 1000)) {
-              setPurchasedPoints(1000);
+              setPurchasedPoints(0);
+              setBonusPoints(1000);
               setDailyPoints(0);
               setLastResetDate(today);
-              savePoints(0, 1000, today);
+              savePoints(0, 0, 1000, today);
             } else {
               setPurchasedPoints(purchased || 0);
               if (lastReset === today) {
@@ -294,21 +294,22 @@ const App: React.FC = () => {
                 const newDaily = TIER_CONFIG[savedTier as keyof typeof TIER_CONFIG]?.daily || 200;
                 setDailyPoints(newDaily);
                 setLastResetDate(today);
-                savePoints(newDaily, purchased || 0, today);
+                savePoints(newDaily, purchased || 0, 0, today);
               }
             }
           } else {
             // 新用户兜底初始化（daily=0，由后端定时任务重置）
             if (savedTier === 'beta') {
               setDailyPoints(0);
-              setPurchasedPoints(1000);
+              setPurchasedPoints(0);
+              setBonusPoints(1000);
               setLastResetDate(today);
-              savePoints(0, 1000, today);
+              savePoints(0, 0, 1000, today);
             } else {
               // 新用户兜底：daily=0，由后端定时任务按等级重置
               setDailyPoints(0);
               setLastResetDate(today);
-              savePoints(0, 0, today);
+              savePoints(0, 0, 0, today);
             }
           }
         }
@@ -562,8 +563,8 @@ const App: React.FC = () => {
     setActiveTab('architect');
   };
 
-  const savePoints = (daily: number, purchased: number, date: string) => {
-    setItemDebounced(POINTS_KEY, JSON.stringify({ daily, purchased, lastReset: date }), 200); // [性能优化] 防抖积分写入
+  const savePoints = (daily: number, purchased: number, bonus: number = 0, date: string) => {
+    setItemDebounced(POINTS_KEY, JSON.stringify({ daily, purchased, bonus, lastReset: date }), 200); // [性能优化] 防抖积分写入
   };
 
   const handleConsumePoints = useCallback(async (amount: number): Promise<boolean> => {
@@ -608,12 +609,19 @@ const App: React.FC = () => {
 
       // 乐观更新本地 UI
       const dailyUsed = Math.min(dailyPoints, amount);
-      const purchasedUsed = amount - dailyUsed;
+      let remaining = amount - dailyUsed;
+      const bonusUsed = remaining > 0 ? Math.min(bonusPoints, remaining) : 0;
+      remaining -= bonusUsed;
+      const purchasedUsed = remaining;
+      
       const newDaily = dailyPoints - dailyUsed;
+      const newBonus = bonusPoints - bonusUsed;
       const newPurchased = purchasedPoints - purchasedUsed;
+      
       setDailyPoints(newDaily);
+      setBonusPoints(newBonus);
       setPurchasedPoints(newPurchased);
-      savePoints(newDaily, newPurchased, lastResetDate);
+      savePoints(newDaily, newPurchased, newBonus, lastResetDate);
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
       setItemDebounced(TOTAL_CONSUMED_POINTS_KEY, newTotalConsumed.toString(), 200); // [性能优化] 防抖写入
@@ -629,11 +637,12 @@ const App: React.FC = () => {
         });
         const balanceResult = await balanceRes.json();
         if (balanceResult.success && balanceResult.data && balanceResult.data.points) {
-          const { daily, purchased } = balanceResult.data.points;
+          const { daily, purchased, bonus } = balanceResult.data.points;
           setDailyPoints(daily || 0);
           setPurchasedPoints(purchased || 0);
-          savePoints(daily || 0, purchased || 0, lastResetDate);
-          console.log('[余额刷新] 积分扣减后同步后端数据:', { daily, purchased });
+          setBonusPoints(bonus || 0);
+          savePoints(daily || 0, purchased || 0, bonus || 0, lastResetDate);
+          console.log('[余额刷新] 积分扣减后同步后端数据:', { daily, purchased, bonus });
         }
       } catch (refreshError) {
         console.warn('[余额刷新] 积分扣减后同步失败:', refreshError);
@@ -652,7 +661,7 @@ const App: React.FC = () => {
   const handleBuyPoints = (amount: number) => {
     const newPurchased = purchasedPoints + amount;
     setPurchasedPoints(newPurchased);
-    savePoints(dailyPoints, newPurchased, lastResetDate);
+    savePoints(dailyPoints, newPurchased, bonusPoints, lastResetDate);
   };
 
   // Handler for toggling developer mode with password protection
@@ -705,10 +714,11 @@ const App: React.FC = () => {
   const handleInviteVerified = (userData: { email: string; tier: string; points: number }) => {
     setUserTier(userData.tier as UserTier);
     setNeedsInviteVerify(false);
-    // [修复] 注册时每日积分为0，由后端定时任务在凌晨按等级重置
+    // [修复] 注册时每日积分为0，赠送积分放入 bonusPoints，由后端登录时分配当日额度
     setDailyPoints(0);
-    setPurchasedPoints(userData.points || 1000);
-    savePoints(0, userData.points || 1000, new Date().toDateString());
+    setPurchasedPoints(0);
+    setBonusPoints(userData.points || 1000);
+    savePoints(0, 0, userData.points || 1000, new Date().toDateString());
   };
 
   if (needsInviteVerify === null) {
@@ -739,8 +749,8 @@ const App: React.FC = () => {
       onOpenSettings={() => setIsSettingsOpen(true)}
       currentModelName={dynamicModelName}
       modelStatus={modelStatus}
-      dailyUsage={Math.max(0, (TIER_CONFIG[userTier as keyof typeof TIER_CONFIG]?.daily || 200) - dailyPoints)}
-      balance={dailyPoints + purchasedPoints}
+      dailyUsage={totalConsumedPoints}
+      balance={dailyPoints + purchasedPoints + bonusPoints}
       activeSessionId={activeSessionId}
       onSessionChange={(id, mode) => {
         setActiveSessionId(id);
@@ -761,7 +771,7 @@ const App: React.FC = () => {
           onVideoGenerated={handleVideoGenerated}
           fontSize={preferences.promptFontSize}
           userTier={userTier}
-          points={{ daily: dailyPoints, purchased: purchasedPoints }}
+          points={{ daily: dailyPoints, purchased: purchasedPoints, bonus: bonusPoints }}
           onConsumePoints={handleConsumePoints}
           useThirdPartyGateway={useThirdPartyGateway}
           isDeveloperMode={isDeveloperMode}
@@ -775,7 +785,7 @@ const App: React.FC = () => {
         modelConfig={activeModel}
         domain={currentDomain}
         instructions={currentInstructions}
-        points={{ daily: dailyPoints, purchased: purchasedPoints }}
+        points={{ daily: dailyPoints, purchased: purchasedPoints, bonus: bonusPoints }}
         onConsumePoints={handleConsumePoints}
         useThirdPartyGateway={useThirdPartyGateway}
         isDeveloperMode={isDeveloperMode}
@@ -807,7 +817,7 @@ const App: React.FC = () => {
         isDeveloperMode={isDeveloperMode}
         onToggleDeveloper={handleToggleDeveloper}
         isSystemVisible={isSystemVisible}
-        points={{ daily: dailyPoints, purchased: purchasedPoints }}
+        points={{ daily: dailyPoints, purchased: purchasedPoints, bonus: bonusPoints }}
         onBuyPoints={handleBuyPoints}
         useThirdPartyGateway={useThirdPartyGateway}
         onToggleGateway={handleToggleGateway}

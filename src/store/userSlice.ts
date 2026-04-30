@@ -5,9 +5,8 @@ interface UserState {
   tier: UserTier;
   dailyPoints: number;
   purchasedPoints: number;
+  bonusPoints: number;
   lastResetDate: string;
-  betaTotalPoints: number;
-  betaDailyUsed: number;
   showBetaBanner: boolean;
   totalConsumedPoints: number;
   lifetimeTokens: number;
@@ -19,9 +18,8 @@ const initialState: UserState = {
   tier: 'free',
   dailyPoints: 200,
   purchasedPoints: 0,
+  bonusPoints: 0,
   lastResetDate: '',
-  betaTotalPoints: 1000,
-  betaDailyUsed: 0,
   showBetaBanner: false,
   totalConsumedPoints: 0,
   lifetimeTokens: 0,
@@ -42,14 +40,11 @@ export const userSlice = createSlice({
     setPurchasedPoints: (state, action: PayloadAction<number>) => {
       state.purchasedPoints = action.payload;
     },
+    setBonusPoints: (state, action: PayloadAction<number>) => {
+      state.bonusPoints = action.payload;
+    },
     setLastResetDate: (state, action: PayloadAction<string>) => {
       state.lastResetDate = action.payload;
-    },
-    setBetaTotalPoints: (state, action: PayloadAction<number>) => {
-      state.betaTotalPoints = action.payload;
-    },
-    setBetaDailyUsed: (state, action: PayloadAction<number>) => {
-      state.betaDailyUsed = action.payload;
     },
     setShowBetaBanner: (state, action: PayloadAction<boolean>) => {
       state.showBetaBanner = action.payload;
@@ -68,23 +63,32 @@ export const userSlice = createSlice({
     },
     consumePoints: (state, action: PayloadAction<number>) => {
       const amount = action.payload;
-      const total = state.dailyPoints + state.purchasedPoints;
+      const total = state.dailyPoints + state.purchasedPoints + state.bonusPoints;
       
       if (total >= amount) {
         let remainingToConsume = amount;
         let newDaily = state.dailyPoints;
         let newPurchased = state.purchasedPoints;
+        let newBonus = state.bonusPoints;
 
         if (newDaily >= remainingToConsume) {
           newDaily -= remainingToConsume;
         } else {
           remainingToConsume -= newDaily;
           newDaily = 0;
-          newPurchased -= remainingToConsume;
+          
+          if (newBonus >= remainingToConsume) {
+            newBonus -= remainingToConsume;
+          } else {
+            remainingToConsume -= newBonus;
+            newBonus = 0;
+            newPurchased -= remainingToConsume;
+          }
         }
 
         state.dailyPoints = newDaily;
         state.purchasedPoints = newPurchased;
+        state.bonusPoints = newBonus;
         state.totalConsumedPoints += amount;
       }
     },
@@ -98,9 +102,8 @@ export const {
   setUserTier, 
   setDailyPoints, 
   setPurchasedPoints, 
+  setBonusPoints, 
   setLastResetDate, 
-  setBetaTotalPoints, 
-  setBetaDailyUsed, 
   setShowBetaBanner, 
   setTotalConsumedPoints, 
   setLifetimeTokens, 

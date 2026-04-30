@@ -25,7 +25,7 @@ interface SettingsPanelProps {
   isDeveloperMode?: boolean;
   onToggleDeveloper: (pass?: string) => boolean;
   isSystemVisible: boolean;
-  points: { daily: number; purchased: number };
+  points: { daily: number; purchased: number; bonus?: number };
   onBuyPoints: (amount: number) => void;
   useThirdPartyGateway: boolean;
   onToggleGateway: (enabled: boolean) => void;
@@ -113,7 +113,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const getTierBenefits = (tier: string) => {
     const benefits: Record<string, string[]> = {
       'free': ['每日 200 积分额度', '基础图像生成', '基础对话功能'],
-      'beta': ['注册赠送1000积分体验金', '每日 200 积分额度', '图像生成、图像分析、对话等功能全开放', '图片无水印下载（无限）', '视频生成可体验（不支持下载）', '优先体验新功能'],
+      'beta': ['注册赠送1000积分体验金', '每日 200 积分额度', '图像生成、图像分析、对话等功能全开放', '图片带水印下载', '视频生成可体验（不支持下载）', '优先体验新功能'],
       'basic': ['每日 400 积分额度', '图像生成增强', '视频生成功能', '图片无水印下载（10次/日）', '优先体验新功能'],
       'pro': ['每日 1,500 积分额度', '图片无水印下载（50次/日）', '视频无水印下载（5次/日）', '优先体验新功能'],
       'plus': ['每日 2,000 积分额度', '图片无水印下载（无限）', '视频无水印下载（无限）', '专属客服支持'],
@@ -147,9 +147,43 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       return (
         <div className="max-w-md mx-auto space-y-6 py-4 animate-in slide-in-from-bottom-4 duration-500">
           <div className="text-center space-y-4 mb-6">
-            <UserAvatar size="lg" editable />
+            <UserAvatar size="lg" editable nickname={loggedInUser.nickname || undefined} />
             <div>
-              <h3 className="text-lg font-semibold text-white/90">{loggedInUser.nickname || loggedInUser.email?.split('@')[0] || '内测用户'}</h3>
+              <h3 
+                className="text-lg font-semibold text-white/90 cursor-pointer hover:text-theme transition-colors"
+                onClick={async () => {
+                  const newNickname = prompt('请输入昵称（2-20个字符）:', loggedInUser.nickname || '');
+                  if (newNickname !== null && newNickname !== loggedInUser.nickname) {
+                    if (newNickname.length < 2 || newNickname.length > 20) {
+                      alert('昵称长度必须在2-20个字符之间');
+                      return;
+                    }
+                    try {
+                      const userId = loggedInUser.userId || loggedInUser.email;
+                      const res = await fetch('/api/user/nickname', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
+                        body: JSON.stringify({ nickname: newNickname })
+                      });
+                      const data = await res.json();
+                      if (!res.ok || !data.success) {
+                        alert(data.error || '昵称更新失败');
+                        return;
+                      }
+                    } catch (err) {
+                      console.error('更新昵称失败:', err);
+                      alert('网络错误，请重试');
+                      return;
+                    }
+                    loggedInUser.nickname = newNickname;
+                    localStorage.setItem('architect-invite-session', JSON.stringify(loggedInUser));
+                    window.dispatchEvent(new CustomEvent('sessionUpdated', { detail: loggedInUser }));
+                    window.location.reload();
+                  }
+                }}
+              >
+                {loggedInUser.nickname || '未设置'}
+              </h3>
               <p className="text-xs text-white/30 font-mono">{loggedInUser.email}</p>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-full border border-blue-500/20">
@@ -164,30 +198,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                 <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">总积分</p>
-                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily).toLocaleString()}</p>
+                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily + (points.bonus || 0)).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">注册赠送</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">总余额</p>
-                <p className="text-xl font-semibold text-green-400">{points.purchased.toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">剩余赠送</p>
+                <p className="text-xl font-semibold text-purple-400">{(points.bonus || 0).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">可用总额</p>
+                  <p className="text-[8px] text-white/20">10天内有效</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                 <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
                 <p className="text-xl font-semibold text-amber-400">200</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">每日可用</p>
+                  <p className="text-[8px] text-white/20">每日限额</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日可用</p>
                 <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">今日可用</p>
+                  <p className="text-[8px] text-white/20">当日剩余</p>
                 </div>
               </div>
             </div>
@@ -195,7 +229,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="grid grid-cols-4 gap-3">
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                 <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">积分余额</p>
-                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily).toLocaleString()}</p>
+                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily + (points.bonus || 0)).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
                   <p className="text-[8px] text-white/20">购买: {points.purchased.toLocaleString()}</p>
                 </div>

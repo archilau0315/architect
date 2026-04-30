@@ -55,8 +55,8 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     }
     
     let strength = 0;
-    if (password.length >= 6) strength++;
-    if (password.length >= 10) strength++;
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++;
     if (/[0-9]/.test(password)) strength++;
     if (/[^A-Za-z0-9]/.test(password)) strength++;
@@ -64,8 +64,18 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     const finalStrength = Math.min(strength, 3) as 0 | 1 | 2 | 3;
     setPasswordStrength(finalStrength);
     
-    if (password.length < 6) {
-      setPasswordError('密码长度至少需要6位');
+    if (password.length < 8) {
+      setPasswordError('密码长度至少需要8位');
+      return false;
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      setPasswordError('密码需要包含数字');
+      return false;
+    }
+    
+    if (!/[a-zA-Z]/.test(password)) {
+      setPasswordError('密码需要包含字母');
       return false;
     }
     setPasswordError('');
@@ -157,8 +167,18 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('密码长度至少6位');
+    if (newPassword.length < 8) {
+      setError('密码长度至少8位');
+      return;
+    }
+
+    if (!/[0-9]/.test(newPassword)) {
+      setError('密码需要包含数字');
+      return;
+    }
+
+    if (!/[a-zA-Z]/.test(newPassword)) {
+      setError('密码需要包含字母');
       return;
     }
 

@@ -65,7 +65,7 @@ interface ConversationViewProps {
   modelConfig: CustomModel;
   domain: CreativeDomain;
   instructions: any;
-  points: { daily: number; purchased: number };
+  points: { daily: number; purchased: number; bonus?: number };
   onConsumePoints: (n: number) => Promise<boolean>;
   pendingVideoMessage?: { url: string; prompt: string } | null;
   onClearPendingVideo?: () => void;
@@ -154,6 +154,14 @@ const renderTextWithCode = (text: string, isError: boolean, copyLabel = 'Copy', 
 };
 
 
+// 判断用户是否有权限下载无水印图片/视频
+const canDownloadOriginal = (tier: string | undefined, isDeveloper: boolean): boolean => {
+  if (isDeveloper) return true;
+  if (!tier) return false;
+  const allowedTiers = ['pro', 'plus', 'dev'];
+  return allowedTiers.includes(tier);
+};
+
 // ─── ImageBubble：三层结构成图展示 ────────────────────────────────────────────
 const ImageBubble: React.FC<{
   images: string[];
@@ -167,7 +175,9 @@ const ImageBubble: React.FC<{
   rerunCount: number;
   setRerunCount: (n: number) => void;
   isDeveloper?: boolean;
-}> = ({ images, watermarkedImages = [], seeds = [], onInpaint, onRerun, onUpscale, rerunPayload, t, rerunCount, setRerunCount, isDeveloper = false }) => {
+  userTier?: string;
+}> = ({ images, watermarkedImages = [], seeds = [], onInpaint, onRerun, onUpscale, rerunPayload, t, rerunCount, setRerunCount, isDeveloper = false, userTier }) => {
+  const hasOriginalAccess = canDownloadOriginal(userTier, isDeveloper);
   const [activeIdx, setActiveIdx] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [fsIdx, setFsIdx] = useState(0);
@@ -358,7 +368,7 @@ const ImageBubble: React.FC<{
                 </button>
                 
                 {/* 无水印下载（根据权限显示） */}
-                {isDeveloper ? (
+                {hasOriginalAccess ? (
                   <button
                     onClick={() => { 
                       const a = document.createElement('a'); 
@@ -453,7 +463,7 @@ const ImageBubble: React.FC<{
 };
 
 // ─── Bubble ───────────────────────────────────────────────────────────────────
-const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false, theme = 'dark' }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean; theme?: string }) => {
+const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false, theme = 'dark', userTier }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean; theme?: string; userTier?: string }) => {
   const isUser = msg.role === 'user';
   const [rerunCount, setRerunCount] = useState(1);
   const [aiLogoError, setAiLogoError] = useState(false);
@@ -580,7 +590,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 
         {/* generated images */}
         {msg.type === 'image' && msg.images && msg.images.length > 0 && (
-          <ImageBubble images={msg.images} watermarkedImages={msg.watermarkedImages} seeds={msg.seeds} onInpaint={onInpaint} onRerun={onRerun} onUpscale={onUpscale} rerunPayload={msg.rerunPayload} t={t} rerunCount={rerunCount} setRerunCount={setRerunCount} isDeveloper={isDeveloper} />
+          <ImageBubble images={msg.images} watermarkedImages={msg.watermarkedImages} seeds={msg.seeds} onInpaint={onInpaint} onRerun={onRerun} onUpscale={onUpscale} rerunPayload={msg.rerunPayload} t={t} rerunCount={rerunCount} setRerunCount={setRerunCount} isDeveloper={isDeveloper} userTier={userTier} />
         )}
 
         {/* video */}
@@ -590,6 +600,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               videoUrl={msg.videoUrl}
               watermarkedVideoUrl={msg.watermarkedVideoUrl}
               isDeveloper={isDeveloper}
+              userTier={userTier}
               onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload) : undefined}
               t={{
                 buttons: {
@@ -1116,7 +1127,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map(msg => (
             <div key={msg.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
-              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloper} theme={theme} />
+              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloper} theme={theme} userTier={userTier} />
             </div>
           ))}
         </div>

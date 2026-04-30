@@ -77,6 +77,18 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: '请填写完整信息' });
   }
   
+  if (password.length < 8) {
+    return res.status(400).json({ error: '密码长度至少8位' });
+  }
+  
+  if (!/[0-9]/.test(password)) {
+    return res.status(400).json({ error: '密码需要包含数字' });
+  }
+  
+  if (!/[a-zA-Z]/.test(password)) {
+    return res.status(400).json({ error: '密码需要包含字母' });
+  }
+  
   try {
     // 验证邀请码
     const [codeRows] = await db.query(
@@ -106,11 +118,23 @@ router.post('/register', async (req, res) => {
 
     const userTier = inviteCode.tier || 'beta';
 
-    // [修复] 注册时 daily_points 初始为 0，不预给每日配额
-    // 每日积分由凌晨定时任务 resetDailyUsage() 按等级自动重置
+    // 根据用户等级设置初始积分：
+    // - beta 用户：注册赠送1000积分，有效期10天，每日限额200积分，不累计
+    //   bonus_points = 1000（总赠送积分）
+    //   bonus_expires_at = 注册日+10天
+    //   daily_points = 0（登录后根据剩余赠送积分分配当日额度）
+    // - 免费用户：直接给每日配额(200)作为初始积分，没有赠送积分
+    const isBeta = userTier === 'beta';
+    const initialDailyPoints = isBeta ? 0 : 200;
+    const initialPurchasedPoints = 0;
+    const initialBonusPoints = isBeta ? inviteCode.points_bonus : 0;
+    
+    // beta用户赠送积分有效期10天
+    const bonusExpiresAt = isBeta ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000) : null;
+
     await db.query(
-      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, status, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, 1, NOW(), NOW())',
-      [email, passwordHash, nickname || email.split('@')[0], userTier, inviteCode.points_bonus]
+      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, bonus_points, bonus_expires_at, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+      [email, passwordHash, nickname || email.split('@')[0], userTier, initialDailyPoints, initialPurchasedPoints, initialBonusPoints, bonusExpiresAt]
     );
 
     // 获取新创建的用户ID
@@ -130,19 +154,22 @@ router.post('/register', async (req, res) => {
       await db.query('UPDATE invite_codes SET status = ? WHERE code = ?', ['used', code]);
     }
     
-    // 记录积分日志
-    await db.query(
-      'INSERT INTO point_logs (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
-      [userId, inviteCode.points_bonus, 'invite', '邀请码注册赠送']
-    );
-    
-    // 同时充值 PH8 余额（邀请码赠送的积分也作为 PH8 余额）
-    try {
-      await ph8TokenService.rechargeBalance(userId, inviteCode.points_bonus);
-      console.log(`[Invite] 用户 ${userId}(${email}) PH8 余额充值成功: ${inviteCode.points_bonus} 积分`);
-    } catch (err) {
-      console.error('[Invite] PH8 余额充值失败:', err);
-      // 不影响注册流程，只记录错误
+    // 只有 beta 用户需要记录邀请奖励日志和充值 PH8 余额
+    if (isBeta) {
+      // 记录积分日志
+      await db.query(
+        'INSERT INTO point_logs (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
+        [userId, inviteCode.points_bonus, 'invite', '邀请码注册赠送']
+      );
+      
+      // 同时充值 PH8 余额（邀请码赠送的积分也作为 PH8 余额）
+      try {
+        await ph8TokenService.rechargeBalance(userId, inviteCode.points_bonus);
+        console.log(`[Invite] 用户 ${userId}(${email}) PH8 余额充值成功: ${inviteCode.points_bonus} 积分`);
+      } catch (err) {
+        console.error('[Invite] PH8 余额充值失败:', err);
+        // 不影响注册流程，只记录错误
+      }
     }
     
     res.json({ 
@@ -152,7 +179,7 @@ router.post('/register', async (req, res) => {
         userId,
         email,
         tier: userTier,
-        totalPoints: inviteCode.points_bonus
+        totalPoints: initialDailyPoints + initialPurchasedPoints + initialBonusPoints
       }
     });
   } catch (err) {
