@@ -1,5 +1,8 @@
 # 首席图像架构师 - 子应用部署文档
 
+> **最后更新**: 2026-05-05
+> **版本**: v1.2.0
+
 ## 一、部署概述
 
 本应用为 **www.kbitai.com.cn** 的子应用，部署路径如下：
@@ -7,8 +10,8 @@
 | 访问地址 | 说明 |
 |----------|------|
 | https://www.kbitai.com.cn/architect/ | 前端应用 |
-| https://www.kbitai.com.cn/architect/backend/ | 后端API |
-| https://www.kbitai.com.cn/architect/admin/ | 管理后台 |
+| https://api.kbitai.com.cn | 后端API（独立域名） |
+| https://www.kbitai.com.cn/admin/ | 管理后台 |
 
 ---
 
@@ -17,7 +20,7 @@
 ### 服务器环境
 - **操作系统**: Linux (CentOS 7+ / Ubuntu 18.04+)
 - **Web服务器**: Nginx 1.20+
-- **PHP**: 8.2+
+- **Node.js**: 18+
 - **数据库**: MySQL 5.7+ / 8.0+
 - **内存**: 最低 2GB，推荐 4GB+
 - **磁盘**: 最低 20GB
@@ -32,84 +35,88 @@
 
 ---
 
-## 三、宝塔面板部署
+## 三、目录结构
 
-### 3.1 目录结构
+### 3.1 前端目录（/www/wwwroot/kbitai.com.cn/architect/）
 ```
-/www/wwwroot/kbitai.com.cn/
-├── index.html              # 主站首页
-├── architect/              # 首席图像架构师子应用
-│   ├── index.html          # 前端入口
-│   ├── assets/             # 前端资源
-│   ├── backend/            # 后端服务
-│   │   ├── index.php
-│   │   ├── config/
-│   │   ├── includes/
-│   │   ├── models/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── routes/
-│   │   └── storage/
-│   └── admin/              # 管理后台
-│       └── index.html
-└── ...
+/www/wwwroot/kbitai.com.cn/architect/
+├── index.html              # 前端入口
+├── assets/                 # 前端资源（JS/CSS）
+│   ├── index-*.js         # 主JS文件
+│   ├── index-*.css        # 主CSS文件
+│   └── ...
+└── public/                 # 公共资源（Logo等）
+    ├── LOGOkbitwater.png
+    ├── Com_Logo.png
+    └── ...
 ```
 
-### 3.2 上传代码
-将项目文件上传到子应用目录：
-```bash
-# 创建目录
-mkdir -p /www/wwwroot/kbitai.com.cn/architect
-
-# 上传文件
-# 前端构建产物 → /www/wwwroot/kbitai.com.cn/architect/
-# 后端代码 → /www/wwwroot/kbitai.com.cn/architect/backend/
-# 管理后台 → /www/wwwroot/kbitai.com.cn/architect/admin/
+### 3.2 后端目录（/www/wwwroot/api.kbitai.com.cn/）
 ```
-
-### 3.3 导入数据库
-1. 打开 phpMyAdmin
-2. 选择或创建数据库 `kbit_architect`
-3. 导入 `database/schema.sql`
-
-### 3.4 配置 Nginx
-将 `deploy/nginx.conf` 内容合并到主站 Nginx 配置中：
-```
-/www/server/panel/vhost/nginx/www.kbitai.com.cn.conf
-```
-
-### 3.5 设置权限
-```bash
-cd /www/wwwroot/kbitai.com.cn/architect
-chmod -R 755 backend/storage
-chown -R www:www backend/storage
+/www/wwwroot/api.kbitai.com.cn/
+├── server.js              # 服务入口
+├── routes/                # 路由
+│   ├── ph8.js            # PH8视频API代理
+│   ├── usage.js          # 用量统计
+│   └── ...
+├── services/             # 服务层
+│   ├── ph8TokenService.js  # 积分服务
+│   └── ...
+├── controllers/          # 控制器
+├── middleware/           # 中间件
+├── config/              # 配置
+└── database.sql         # 数据库脚本
 ```
 
 ---
 
-## 四、前端构建配置
+## 四、部署步骤
 
-### 4.1 vite.config.ts 配置
-```typescript
-export default defineConfig({
-  base: '/architect/',  // 子应用路径
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets'
-  }
-})
-```
+### 4.1 前端部署
 
-### 4.2 构建命令
 ```bash
+# 1. 本地构建
+cd Architect\(NewUI\)
 npm install
 npm run build
+
+# 2. 上传构建产物到服务器
+# dist/ → /www/wwwroot/kbitai.com.cn/architect/
+# 注意：上传前删除旧的 .js/.css 文件，只保留新文件
+
+# 3. 公共资源
+# public/ → /www/wwwroot/kbitai.com.cn/architect/public/
 ```
 
-### 4.3 部署构建产物
-将 `dist/` 目录内容复制到：
+### 4.2 后端部署
+
+```bash
+# 1. 上传后端代码到服务器
+# backend/ → /www/wwwroot/api.kbitai.com.cn/
+
+# 2. 安装依赖
+cd /www/wwwroot/api.kbitai.com.cn
+npm install --production
+
+# 3. 配置环境变量
+cp .env.example .env
+# 编辑 .env 填写正确的配置
+
+# 4. 导入数据库
+mysql -u root -p kbitai0302 < database.sql
 ```
-/www/wwwroot/kbitai.com.cn/architect/
+
+### 4.3 启动服务
+
+```bash
+# 使用 PM2 启动
+pm2 start ecosystem.config.js --name kbitai-api
+
+# 重启服务
+pm2 restart kbitai-api
+
+# 查看日志
+pm2 logs kbitai-api --lines 50
 ```
 
 ---
@@ -117,12 +124,11 @@ npm run build
 ## 五、环境配置
 
 ### 5.1 后端环境变量 (.env)
-在 `backend/` 目录创建 `.env` 文件：
 ```env
 # 数据库配置
 DB_HOST=localhost
 DB_PORT=3306
-DB_DATABASE=kbit_architect
+DB_DATABASE=kbitai0302
 DB_USERNAME=root
 DB_PASSWORD=your_password
 
@@ -135,90 +141,90 @@ ENCRYPTION_KEY=your-32-char-encryption-key
 # 调试模式
 APP_DEBUG=false
 
-# PH8 网关配置（AI模型调用）
+# PH8 网关配置（视频生成API）
 PH8_API_KEY=your_ph8_api_key
+PH8_GATEWAY_KEY=your_ph8_gateway_key
 PH8_GATEWAY_URL=https://ph8.co
-PH8_ENABLED=true
 
 # Tavily Search API（海外联网搜索）
 TAVILY_API_KEY=your_tavily_api_key
 
-# 百度图像搜索 API（以图搜图）
+# 百度图像搜索 API
 BAIDU_APP_ID=your_baidu_app_id
 BAIDU_API_KEY=your_baidu_api_key
 BAIDU_SECRET_KEY=your_baidu_secret_key
-```
-
-### 5.2 生成密钥
-```bash
-# JWT密钥
-openssl rand -hex 32
-
-# 加密密钥
-openssl rand -hex 16
 ```
 
 ---
 
 ## 六、API 接口
 
-所有 API 接口前缀为 `/architect/backend/api/`
+### 6.1 后端API（api.kbitai.com.cn）
 
-### 6.1 认证接口
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | /api/auth/register | 用户注册 |
 | POST | /api/auth/login | 用户登录 |
-| POST | /api/auth/logout | 用户登出 |
-| GET | /api/auth/me | 获取当前用户 |
+| POST | /api/invite/register | 注册 |
+| GET | /api/invite/verify/:code | 验证邀请码 |
+| POST | /api/ph8/proxy | PH8视频API代理 |
+| GET | /api/usage/logs | 用量日志 |
+| GET | /api/ph8/user-info | 用户PH8信息 |
 
-### 6.2 订阅接口
+### 6.2 管理后台API
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /api/subscription/plans | 获取订阅方案 |
-| POST | /api/subscription/subscribe | 创建订阅 |
-| POST | /api/subscription/activate-license | 激活授权口令 |
-
-### 6.3 路由接口
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/routing/select | 智能模型选择 |
-| GET | /api/routing/models | 获取可用模型 |
-| POST | /api/routing/check-quota | 检查配额 |
-
-### 6.4 搜索接口
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/search/web | 联网搜索（文本搜索） |
-| POST | /api/search/similar | 以图搜图（相似图片搜索） |
+| GET | /api/admin/users | 用户列表 |
+| GET | /api/admin/usage | 使用统计 |
+| POST | /api/admin/reset-password | 重置密码 |
 
 ---
 
-## 七、联网搜索功能
+## 七、视频功能说明
 
-### 7.1 双搜索源系统
-- **国内用户**：百度搜索（自动降级兜底）
-- **海外用户**：Tavily Search（Pro用户专用）
+### 7.1 视频生成流程
 
-### 7.2 以图搜图
-当用户上传底图时，系统自动调用百度相似图片搜索 API，返回与底图风格相似的设计案例图片。
+1. 用户在"动漫导演控制台"生成视频
+2. 后端通过PH8 API创建视频任务
+3. 前端轮询任务状态直到完成
+4. 视频URL保存到localStorage
+5. 切换页面后自动从服务器恢复
 
-### 7.3 搜索触发
-- 用户上传图片时自动触发
-- 无需手动开关
+### 7.2 视频URL恢复机制
+
+当blob URL失效时，系统会自动：
+1. 检测到blob URL已失效
+2. 使用保存的videoRef从服务器重新获取
+3. 恢复视频显示
+
+### 7.3 积分计算规则
+
+PH8视频费率标准：
+- 基础费率：100,000 tokens = ¥0.42
+- 单价：¥0.0000042 / token
+- 标准积分：约117积分/次视频生成
 
 ---
 
-## 八、授权口令
+## 八、常见问题
 
-| 口令 | 等级 | 有效期 |
-|------|------|--------|
-| KBIT-BASIC-2025 | 基础级 | 1个月 |
-| KBIT-PRO-2025 | PRO级 | 1个月 |
-| KBIT-PLUS-2025 | PLUS级 | 1个月 |
-| KBIT-BASIC-2025-Y | 基础级 | 12个月 |
-| KBIT-PRO-2025-Y | PRO级 | 12个月 |
-| KBIT-PLUS-2025-Y | PLUS级 | 12个月 |
+### 8.1 502 Bad Gateway
+- 检查后端服务是否运行：`pm2 list`
+- 重启服务：`pm2 restart kbitai-api`
+
+### 8.2 视频生成失败
+- 检查浏览器控制台错误
+- 检查后端日志：`pm2 logs kbitai-api`
+
+### 8.3 积分显示为-
+- 后端服务未正常运行
+- 数据库连接失败
+- 积分计算逻辑异常
+
+### 8.4 CORS 错误
+- 检查Nginx配置
+- 检查后端CORS设置
+- 确认API地址配置正确
 
 ---
 
@@ -227,9 +233,9 @@ openssl rand -hex 16
 | 功能 | 地址 |
 |------|------|
 | 前端应用 | https://www.kbitai.com.cn/architect/ |
-| 管理后台 | https://www.kbitai.com.cn/architect/admin/ |
-| API接口 | https://www.kbitai.com.cn/architect/backend/api/ |
-| 健康检查 | https://www.kbitai.com.cn/architect/backend/api/health |
+| 管理后台 | https://www.kbitai.com.cn/admin/ |
+| 后端API | https://api.kbitai.com.cn |
+| PH8代理 | https://api.kbitai.com.cn/api/ph8 |
 
 ---
 
