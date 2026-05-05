@@ -118,23 +118,14 @@ router.post('/register', async (req, res) => {
 
     const userTier = inviteCode.tier || 'beta';
 
-    // 根据用户等级设置初始积分：
-    // - beta 用户：注册赠送1000积分，有效期10天，每日限额200积分，不累计
-    //   bonus_points = 1000（总赠送积分）
-    //   bonus_expires_at = 注册日+10天
-    //   daily_points = 0（登录后根据剩余赠送积分分配当日额度）
-    // - 免费用户：直接给每日配额(200)作为初始积分，没有赠送积分
     const isBeta = userTier === 'beta';
-    const initialDailyPoints = isBeta ? 0 : 200;
-    const initialPurchasedPoints = 0;
-    const initialBonusPoints = isBeta ? inviteCode.points_bonus : 0;
-    
-    // beta用户赠送积分有效期10天
-    const bonusExpiresAt = isBeta ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000) : null;
+    const initialTotalEarned = isBeta ? (inviteCode.points_bonus || 1000) : 0;
+    const initialDailyQuota = 200;
+    const tierExpiresAt = isBeta ? `DATE_ADD(NOW(), INTERVAL 10 DAY)` : NULL;
 
     await db.query(
-      'INSERT INTO kbit_users (email, password_hash, nickname, user_tier, daily_points, purchased_points, bonus_points, bonus_expires_at, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
-      [email, passwordHash, nickname || email.split('@')[0], userTier, initialDailyPoints, initialPurchasedPoints, initialBonusPoints, bonusExpiresAt]
+      `INSERT INTO kbit_users (email, password_hash, nickname, user_tier, total_earned, total_points, daily_quota, daily_used, daily_reset_at, tier_expires_at, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, CURDATE(), ${isBeta ? 'DATE_ADD(NOW(), INTERVAL 10 DAY)' : 'NULL'}, 1, NOW(), NOW())`,
+      [email, passwordHash, nickname || email.split('@')[0], userTier, initialTotalEarned, initialTotalEarned, initialDailyQuota]
     );
 
     // 获取新创建的用户ID

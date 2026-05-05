@@ -40,7 +40,7 @@ exports.login = async (req, res) => {
         email: user.email,
         nickname: user.nickname,
         tier: user.user_tier,
-        totalPoints: user.daily_points + user.purchased_points
+        totalPoints: user.total_earned || user.total_points || 0
       }
     });
   } catch (err) {

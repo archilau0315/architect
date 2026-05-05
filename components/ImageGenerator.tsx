@@ -20,7 +20,7 @@ interface ImageGeneratorProps {
   domain: CreativeDomain;
   userTier?: UserTier;
   points: { daily: number; purchased: number; bonus?: number };
-  onConsumePoints: (amount: number) => Promise<boolean>;
+  onConsumePoints: (opts: { amount: number; feature?: string; modelId?: string }) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
   language?: Language;
 }
@@ -230,13 +230,17 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
 
   const getCanvasCoords = (e: any) => {
     const canvas = markCanvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    const container = containerRef.current;
+    if (!canvas || !container) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const imgX = (mouseX - pan.x) / zoom;
+    const imgY = (mouseY - pan.y) / zoom;
+    return { x: imgX, y: imgY };
   };
 
   const commitBrushStroke = (points: Point[]) => {
@@ -584,7 +588,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
             // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
             if (realCost > 0 && onConsumePoints) {
               const userPoints = Math.ceil(realCost / 10);
-              const deducted = await onConsumePoints(userPoints);
+              const deducted = await onConsumePoints({ amount: userPoints, feature: 'Image', modelId: result.data.model });
               if (!deducted) {
                 console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
               }

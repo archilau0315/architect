@@ -266,16 +266,16 @@
                                 <h4 class="text-md font-semibold text-gray-900 mb-3">积分信息</h4>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div class="bg-gray-50 p-4 rounded-lg">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">每日积分</label>
-                                        <input type="number" id="modalDailyPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">总积分</label>
+                                        <input type="number" id="modalTotalPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="bg-gray-50 p-4 rounded-lg">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">购买积分</label>
-                                        <input type="number" id="modalPurchasedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">每日限额</label>
+                                        <input type="number" id="modalDailyQuota" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
                                     </div>
                                     <div class="bg-gray-50 p-4 rounded-lg">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">总消耗</label>
-                                        <p id="modalTotalConsumed" class="text-gray-900"></p>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">今日消耗</label>
+                                        <p id="modalDailyUsed" class="text-gray-900"></p>
                                     </div>
                                 </div>
                             </div>
@@ -462,10 +462,10 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${(parseFloat(user.daily_points) + parseFloat(user.purchased_points) + parseFloat(user.bonus_points || 0))}
+                            ${user.total_earned || user.total_points || 0}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${user.total_consumed_points || 0}
+                            ${(user.total_earned || user.total_points || 0) - (user.total_points || 0)}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             ${user.tier_expires_at ? new Date(user.tier_expires_at).toLocaleString() : '无'}
@@ -577,9 +577,9 @@
                     document.getElementById('modalTier').value = user.user_tier;
                     document.getElementById('modalStatus').value = user.status;
                     document.getElementById('modalTierExpires').value = user.tier_expires_at ? user.tier_expires_at.replace(' ', 'T') : '';
-                    document.getElementById('modalDailyPoints').value = user.daily_points;
-                    document.getElementById('modalPurchasedPoints').value = user.purchased_points;
-                    document.getElementById('modalTotalConsumed').textContent = user.total_consumed_points;
+                    document.getElementById('modalTotalPoints').value = user.total_points;
+                    document.getElementById('modalDailyQuota').value = user.daily_quota;
+                    document.getElementById('modalDailyUsed').textContent = user.daily_used;
                     
                     // 填充流量统计
                     document.getElementById('modalTodayRequests').textContent = usageStats.today?.total_requests || 0;
@@ -680,8 +680,8 @@
                 user_tier: document.getElementById('modalTier').value,
                 status: document.getElementById('modalStatus').value,
                 tier_expires_at: tierExpires,
-                daily_points: document.getElementById('modalDailyPoints').value,
-                purchased_points: document.getElementById('modalPurchasedPoints').value
+                total_points: document.getElementById('modalTotalPoints').value,
+                daily_quota: document.getElementById('modalDailyQuota').value
             };
             
             fetch(`/api/admin/users/${currentUserId}`, {

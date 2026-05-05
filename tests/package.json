@@ -1,0 +1,28 @@
+{
+  "name": "test-framework",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4",
+    "axios": "^1.6.8",
+    "chai": "^5.1.0",
+    "sinon": "^17.0.1"
+  },
+  "scripts": {
+    "test": "jest --runInBand --detectOpenHandles --testPathPattern=tests/",
+    "test:unit": "jest --runInBand tests/unit/",
+    "test:integration": "jest --runInBand tests/integration/",
+    "test:coverage": "jest --coverage --runInBand tests/"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 30000,
+    "collectCoverageFrom": [
+      "backend/routes/ph8.js",
+      "backend/services/ph8TokenService.js",
+      "backend/controllers/userController.js"
+    ],
+    "coverageReporters": ["text", "lcov", "html"]
+  }
+}

@@ -50,8 +50,14 @@ const validatePassword = (password) => {
 
 // 验证用户ID格式
 const validateUserId = (userId) => {
-  if (!userId || typeof userId !== 'string') return false;
-  return validator.isAlphanumeric(userId.replace(/[_-]/g, ''));
+  if (!userId) return false;
+  // 接受纯数字ID（数据库中的BIGINT格式）
+  if (/^\d+$/.test(userId.toString())) return true;
+  // 也接受字母数字混合的字符串ID
+  if (typeof userId === 'string') {
+    return validator.isAlphanumeric(userId.replace(/[_-]/g, ''));
+  }
+  return false;
 };
 
 // 验证积分数量

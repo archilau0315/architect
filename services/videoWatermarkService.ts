@@ -34,7 +34,19 @@ export const VideoWatermarkUtils = {
       
       onProgress?.(15);
       
-      const videoData = await fetchFile(videoUrl);
+      let videoData: Uint8Array;
+      // 如果是 blob URL，直接从 videoBlobService 获取数据，避免 fetch 失效
+      if (videoUrl.startsWith('blob:')) {
+        const blob = videoBlobService.getBlob(videoUrl);
+        if (!blob) {
+          throw new Error('视频数据已过期，请重新生成');
+        }
+        const arrayBuffer = await blob.arrayBuffer();
+        videoData = new Uint8Array(arrayBuffer);
+        console.log('[VideoWatermark] 使用 blob 数据，大小:', videoData.byteLength);
+      } else {
+        videoData = await fetchFile(videoUrl);
+      }
       
       if (videoData.byteLength === 0) {
         throw new Error('视频下载失败，文件为空');

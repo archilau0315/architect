@@ -3,8 +3,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { GeminiService, DEFAULT_SYSTEM_PRESETS } from '../services/geminiService.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
-import { VideoWatermarkUtils } from '../services/videoWatermarkService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
+import { videoBlobService } from '../services/videoBlobService.ts';
 import { UserTier, Language } from '../types.ts';
 import { getTranslation } from '../i18n/locales.ts';
 
@@ -16,10 +16,11 @@ interface VideoGeneratorProps {
   fontSize?: number;
   userTier?: UserTier;
   points: { daily: number; purchased: number; bonus?: number };
-  onConsumePoints: (amount: number) => Promise<boolean>;
+  onConsumePoints: (opts: { amount: number; feature?: string; modelId?: string }) => Promise<boolean>;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;
   language?: Language;
+  onBusyStateChange?: (busy: boolean) => void;
 }
 
 const STORAGE_KEY = 'ARCHITECT_VIDEO_WORKBENCH_V2';
@@ -57,7 +58,7 @@ const incrementDownloadCount = (): number => {
   return newCount;
 };
 
-const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, onBack, onVideoGenerated, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false, language = 'zh-CN' }) => {
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, onBack, onVideoGenerated, fontSize = 18, userTier = 'free', points, onConsumePoints, useThirdPartyGateway = false, isDeveloperMode = false, language = 'zh-CN', onBusyStateChange }) => {
   const t = getTranslation(language);
   const isDeveloper = userTier === 'pro' || userTier === 'plus' || isDeveloperMode;
   const effectiveTier = (isDeveloperMode ? 'dev' : userTier) as UserTier | 'dev';
@@ -69,8 +70,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const [selectedEngine, setSelectedEngine] = useState<string>('SeeDance-1.0PF');
 
   // 视频生成参数（API 可控）
-  const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>('1080p');
-  const [videoDuration, setVideoDuration] = useState<number>(5);
+  const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>('720p');
+  const [videoDuration, setVideoDuration] = useState<number>(-1);
   const [cameraFixed, setCameraFixed] = useState<boolean>(false);
   const [videoSeed, setVideoSeed] = useState<number | null>(null);
 
@@ -111,26 +112,31 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     };
   }, []);
 
+  // 更新导航栏模型状态
+  useEffect(() => {
+    onBusyStateChange?.(isGenerating);
+  }, [isGenerating, onBusyStateChange]);
+
   // [Bug修复] 依赖 referenceVideos，确保 cleanup 捕获最新值释放 Blob URL，防止内存泄漏
   useEffect(() => {
     const currentUrls = [...referenceVideos];
     return () => { currentUrls.forEach(url => URL.revokeObjectURL(url)); };
   }, [referenceVideos]);
 
-  // 预加载 FFmpeg 和 Logo 以加快水印处理速度
+  // 预加载 FFmpeg 和 Logo 以加快水印处理速度（动态导入，避免WASM加载失败导致组件崩溃）
   useEffect(() => {
     const loadResourcesAsync = async () => {
       try {
+        const { VideoWatermarkUtils: VWU } = await import('../services/videoWatermarkService');
         await Promise.all([
-          VideoWatermarkUtils.loadFFmpeg(),
-          VideoWatermarkUtils.preloadLogo('/public/LOGOkbitwater.png')
+          VWU.loadFFmpeg(),
+          VWU.preloadLogo('/public/LOGOkbitwater.png')
         ]);
         console.log('[资源预加载] FFmpeg 和 Logo 预加载完成');
       } catch (e) {
-        console.warn('[资源预加载] 失败:', e);
+        console.warn('[资源预加载] FFmpeg/WASM 加载失败(非致命):', e?.message || e);
       }
     };
-    // 延迟预加载，避免阻塞页面加载
     const timer = setTimeout(loadResourcesAsync, 2000);
     return () => clearTimeout(timer);
   }, []);
@@ -144,6 +150,25 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       duration: '5-15s'
     };
   }, [capabilities, selectedEngine]);
+
+  const supportedDurations = useMemo(() => {
+    const durStr = currentEngineDetails.duration || '5-15s';
+    if (durStr.includes('-')) {
+      const match = durStr.match(/(\d+)/);
+      if (match) return [parseInt(match[1])];
+    }
+    return durStr.split(/\s*\/\s*/).map(s => parseInt(s.replace(/[^0-9]/g, ''))).filter(n => n > 0);
+  }, [currentEngineDetails]);
+
+  const autoCalculatedDuration = useMemo(() => {
+    if (supportedDurations.length === 0) return 5;
+    if (prompt.length < 20) return Math.min(supportedDurations[0], 5);
+    if (assets.length >= 3) return supportedDurations[supportedDurations.length - 1] || 10;
+    const mid = Math.floor(supportedDurations.length / 2);
+    return supportedDurations[mid] || 8;
+  }, [supportedDurations, prompt.length, assets.length]);
+
+  const displayDuration = videoDuration === -1 ? autoCalculatedDuration : videoDuration;
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -160,9 +185,129 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         if (typeof data.videoDuration === 'number') setVideoDuration(data.videoDuration);
         if (typeof data.cameraFixed === 'boolean') setCameraFixed(data.cameraFixed);
         if (data.videoSeed !== undefined) setVideoSeed(data.videoSeed);
+
+        // 恢复视频 URL（如果是 blob URL，需要检查是否仍然有效）
+        if (data.videoUrl) {
+          // 检查 blob URL 是否仍然有效（通过 videoBlobService）
+          if (data.videoUrl.startsWith('blob:')) {
+            const isValid = videoBlobService.ensureValid(data.videoUrl) !== null;
+            if (isValid) {
+              setVideoUrl(data.videoUrl);
+            } else {
+              console.warn('[VideoGenerator] Blob URL 已失效，尝试使用 videoRef 重新获取');
+              // 如果有 videoRef，尝试从服务器重新获取视频
+              if (data.lastVideoRef) {
+                console.log('[VideoGenerator] 尝试重新获取视频:', data.lastVideoRef);
+                // 标记需要重新加载
+                sessionStorage.setItem('RELOAD_VIDEO_REF', data.lastVideoRef);
+                // 清除失效的 videoUrl
+                const newData = { ...data };
+                delete newData.videoUrl;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+              } else {
+                console.warn('[VideoGenerator] Blob URL 已失效且无 videoRef，无法恢复');
+                // 清除失效的 videoUrl
+                const newData = { ...data };
+                delete newData.videoUrl;
+                delete newData.lastVideoRef;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+              }
+            }
+          } else {
+            // 非 blob URL（如服务器 URL）直接恢复
+            setVideoUrl(data.videoUrl);
+          }
+        }
+        if (data.lastVideoRef) setLastVideoRef(data.lastVideoRef);
+
+        // 恢复水印视频 URL
+        if (data.watermarkedVideoUrl) {
+          if (data.watermarkedVideoUrl.startsWith('blob:')) {
+            const isValid = videoBlobService.ensureValid(data.watermarkedVideoUrl) !== null;
+            if (isValid) {
+              setWatermarkedVideoUrl(data.watermarkedVideoUrl);
+            }
+          } else {
+            setWatermarkedVideoUrl(data.watermarkedVideoUrl);
+          }
+        }
       } catch (e) { console.error("Restore workbench failed", e); }
     }
+
+    // 检查是否需要重新加载视频（blob URL 失效后）
+    const reloadVideoRef = sessionStorage.getItem('RELOAD_VIDEO_REF');
+    if (reloadVideoRef && !videoUrl) {
+      console.log('[VideoGenerator] 检测到需要重新加载视频:', reloadVideoRef);
+      // 设置加载状态
+      setIsGenerating(true);
+      setProgress(90);
+      setStatusText('正在恢复视频...');
+      
+      // 调用重新获取视频的函数
+      restoreVideoFromRef(reloadVideoRef);
+    }
   }, []);
+
+  // 从 videoRef 重新获取视频
+  const restoreVideoFromRef = async (videoRef: string) => {
+    try {
+      console.log('[VideoGenerator] 开始重新获取视频:', videoRef);
+      
+      // 使用 PH8 网关获取视频
+      const proxiedUrl = `${window.location.origin}/api/ph8-openai/videos/${videoRef}`;
+      console.log('[VideoGenerator] 请求URL:', proxiedUrl);
+      
+      const response = await fetch(proxiedUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const statusData = await response.json();
+      console.log('[VideoGenerator] 获取视频状态:', statusData);
+      
+      // 尝试从响应中获取视频 URL
+      let videoUrl = statusData.url || 
+                     statusData.video_url || 
+                     statusData.content_url ||
+                     statusData.output?.url ||
+                     statusData.data?.url;
+      
+      if (videoUrl) {
+        console.log('[VideoGenerator] 成功恢复视频:', videoUrl);
+        setVideoUrl(videoUrl);
+        // 如果是 blob URL，标记为持久化
+        if (videoUrl.startsWith('blob:')) {
+          videoBlobService.markAsPersistent(videoUrl);
+        }
+      } else {
+        // 尝试下载内容
+        console.log('[VideoGenerator] 尝试下载视频内容...');
+        const contentUrl = `${window.location.origin}/api/ph8/videos/${videoRef}/content`;
+        const contentResponse = await fetch(contentUrl);
+        if (contentResponse.ok) {
+          const arrayBuffer = await contentResponse.arrayBuffer();
+          const contentType = contentResponse.headers.get('content-type') || 'video/mp4';
+          const blob = new Blob([arrayBuffer], { type: contentType });
+          const objectUrl = URL.createObjectURL(blob);
+          videoBlobService.markAsPersistent(objectUrl);
+          setVideoUrl(objectUrl);
+          console.log('[VideoGenerator] 成功下载并恢复视频:', objectUrl);
+        } else {
+          throw new Error('无法获取视频内容');
+        }
+      }
+      
+      // 清除重新加载标记
+      sessionStorage.removeItem('RELOAD_VIDEO_REF');
+    } catch (error) {
+      console.error('[VideoGenerator] 重新获取视频失败:', error);
+      sessionStorage.removeItem('RELOAD_VIDEO_REF');
+    } finally {
+      setIsGenerating(false);
+      setProgress(0);
+      setStatusText('就绪');
+    }
+  };
 
   useEffect(() => {
     if (!currentEngineDetails.supportedRatios.includes(aspectRatio)) {
@@ -190,13 +335,13 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
 
   useEffect(() => {
     try {
-      const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
+      const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
       // 捕获 QuotaExceededError 溢出错误，防止崩溃
       console.warn("LocalStorage Quota Exceeded. State maintained in RAM only.");
     }
-  }, [prompt, assets, aspectRatio, selectedEngine, videoUrl, lastVideoRef]);
+  }, [prompt, assets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -288,6 +433,18 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       return;
     }
 
+    // [前置余额检查] 非开发者模式且使用第三方网关时，先检查积分余额
+    if (!isDeveloperMode && useThirdPartyGateway && onConsumePoints) {
+      // 视频PH8标准费用: ≤10s=42分, >10s=420分
+      const estimatedCost = (displayDuration > 0 ? displayDuration : 5) <= 10 ? 42 : 420;
+      const currentBalance = points?.daily_balance ?? points?.total_points ?? 0;
+      
+      if (currentBalance < estimatedCost) {
+        window.alert(`⚠️ 积分余额不足\n\n视频生成需要 ${estimatedCost} 积分\n当前可用余额: ${currentBalance} 积分\n\n每日免费额度: ${points?.daily_quota || 200} 次\n今日已用: ${points?.daily_used || 0} 次\n\n请明日重试或联系管理员充值`);
+        return; // 拦截，不调用API，不扣费
+      }
+    }
+
     // 视频生成走 PH8 后端代理，不需要前端检查 API Key
 
     // 保存当前视频作为上一次版本，用于撤销
@@ -332,54 +489,61 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             setStatusText('即将完成...');
           }
         },
-        { resolution: videoResolution, duration: videoDuration, camerafixed: cameraFixed, seed: videoSeed }
+        { resolution: videoResolution, duration: displayDuration, camerafixed: cameraFixed, seed: videoSeed }
       );
       setProgress(100);
-      // 注意：不要释放 blob URL！父组件会保留引用
-      // 现在使用 videoBlobService 管理 URL 的生命周期
+      
+      // [关键] 先显示视频结果给用户，确保用户一定看到成果
       blobUrlRef.current = result.url.startsWith('blob:') ? result.url : null;
+      if (result.url.startsWith('blob:')) {
+        videoBlobService.markAsPersistent(result.url);
+      }
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
-      // 回写：通知父组件将视频成果写入聊天气泡
+      
+      // 通知父组件写入聊天气泡（必须在setVideoUrl之后）
       if (onVideoGenerated) {
-        onVideoGenerated({ url: result.url, prompt: finalPrompt });
+        try { onVideoGenerated({ url: result.url, prompt: finalPrompt }); } catch(e) { console.warn('[VideoGenerator] onVideoGenerated回调失败(非致命):', e); }
       }
-      setProgress(100);
+      
+      console.log('[VideoGenerator] ✅ 视频生成成功，已显示给用户');
 
-      // 自动生成水印版本供普通下载使用
+      // 水印处理：完全非致命，失败不影响已显示的视频
       setTimeout(async () => {
         try {
           const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
           const watermarkResult = await VideoWatermarkUtils.addWatermark(result.url);
+          if (watermarkResult.objectUrl.startsWith('blob:')) {
+            videoBlobService.markAsPersistent(watermarkResult.objectUrl);
+          }
           setWatermarkedVideoUrl(watermarkResult.objectUrl);
+          console.log('[VideoGenerator] ✅ 水印添加成功');
         } catch (error) {
-          console.error('自动添加水印失败:', error);
+          // 水印失败 = 仅影响无水印下载，视频本身已正常显示
+          console.warn('[VideoGenerator] ⚠️ 水印添加失败(非致命，视频已正常显示):', error?.message || error);
+          setWatermarkedVideoUrl(null); // 标记无水印版本
         }
       }, 1000);
 
-      // 扣积分
-      setTimeout(async () => {
-        try {
-          const session = localStorage.getItem('architect-invite-session');
-          if (!session) return;
-          const sessionData = JSON.parse(session);
-          const userId = sessionData.user_id || sessionData.email;
-          const usageResult = await Ph8UsageService.getLatestUsage(userId);
-          if (usageResult.success && usageResult.data) {
-            const realCost = usageResult.data.total_tokens || 0;
-            if (realCost > 0 && onConsumePoints) {
-              await onConsumePoints(Math.ceil(realCost / 10));
-            }
-          }
-        } catch (err) {
-          console.error('获取PH8真实费用失败:', err);
-        }
-      }, 500);
+      // 积分扣除由 ConversationView.deductPh8Cost 统一处理（从PH8账单读取actual_cost×1000）
     } catch (err: any) {
-      console.error('[VideoGenerator] 生成失败:', err);
-      if (err.name !== 'AbortError') {
+      console.error('[VideoGenerator] ❌ 视频生成失败:', err?.message || err);
+      console.error('[VideoGenerator] 错误详情:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      
+      if (err.name === 'AbortError') {
+        console.log('[VideoGenerator] 用户主动取消');
+      } else {
         const errorHint = err?.message || err?.error?.message || '未知错误';
-        alert(`视频生成失败：${errorHint}\n\n详细信息已打印到 F12 控制台`);
+        const isNetwork = errorHint.includes('fetch') || errorHint.includes('network') || errorHint.includes('timeout');
+        const isPH8 = errorHint.includes('ph8') || errorHint.includes('502') || errorHint.includes('503');
+        
+        let detailMsg = '';
+        if (isNetwork) detailMsg = '\n\n可能原因：网络连接不稳定，请检查网络后重试';
+        else if (isPH8) detailMsg = '\n\n可能原因：视频服务暂时繁忙，请稍后重试';
+        else if (errorHint.includes('Watermark') || errorHint.includes('watermark')) detailMsg = '\n\n注意：视频已生成成功，仅水印处理失败';
+        else if (errorHint.includes('balance') || errorHint.includes('积分')) detailMsg = '\n\n可能原因：积分余额不足';
+        
+        alert(`视频生成失败：${errorHint}${detailMsg}\n\n详细信息请查看 F12 控制台`);
       }
     } finally {
       setIsGenerating(false);
@@ -508,7 +672,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     }
   };
 
-  const AssetSlot = ({ current, isLocked, onToggleLock, onUpload, index, style }: any) => {
+  const AssetSlot = ({ current, isLocked, onToggleLock, onUpload, index, style, onRemove }: any) => {
     const displayRatio = (current && isLocked) ? aspectRatio : '16:9';
     return (
     <div
@@ -525,6 +689,15 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             {/* 悬停时显示操作按钮 */}
             <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
               <div className="flex items-center gap-2">
+                {onRemove && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemove(index); }}
+                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-600/80 text-white/90 border border-transparent hover:bg-red-500 hover:text-white transition-all"
+                    title="移除底图"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
                 {onToggleLock && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onToggleLock(index); }} 
@@ -676,7 +849,10 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
               </div>
               <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.02] border border-white/[0.06] rounded-xl">
                 <span className="text-[10px] font-medium text-white/30 uppercase tracking-widest">预计时长</span>
-                <span className="text-[11px] font-medium text-blue-400">{currentEngineDetails.duration}</span>
+                <span className="text-[11px] font-medium text-blue-400">
+                  {videoDuration === -1 ? `Auto (~${autoCalculatedDuration}s)` : `${displayDuration}s`}
+                  <span className="text-white/25 ml-1.5">| {currentEngineDetails.duration}</span>
+                </span>
               </div>
 
               {/* 比例选择器：仅显示当前引擎支持的比例 */}
@@ -723,9 +899,14 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                   </div>
                   {/* 时长 */}
                   <div className="space-y-1.5">
-                    <span className="text-[9px] text-white/25 font-medium uppercase tracking-wider">时长</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-white/25 font-medium uppercase tracking-wider">时长</span>
+                      {videoDuration === -1 && (
+                        <span className="text-[10px] font-mono text-purple-400/80">≈ {autoCalculatedDuration}s</span>
+                      )}
+                    </div>
                     <div className="flex gap-1.5 flex-wrap">
-                      {[4, 5, 6, 8, 10, 12].map(d => (
+                      {supportedDurations.map(d => (
                         <button key={d} type="button" onClick={() => setVideoDuration(d)}
                           className={`px-2 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-all active:scale-95 ${
                             videoDuration === d
@@ -736,7 +917,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                         </button>
                       ))}
                       <button type="button" onClick={() => setVideoDuration(-1)}
-                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 ${
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 ${
                           videoDuration === -1
                             ? 'bg-purple-500/15 text-purple-400 border border-purple-500/40'
                             : 'bg-white/[0.03] text-white/40 border border-white/[0.08] hover:text-white/70 hover:border-white/20'
@@ -789,16 +970,15 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
               />
             </div>
 
-            <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-4 rounded-xl font-medium text-sm transition-all active:scale-95 ${isGenerating ? 'bg-white/[0.04] border border-white/[0.06] text-white/50 cursor-not-allowed' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}>
+            <button onClick={handleGenerate} className={`w-full py-4 rounded-xl font-medium text-sm transition-all active:scale-95 ${isGenerating ? 'bg-red-500/80 text-white hover:bg-red-500 border border-red-500/40' : 'bg-blue-500/80 text-white hover:bg-blue-500'}`}>
               {isGenerating ? (
                 <div className="flex items-center justify-center gap-3">
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  <span>{progress}% - {statusText}</span>
+                  <span>取消生成</span>
                   <div className="w-32 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                    <div className="h-full bg-red-400 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
               ) : (
@@ -818,6 +998,15 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                   <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                 </div>
                 <p className="text-white/50 text-xs mt-2">{progress}%</p>
+                <button
+                  onClick={handleGenerate}
+                  className="mt-4 px-6 py-2 bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  取消生成
+                </button>
               </div>
             )}
             

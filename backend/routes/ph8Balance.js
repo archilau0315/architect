@@ -16,8 +16,8 @@ router.get('/user-info', async (req, res) => {
     // 查询用户信息（包含 tier_expires_at）
     const db = require('../db');
     const [users] = await db.query(
-      `SELECT id, email, nickname, user_tier, daily_points, purchased_points, 
-              total_consumed_points, tier_expires_at, last_reset_date
+      `SELECT id, email, nickname, user_tier, total_earned, total_points,
+              daily_quota, daily_used, daily_reset_at, tier_expires_at
        FROM kbit_users WHERE id = ?`,
       [userId]
     );
@@ -36,7 +36,7 @@ router.get('/user-info', async (req, res) => {
       if (expiryDate <= new Date()) {
         // 过期 → 立即降级为 free
         await db.query(
-          `UPDATE kbit_users SET user_tier = 'free', tier_expires_at = NULL, daily_points = 200, updated_at = NOW() WHERE id = ?`,
+          `UPDATE kbit_users SET user_tier = 'free', tier_expires_at = NULL, daily_quota = 200, updated_at = NOW() WHERE id = ?`,
           [userId]
         );
         tierExpired = true;
@@ -56,9 +56,12 @@ router.get('/user-info', async (req, res) => {
         previousTier: tierExpired ? user.user_tier : null,
         tierExpiresAt: effectiveTier === 'free' ? null : user.tier_expires_at,
         points: {
-          daily: user.daily_points,
-          purchased: user.purchased_points,
-          totalConsumed: user.total_consumed_points || 0
+          totalPoints: user.total_earned || 0,
+          balance: user.total_points || 0,
+          consumedTotal: (user.total_earned || 0) - (user.total_points || 0),
+          dailyQuota: user.daily_quota || 200,
+          dailyUsed: user.daily_used || 0,
+          dailyRemaining: Math.max(0, (user.daily_quota || 200) - (user.daily_used || 0))
         }
       }
     });

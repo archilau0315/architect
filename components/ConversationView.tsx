@@ -13,7 +13,9 @@ import type { Language } from '../i18n/locales.ts';
 import { MessageCircle, Image, Video, Download, RefreshCw, Copy, StopCircle, UserCircle, Palette, X, Lock, LockOpen } from 'lucide-react';
 
 // ─── PH8 费用扣除（共享函数，避免竞态：每次调用独立查询，不依赖闭包状态）─────────
-async function deductPh8Cost(label: string, onConsumePoints?: (n: number) => Promise<boolean>) {
+interface ConsumePointsOptions { amount: number; feature?: string; modelId?: string; }
+
+async function deductPh8Cost(label: string, onConsumePoints?: (opts: ConsumePointsOptions) => Promise<boolean>) {
   try {
     const session = localStorage.getItem('architect-invite-session');
     if (!session) return;
@@ -21,11 +23,14 @@ async function deductPh8Cost(label: string, onConsumePoints?: (n: number) => Pro
     const userId = user_id || email;
     const result = await Ph8UsageService.getLatestUsage(userId);
     if (result.success && result.data) {
-      const realCost = result.data.total_tokens || 0;
-      console.log(`[PH8真实费用-${label}]`, { requestId: result.data.request_id, cost: realCost, model: result.data.model });
-      if (realCost > 0 && onConsumePoints) {
-        const userPoints = Math.ceil(realCost / 10);
-        if (!onConsumePoints(userPoints)) console.warn('[PH8费用] 积分不足:', userPoints);
+      const actualCost = result.data.actual_cost || result.data.points_cost || 0;
+      console.log(`[PH8真实费用-${label}]`, { requestId: result.data.request_id, actualCost: actualCost, model: result.data.model });
+      if (actualCost > 0 && onConsumePoints) {
+        const userPoints = Math.ceil(actualCost * 1000);
+        console.log(`[PH8积分换算-${label}] ${actualCost}元 × 1000 = ${userPoints}积分`);
+        if (!onConsumePoints({ amount: userPoints, feature: label, modelId: result.data.model })) console.warn('[PH8费用] 积分不足:', userPoints);
+      } else {
+        console.log(`[PH8费用-${label}] 实际费用为0或未返回，跳过扣费`);
       }
     }
   } catch (err) {
@@ -66,7 +71,7 @@ interface ConversationViewProps {
   domain: CreativeDomain;
   instructions: any;
   points: { daily: number; purchased: number; bonus?: number };
-  onConsumePoints: (n: number) => Promise<boolean>;
+  onConsumePoints: (opts: { amount: number; feature?: string; modelId?: string }) => Promise<boolean>;
   pendingVideoMessage?: { url: string; prompt: string } | null;
   onClearPendingVideo?: () => void;
   useThirdPartyGateway?: boolean;
@@ -77,6 +82,7 @@ interface ConversationViewProps {
   theme?: string;
   userTier?: UserTier;
   onModeChange?: (mode: ConversationMode) => void;
+  onBusyStateChange?: (busy: boolean) => void;
 }
 
 const gemini = GeminiService;
@@ -653,7 +659,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 const ConversationView: React.FC<ConversationViewProps> = ({
   modelConfig, domain, instructions, points, onConsumePoints, pendingVideoMessage, onClearPendingVideo, useThirdPartyGateway, isDeveloperMode,
-  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark', userTier = 'free', onModeChange
+  showPresetPanel = false, onTogglePresetPanel, language = 'zh-CN', theme = 'dark', userTier = 'free', onModeChange, onBusyStateChange
 }) => {
   const t = getTranslation(language);
   // [修复] 基于用户等级判断是否为付费用户（PRO/PLUS 或开发者模式均可）
@@ -682,6 +688,11 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 更新导航栏模型状态
+  useEffect(() => {
+    onBusyStateChange?.(isLoading);
+  }, [isLoading, onBusyStateChange]);
 
   const addMsg = (msg: Omit<Message, 'id' | 'timestamp'>) =>
     setMessages(prev => [...prev, { ...msg, id: uid(), timestamp: Date.now() }]);
@@ -862,6 +873,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
       // ── IMAGE ─────────────────────────────────────────────────────────────
       else if (m === 'architect') {
+        // [前置余额检查] 非开发者模式时先检查积分
+        if (!isDeveloperMode && useThirdPartyGateway && onConsumePoints) {
+          const imgCost = 12; // PH8图像标准费用: 12积分
+          const currentBalance = points?.daily_balance ?? points?.total_points ?? 0;
+          if (currentBalance < imgCost) {
+            updateLast({ type: 'error', text: `⚠️ 积分余额不足\n图像生成需要 ${imgCost} 积分，当前仅剩 ${currentBalance} 积分` });
+            return; // 拦截
+          }
+        }
+
         updateLast({ type: 'thinking', text: t.buttons.generatingImage });
         
         // 分离供体和受体图像
@@ -923,6 +944,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
       // ── VIDEO ─────────────────────────────────────────────────────────────
       else if (m === 'video') {
+        // [前置余额检查] 非开发者模式时先检查积分
+        if (!isDeveloperMode && useThirdPartyGateway && onConsumePoints) {
+          const videoCost = 42; // PH8视频标准费用(≤10s)
+          const currentBalance = points?.daily_balance ?? points?.total_points ?? 0;
+          if (currentBalance < videoCost) {
+            updateLast({ type: 'error', text: `⚠️ 积分余额不足\n视频生成需要 ${videoCost} 积分，当前仅剩 ${currentBalance} 积分` });
+            return; // 拦截
+          }
+        }
+
         updateLast({ type: 'thinking', text: t.buttons.generatingVideo });
         const assets = payload.images.map(f => f.data);
         const res: any = await gemini.generateVideo(finalText, assets, '16:9', instructions, signal);
@@ -948,7 +979,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         }
         else updateLast({ type: 'error', text: t.buttons.videoGenerationFailed });
 
-        // 获取 PH8 真实费用并扣除积分
+        // 获取 PH8 真实费用并扣除积分（统一公式：actual_cost × 1000 = 积分）
         setTimeout(() => deductPh8Cost('Video', onConsumePoints), 500);
       }
 
@@ -1029,6 +1060,19 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   const handleInpaintSubmit = async (maskDataUrl: string, prompt: string) => {
     if (!inpaintImage) return;
+    
+    // [前置余额检查] 非开发者模式时先检查积分
+    if (!isDeveloperMode && useThirdPartyGateway && onConsumePoints) {
+      const inpaintCost = 12; // PH3重绘标准费用: 12积分
+      const currentBalance = points?.daily_balance ?? points?.total_points ?? 0;
+      if (currentBalance < inpaintCost) {
+        addMsg({ role: 'assistant', type: 'error', text: `⚠️ 积分余额不足\n局部重绘需要 ${inpaintCost} 积分，当前仅剩 ${currentBalance} 积分` });
+        setInpaintImage(null);
+        setIsLoading(false);
+        return; // 拦截
+      }
+    }
+
     setInpaintImage(null);
     setIsLoading(true);
 

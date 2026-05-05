@@ -25,7 +25,18 @@ interface SettingsPanelProps {
   isDeveloperMode?: boolean;
   onToggleDeveloper: (pass?: string) => boolean;
   isSystemVisible: boolean;
-  points: { daily: number; purchased: number; bonus?: number };
+  points: { 
+    daily: number; 
+    purchased: number; 
+    bonus?: number; 
+    totalConsumed?: number;
+    // 四个核心数值（从后端 /api/user/quota 获取）
+    total_points?: number;      // 总积分 = 赠送 + 购买
+    total_balance?: number;     // 余额 = 总积分 - 累计消耗
+    daily_balance?: number;     // 每日余额 = 当日剩余
+    daily_quota?: number;       // 每日限额（按等级）
+    daily_used?: number;        // 每日消耗
+  };
   onBuyPoints: (amount: number) => void;
   useThirdPartyGateway: boolean;
   onToggleGateway: (enabled: boolean) => void;
@@ -198,61 +209,61 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
                 <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">总积分</p>
-                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily + (points.bonus || 0)).toLocaleString()}</p>
+                <p className="text-xl font-semibold text-blue-400">{(points.total_points || ((points.bonus || 0) + (points.purchased || 0))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">注册赠送</p>
+                  <p className="text-[8px] text-white/20">赠送+购买</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">剩余赠送</p>
-                <p className="text-xl font-semibold text-purple-400">{(points.bonus || 0).toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">余额</p>
+                <p className="text-xl font-semibold text-purple-400">{(points.total_balance || (points.total_points || Math.max(0, (points.bonus || 0) + (points.purchased || 0) - (points.totalConsumed || 0)))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">10天内有效</p>
+                  <p className="text-[8px] text-white/20">总积分-已消耗</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日额度</p>
-                <p className="text-xl font-semibold text-amber-400">200</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">每日余额</p>
+                <p className="text-xl font-semibold text-amber-400">{(points.daily_balance || points.daily_remaining || Math.max(0, (points.daily_quota || 200) - (points.daily_used || 0))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">每日限额</p>
+                  <p className="text-[8px] text-white/20">{(points.daily_quota || 200)}-{points.daily_used || 0}</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日可用</p>
-                <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">每日消耗</p>
+                <p className="text-xl font-semibold text-rose-400">{(points.daily_used || 0).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">当日剩余</p>
+                  <p className="text-[8px] text-white/20">当日已消耗</p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">积分余额</p>
-                <p className="text-xl font-semibold text-blue-400">{(points.purchased + points.daily + (points.bonus || 0)).toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">总积分</p>
+                <p className="text-xl font-semibold text-blue-400">{(points.total_points || ((points.bonus || 0) + (points.purchased || 0))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">购买: {points.purchased.toLocaleString()}</p>
+                  <p className="text-[8px] text-white/20">赠送+购买</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日剩余</p>
-                <p className="text-xl font-semibold text-amber-400">{points.daily.toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">余额</p>
+                <p className="text-xl font-semibold text-purple-400">{(points.total_balance || (points.total_points || Math.max(0, (points.bonus || 0) + (points.purchased || 0) - (points.totalConsumed || 0)))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">剩余额度</p>
+                  <p className="text-[8px] text-white/20">总积分-已消耗</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">今日已用</p>
-                <p className="text-xl font-semibold text-rose-400">{Math.max(0, tierLimits.daily - points.daily).toLocaleString()}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">每日余额</p>
+                <p className="text-xl font-semibold text-amber-400">{(points.daily_balance || points.daily_remaining || Math.max(0, (points.daily_quota || 200) - (points.daily_used || 0))).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">每日: {formatNumber(tierLimits.daily)}</p>
+                  <p className="text-[8px] text-white/20">{(points.daily_quota || 200)}-{points.daily_used || 0}</p>
                 </div>
               </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
-                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">月限额</p>
-                <p className="text-xl font-semibold text-white/70">{formatNumber(tierLimits.monthly)}</p>
+                <p className="text-[9px] font-medium text-white/30 uppercase tracking-wider mb-2">每日消耗</p>
+                <p className="text-xl font-semibold text-rose-400">{(points.daily_used || 0).toLocaleString()}</p>
                 <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                  <p className="text-[8px] text-white/20">每月重置</p>
+                  <p className="text-[8px] text-white/20">当日已消耗</p>
                 </div>
               </div>
             </div>
@@ -543,19 +554,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <div className="space-y-1">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">可用积分余额 / Points Balance</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-theme">{points.daily + points.purchased}</span>
+                  <span className="text-3xl font-black text-theme">{Math.max(0, (points.bonus || 0) + (points.purchased || 0) - (points.totalConsumed || 0))}</span>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Points</span>
                 </div>
               </div>
               <div className="flex gap-4 text-right">
                 <div className="space-y-0.5">
-                  <p className="text-[9px] font-black text-slate-400 uppercase">每日赠送</p>
-                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{points.daily}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase">赠送积分</p>
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{points.bonus || 0}</p>
                 </div>
                 <div className="w-px h-8 bg-slate-200 dark:bg-slate-800" />
                 <div className="space-y-0.5">
-                  <p className="text-[9px] font-black text-slate-400 uppercase">永久点数</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase">购买积分</p>
                   <p className="text-xs font-bold text-theme">{points.purchased}</p>
+                </div>
+                <div className="w-px h-8 bg-slate-200 dark:bg-slate-800" />
+                <div className="space-y-0.5">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">已消耗</p>
+                  <p className="text-xs font-bold text-rose-500">{points.totalConsumed || 0}</p>
                 </div>
               </div>
             </div>

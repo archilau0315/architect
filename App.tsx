@@ -47,7 +47,12 @@ const TIER_CONFIG = {
   plus: { daily: 2000, label: 'PLUS 级' }
 };
 
-const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD ?? null;
+const DEVELOPER_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD ?? 'KBIT-DEV-2026';
+
+// 挂载全局变量供调试使用
+if (typeof window !== 'undefined') {
+  (window as any).DEVELOPER_PASSWORD = DEVELOPER_PASSWORD;
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('architect');
@@ -64,6 +69,7 @@ const App: React.FC = () => {
   const [dailyPoints, setDailyPoints] = useState(200);
   const [purchasedPoints, setPurchasedPoints] = useState(0);
   const [bonusPoints, setBonusPoints] = useState(0);
+  const [dailyUsedPoints, setDailyUsedPoints] = useState(0);
   const [lastResetDate, setLastResetDate] = useState('');
   const [showBetaBanner, setShowBetaBanner] = useState(false);
 
@@ -116,6 +122,10 @@ const App: React.FC = () => {
   const [lastOpTokens, setLastOpTokens] = useState({ prompt: 0, completion: 0, total: 0 });
   const [sessionTotalTokens, setSessionTotalTokens] = useState(0);
   const [totalConsumedPoints, setTotalConsumedPoints] = useState(0);
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [dailyQuota, setDailyQuota] = useState(200);
+  const [dailyUsed, setDailyUsed] = useState(0);
   const [lifetimeTokens, setLifetimeTokens] = useState(0);
 
   useEffect(() => {
@@ -170,18 +180,10 @@ const App: React.FC = () => {
           });
           const data = await response.json();
           if (data.success && data.data?.tier) {
-            savedTier = data.data.tier as UserTier;
-            localStorage.setItem(USER_TIER_KEY, savedTier);
-            // 同步后端积分数据
-            if (data.data.points) {
-              setDailyPoints(data.data.points.daily || 0);
-              setPurchasedPoints(data.data.points.purchased || 0);
-              setTotalConsumedPoints(data.data.points.totalConsumed || 0);
-            } else if (data.data.daily_points !== undefined) {
-              setDailyPoints(data.data.daily_points);
-              setPurchasedPoints(data.data.purchased_points || 0);
-              setTotalConsumedPoints(data.data.total_consumed_points || 0);
-            }
+              savedTier = data.data.tier as UserTier;
+              localStorage.setItem(USER_TIER_KEY, savedTier);
+              // 新积分系统：从user-info接口不再设置积分，后面统一从quota接口获取
+              // 避免数据冲突和覆盖问题
             // 检测等级是否已过期降级
             if (data.data.tierExpired && data.data.previousTier) {
               const tierLabels: Record<string, string> = { beta: '内测用户', basic: '基础级', pro: 'PRO级', plus: 'PLUS级' };
@@ -206,16 +208,22 @@ const App: React.FC = () => {
         const fetchBalance = async () => {
           try {
             const session = localStorage.getItem('architect-invite-session');
-            if (!session) return;
+            if (!session) {
+              console.log('[余额同步] 没有找到session，跳过后端同步');
+              return;
+            }
 
             const sessionData = JSON.parse(session);
-            if (!sessionData.token) return;
-            const userId = sessionData.userId || sessionData.email;
+            const userId = sessionData.userId || sessionData.user_id || sessionData.email;
+            if (!userId) {
+              console.log('[余额同步] 无法获取用户ID');
+              return;
+            }
+            console.log('[余额同步] 用户ID:', userId);
 
             const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
             const response = await fetch(balanceUrl, {
               headers: {
-                'Authorization': `Bearer ${sessionData.token}`,
                 'x-user-id': userId,
                 'Content-Type': 'application/json'
               }
@@ -223,11 +231,14 @@ const App: React.FC = () => {
             const result = await response.json();
             if (result.success && result.data) {
               const { points, tier, tierExpired, previousTier } = result.data;
-              // 正确同步每日积分、购买积分和赠送积分（后端数据优先）
-              setDailyPoints(points.daily || 0);
-              setPurchasedPoints(points.purchased || 0);
-              setBonusPoints(points.bonus || 0);
-              setTotalConsumedPoints(points.total_consumed || 0);
+              setTotalBalance(points.total_balance || 0);
+              setTotalPoints(points.total_points || 0);
+              setDailyQuota(points.daily_quota || 200);
+              setDailyUsed(points.daily_used || 0);
+              setDailyPoints(points.daily_remaining || points.daily_balance || points.daily || 0);
+              setPurchasedPoints(0);
+              setBonusPoints(0);
+              setTotalConsumedPoints(0);
               backendSynced = true; // 标记：后端已提供真实数据
 
               // 检测等级过期
@@ -567,7 +578,8 @@ const App: React.FC = () => {
     setItemDebounced(POINTS_KEY, JSON.stringify({ daily, purchased, bonus, lastReset: date }), 200); // [性能优化] 防抖积分写入
   };
 
-  const handleConsumePoints = useCallback(async (amount: number): Promise<boolean> => {
+  const handleConsumePoints = useCallback(async (opts: { amount: number; feature?: string; modelId?: string }): Promise<boolean> => {
+    const { amount, feature, modelId } = opts;
     // 开发者模式或开发模式（使用官方API）不消耗点数
     if (isDeveloperMode || !useThirdPartyGateway) {
       return true;
@@ -598,7 +610,7 @@ const App: React.FC = () => {
       const res = await fetch('/api/user/consume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
-        body: JSON.stringify({ amount, description: 'AI generation' })
+        body: JSON.stringify({ amount, description: `AI ${feature || 'generation'}`, feature: feature || 'unknown', model_id: modelId || null })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -621,6 +633,7 @@ const App: React.FC = () => {
       setDailyPoints(newDaily);
       setBonusPoints(newBonus);
       setPurchasedPoints(newPurchased);
+      setDailyUsedPoints(prev => prev + dailyUsed);
       savePoints(newDaily, newPurchased, newBonus, lastResetDate);
       const newTotalConsumed = totalConsumedPoints + amount;
       setTotalConsumedPoints(newTotalConsumed);
@@ -631,18 +644,24 @@ const App: React.FC = () => {
         const balanceUrl = getProxiedUrl('https://api.kbitai.com.cn/api/user/quota');
         const balanceRes = await fetch(balanceUrl, {
           headers: {
-            'Authorization': `Bearer ${sessionData.token}`,
+            'x-user-id': userId,
             'Content-Type': 'application/json'
           }
         });
         const balanceResult = await balanceRes.json();
         if (balanceResult.success && balanceResult.data && balanceResult.data.points) {
-          const { daily, purchased, bonus } = balanceResult.data.points;
-          setDailyPoints(daily || 0);
-          setPurchasedPoints(purchased || 0);
-          setBonusPoints(bonus || 0);
-          savePoints(daily || 0, purchased || 0, bonus || 0, lastResetDate);
-          console.log('[余额刷新] 积分扣减后同步后端数据:', { daily, purchased, bonus });
+          const { total_points, total_balance, daily_balance, daily_quota, daily_used } = balanceResult.data.points;
+          // 更新新积分系统字段
+          setTotalBalance(total_balance || 0);
+          setTotalPoints(total_points || 0);
+          setDailyQuota(daily_quota || 200);
+          setDailyUsed(daily_used || 0);
+          // 兼容旧字段（避免UI显示异常）
+          setDailyPoints(daily_balance || 0);  // 每日剩余
+          setPurchasedPoints(0);  // 新积分系统：已废弃，从total_points统一管理
+          setBonusPoints(0);      // 新积分系统：已废弃，从total_points统一管理
+          savePoints(daily_balance || 0, 0, 0, lastResetDate);
+          console.log('[余额刷新] 积分扣减后同步后端数据:', { total_points, total_balance, daily_balance, daily_quota, daily_used });
         }
       } catch (refreshError) {
         console.warn('[余额刷新] 积分扣减后同步失败:', refreshError);
@@ -749,8 +768,8 @@ const App: React.FC = () => {
       onOpenSettings={() => setIsSettingsOpen(true)}
       currentModelName={dynamicModelName}
       modelStatus={modelStatus}
-      dailyUsage={totalConsumedPoints}
-      balance={dailyPoints + purchasedPoints + bonusPoints}
+      dailyUsage={dailyUsed}
+      balance={totalBalance}
       activeSessionId={activeSessionId}
       onSessionChange={(id, mode) => {
         setActiveSessionId(id);
@@ -776,6 +795,14 @@ const App: React.FC = () => {
           useThirdPartyGateway={useThirdPartyGateway}
           isDeveloperMode={isDeveloperMode}
           language={preferences.language}
+          onBusyStateChange={(busy) => { 
+            if (busy) {
+              setModelStatus('assigning'); 
+              setDynamicModelName(activeModel?.name || activeModel?.modelId || 'KbitAi-Flash');
+            } else {
+              setModelStatus('connected');
+            }
+          }}
           key={videoKey}
         />
       ) : (
@@ -797,6 +824,14 @@ const App: React.FC = () => {
         pendingVideoMessage={pendingVideoMessage}
         onClearPendingVideo={() => setPendingVideoMessage(null)}
         onModeChange={(mode) => { if (mode === 'video') setActiveTab('video'); }}
+        onBusyStateChange={(busy) => { 
+          if (busy) {
+            setModelStatus('assigning'); 
+            setDynamicModelName(activeModel?.name || activeModel?.modelId || 'KbitAi-Flash');
+          } else {
+            setModelStatus('connected');
+          }
+        }}
       />
       )}
 
@@ -817,7 +852,19 @@ const App: React.FC = () => {
         isDeveloperMode={isDeveloperMode}
         onToggleDeveloper={handleToggleDeveloper}
         isSystemVisible={isSystemVisible}
-        points={{ daily: dailyPoints, purchased: purchasedPoints, bonus: bonusPoints }}
+        points={{ 
+          // 新积分系统：四个核心数值
+          total_points: totalPoints,
+          total_balance: totalBalance,
+          daily_balance: Math.max(0, dailyQuota - dailyUsed),
+          daily_used: dailyUsed,
+          daily_quota: dailyQuota,
+          // 兼容旧字段（避免UI显示异常）
+          daily: Math.max(0, dailyQuota - dailyUsed),
+          purchased: 0,
+          bonus: 0,
+          totalConsumed: 0
+        }}
         onBuyPoints={handleBuyPoints}
         useThirdPartyGateway={useThirdPartyGateway}
         onToggleGateway={handleToggleGateway}

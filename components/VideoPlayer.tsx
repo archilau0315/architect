@@ -61,6 +61,9 @@ export const VideoPlayer = ({
   const [playbackPosition, setPlaybackPosition] = useState<number | null>(null);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [isLightMode, setIsLightMode] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
   useEffect(() => {
     const checkLightMode = () => {
@@ -71,6 +74,13 @@ export const VideoPlayer = ({
     observer.observe(document.documentElement, { attributes: true });
     return () => observer.disconnect();
   }, []);
+
+  // 重置错误状态当 videoUrl 改变时
+  useEffect(() => {
+    setHasError(false);
+    setErrorMessage('');
+    setIsVideoLoaded(false);
+  }, [videoUrl]);
 
   useEffect(() => {
     const savedPosition = localStorage.getItem(`videoPosition_${videoUrl}`);
@@ -101,6 +111,13 @@ export const VideoPlayer = ({
     const handlePlaying = () => setIsBuffering(false);
     const handleEnterPictureInPicture = () => setIsPictureInPicture(true);
     const handleLeavePictureInPicture = () => setIsPictureInPicture(false);
+    const handleCanPlay = () => setIsVideoLoaded(true);
+    const handleError = (e: Event) => {
+      console.error('[VideoPlayer] Video loading error:', e);
+      setHasError(true);
+      setErrorMessage('视频加载失败，请稍后重试');
+      setIsBuffering(false);
+    };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -110,6 +127,8 @@ export const VideoPlayer = ({
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('enterpictureinpicture', handleEnterPictureInPicture);
     video.addEventListener('leavepictureinpicture', handleLeavePictureInPicture);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('error', handleError);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -120,6 +139,8 @@ export const VideoPlayer = ({
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('enterpictureinpicture', handleEnterPictureInPicture);
       video.removeEventListener('leavepictureinpicture', handleLeavePictureInPicture);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('error', handleError);
     };
   }, [videoUrl, playbackPosition]);
 
@@ -278,6 +299,45 @@ export const VideoPlayer = ({
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-white/60">加载中...</span>
+          </div>
+        </div>
+      )}
+
+      {/* 视频加载初始状态 */}
+      {!isVideoLoaded && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-3 border-blue-500/50 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-white/60">正在加载视频...</span>
+          </div>
+        </div>
+      )}
+
+      {/* 错误状态 */}
+      {hasError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-white/80 font-medium mb-1">视频加载失败</p>
+              <p className="text-xs text-white/50">{errorMessage}</p>
+            </div>
+            <button
+              onClick={() => {
+                setHasError(false);
+                setErrorMessage('');
+                if (videoRef.current) {
+                  videoRef.current.load();
+                }
+              }}
+              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-400 text-sm font-medium transition-all"
+            >
+              重试
+            </button>
           </div>
         </div>
       )}

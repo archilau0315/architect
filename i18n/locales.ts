@@ -165,6 +165,9 @@ export interface Translations {
     undo: string;
     imageCount: string;
     inpaintConfirm: string;
+    // 导航栏按钮
+    toggleDark: string;   // 切换深色模式
+    toggleLight: string;  // 切换亮色模式
   };
 
   // 参数设置
@@ -967,6 +970,8 @@ export const translations: Record<Language, Translations> = {
       undo: '되돌리기',
       imageCount: '장',
       inpaintConfirm: '이미지 {n}을 부분 편집합니다. 확인하시겠습니까?',
+      toggleDark: '다크 모드로 전환',
+      toggleLight: '라이트 모드로 전환',
     },
     parameters: {
       title: '매개변수 설정',
@@ -1371,6 +1376,8 @@ export const translations: Record<Language, Translations> = {
       undo: 'Annuler',
       imageCount: 'Img',
       inpaintConfirm: 'Retoucher l\'image {n}. Confirmer ?',
+      toggleDark: 'Passer en Mode Sombre',
+      toggleLight: 'Passer en Mode Clair',
     },
     parameters: {
       title: 'Configuration des Paramètres',
@@ -1775,6 +1782,8 @@ export const translations: Record<Language, Translations> = {
       undo: 'Отменить',
       imageCount: 'Изобр',
       inpaintConfirm: 'Ретушировать изображение {n}. Подтвердить?',
+      toggleDark: 'Переключить на Тёмный режим',
+      toggleLight: 'Переключить на Светлый режим',
     },
     parameters: {
       title: 'Настройки Параметров',

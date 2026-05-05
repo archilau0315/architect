@@ -86,7 +86,7 @@ exports.getUsers = async (req, res) => {
     if (status !== '') { where += ' AND status = ?'; params.push(parseInt(status)); }
 
     const [rows] = await db.query(
-      `SELECT id, email, nickname, user_tier, daily_points, purchased_points, bonus_points, total_consumed_points, tier_expires_at, status, last_login_at, created_at FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT id, email, nickname, user_tier, total_earned, total_points, daily_quota, daily_used, tier_expires_at, status, last_login_at, created_at FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
     const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM kbit_users ${where}`, params);
@@ -160,10 +160,10 @@ exports.getUser = async (req, res) => {
 // 更新用户
 exports.updateUser = async (req, res) => {
   try {
-    const { user_tier, status, tier_expires_at, daily_points, purchased_points } = req.body;
+    const { user_tier, status, tier_expires_at, total_points, daily_quota } = req.body;
     await db.query(
-      'UPDATE kbit_users SET user_tier=?, status=?, tier_expires_at=?, daily_points=?, purchased_points=? WHERE id=?',
-      [user_tier, status, tier_expires_at || null, daily_points, purchased_points, req.params.id]
+      'UPDATE kbit_users SET user_tier=?, status=?, tier_expires_at=?, total_points=?, daily_quota=? WHERE id=?',
+      [user_tier, status, tier_expires_at || null, total_points, daily_quota, req.params.id]
     );
     res.json({ success: true });
   } catch (err) {
@@ -465,17 +465,47 @@ exports.getLogs = async (req, res) => {
     if (status) { where += ' AND ul.status = ?'; params.push(status); }
     if (date) { where += ' AND DATE(ul.created_at) = ?'; params.push(date); }
 
-    // 查询：LEFT JOIN 关联用户表，user_id=0 表示未识别用户
+    // 查询：先获取日志，再逐个匹配用户（更稳妥）
     const [logs] = await db.query(
-      `SELECT ul.*,
-              CASE WHEN ul.user_id = 0 THEN NULL ELSE u.email END as user_email,
-              CASE WHEN ul.user_id = 0 THEN NULL ELSE u.nickname END as user_nickname,
-              CASE WHEN ul.user_id = 0 THEN '未识别' ELSE COALESCE(u.nickname, u.email, '未知') END as display_name
-       FROM kbit_usage_logs ul
-       LEFT JOIN kbit_users u ON ul.user_id = u.id
+      `SELECT * FROM kbit_usage_logs ul
        ${where} ORDER BY ul.created_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
+    
+    // 补充用户信息
+    for (let i = 0; i < logs.length; i++) {
+      const log = logs[i];
+      let user_email = null;
+      let user_nickname = null;
+      let display_name = '未识别';
+      
+      if (log.user_id && log.user_id !== 0 && log.user_id !== '0' && log.user_id !== 'guest' && log.user_id !== '未识别') {
+        try {
+          const [users] = await db.query(
+            'SELECT id, nickname, email FROM kbit_users WHERE id = ? OR email = ? LIMIT 1',
+            [log.user_id, log.user_id]
+          );
+          
+          if (users.length > 0) {
+            user_email = users[0].email;
+            user_nickname = users[0].nickname;
+            display_name = user_nickname || user_email || '未知用户';
+          } else if (typeof log.user_id === 'string' && log.user_id.includes('@')) {
+            // 如果 user_id 本身是邮箱且没找到用户，直接显示
+            display_name = log.user_id;
+            user_email = log.user_id;
+          } else {
+            display_name = '未知用户';
+          }
+        } catch (e) {
+          console.error('[Admin] 查询用户信息失败:', e);
+        }
+      }
+      
+      logs[i].user_email = user_email;
+      logs[i].user_nickname = user_nickname;
+      logs[i].display_name = display_name;
+    }
 
     // 计算总数
     const [[{ total }]] = await db.query('SELECT COUNT(*) as total FROM kbit_usage_logs ul ' + where, params);

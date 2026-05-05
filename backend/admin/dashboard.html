@@ -187,7 +187,7 @@
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm text-gray-500">今日成本</p>
-                                <h3 id="todayCost" class="text-2xl font-bold text-gray-900">¥0.00</h3>
+                                <h3 id="todayCost" class="text-2xl font-bold text-gray-900">¥0.0000</h3>
                             </div>
                             <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center text-warning">
                                 <i class="fa fa-money text-xl"></i>
@@ -250,7 +250,10 @@
                                         时间
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        用户
+                                        用户昵称
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        邮箱
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         操作
@@ -269,7 +272,7 @@
                             <tbody class="bg-white divide-y divide-gray-200" id="activityLog">
                                 <!-- 活动记录将通过JavaScript动态添加 -->
                                 <tr>
-                                    <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                                    <td colspan="7" class="px-6 py-10 text-center text-gray-500">
                                         加载中...
                                     </td>
                                 </tr>
@@ -332,7 +335,7 @@
                     document.getElementById('totalUsers').textContent = stats.total_users;
                     document.getElementById('activeUsers').textContent = stats.active_users;
                     document.getElementById('todayRequests').textContent = stats.today_requests;
-                    document.getElementById('todayCost').textContent = '¥' + stats.today_cost.toFixed(2);
+                    document.getElementById('todayCost').textContent = '¥' + stats.today_cost.toFixed(4);
                     
                     // 更新增长率
                     const ug = stats.userGrowth || 0;
@@ -553,8 +556,12 @@
                         
                         logs.forEach(log => {
                             const row = document.createElement('tr');
-                            const displayName = log.display_name || log.user_nickname || log.user_email || log.email || '未知用户';
-                            const safeDisplay = (displayName && displayName !== 'undefined' && displayName !== 'null') ? displayName : '未知用户';
+                            // 用户昵称显示
+                            const nickname = log.user_nickname || log.display_name || '未知用户';
+                            const safeNickname = (nickname && nickname !== 'undefined' && nickname !== 'null') ? nickname : '未知用户';
+                            // 用户邮箱显示
+                            const email = log.user_email || log.email || '';
+                            const safeEmail = (email && email !== 'undefined' && email !== 'null') ? email : '-';
                             // 消耗显示：积分 + 金额
                             const actualCost = parseFloat(log.actual_cost) || 0;
                             const pointsCost = parseInt(log.points_cost) || 0;
@@ -568,7 +575,10 @@
                                     ${new Date(log.created_at).toLocaleString()}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    ${safeDisplay}
+                                    ${safeNickname}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    ${safeEmail}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     ${featureLabel}
@@ -590,7 +600,7 @@
                     } else {
                         activityLog.innerHTML = `
                             <tr>
-                                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                                <td colspan="7" class="px-6 py-10 text-center text-gray-500">
                                     暂无活动记录
                                 </td>
                             </tr>

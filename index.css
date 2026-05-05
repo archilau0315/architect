@@ -475,15 +475,15 @@ html {
 .light-mode {
   --bg-primary: #ffffff;
   --bg-secondary: #f1f5f9;
-  --bg-tertiary: #cbd5e1;
+  --bg-tertiary: #e2e8f0;
   --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-tertiary: #64748b;
+  --text-secondary: #374151;
+  --text-tertiary: #4b5563;
   --text-error: #EF4444;
   --text-success: #10B981;
   --bg-card: #ffffff;
-  --border-color: rgba(0, 0, 0, 0.15);
-  --border-hover: rgba(0, 0, 0, 0.3);
+  --border-color: rgba(0, 0, 0, 0.2);
+  --border-hover: rgba(0, 0, 0, 0.4);
   
   /* Theme colors remain the same but adjust shadow for light mode */
   --theme-shadow: rgba(59, 130, 246, 0.25);
@@ -1027,10 +1027,88 @@ body { font-family: var(--font-family) !important; }
 
 /* Scrollbar in light mode */
 .light-mode ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2) !important;
+  background: rgba(0, 0, 0, 0.25) !important;
 }
 
 .light-mode ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3) !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* SystemSpec specific fixes for light mode */
+.light-mode .bg-white\/40 {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.light-mode .bg-slate-950\/40 {
+  background-color: var(--bg-secondary) !important;
+}
+
+.light-mode .bg-slate-900, 
+.light-mode .bg-slate-800, 
+.light-mode .bg-slate-700 {
+  background-color: var(--bg-secondary) !important;
+}
+
+.light-mode .text-slate-400 {
+  color: var(--text-secondary) !important;
+}
+
+.light-mode .text-slate-300 {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.light-mode .text-slate-600 {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .border-slate-800 {
+  border-color: var(--border-color) !important;
+}
+
+.light-mode .border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+.light-mode .border-slate-700 {
+  border-color: var(--border-color) !important;
+}
+
+.light-mode .bg-slate-50 {
+  background-color: var(--bg-primary) !important;
+}
+
+.light-mode .bg-slate-100 {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Fix for text-slate-400/500/600 in SystemSpec */
+.light-mode [class*="text-slate-3"],
+.light-mode [class*="text-slate-4"],
+.light-mode [class*="text-slate-5"],
+.light-mode [class*="text-slate-6"] {
+  color: var(--text-primary) !important;
+}
+
+/* Fix for white/50/60/70/80/90 in light mode */
+.light-mode .text-white\/50,
+.light-mode .text-white\/60,
+.light-mode .text-white\/70,
+.light-mode .text-white\/80,
+.light-mode .text-white\/90 {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .text-white\/30,
+.light-mode .text-white\/40 {
+  color: var(--text-secondary) !important;
+}
+
+.light-mode .text-white\/20,
+.light-mode .text-white\/10 {
+  color: var(--text-tertiary) !important;
 }
 

@@ -43,6 +43,10 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [originalImageSize, setOriginalImageSize] = useState({ width: 0, height: 0 });
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const lastClickTime = useRef<number>(0);
+  const DOUBLE_CLICK_MS = 350;
+  const undoStack = useRef<ImageData[]>([]);
+  const MAX_UNDO = 30;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,15 +76,43 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       canvas.width = maskCanvas.width = img.width;
       canvas.height = maskCanvas.height = img.height;
       canvas.getContext('2d')!.drawImage(img, 0, 0);
-      const mCtx = maskCanvas.getContext('2d')!;
-      mCtx.fillStyle = 'rgba(128, 128, 128, 0.3)';
-      mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
       setOriginalImageSize({ width: img.width, height: img.height });
       setImageLoaded(true);
       resetView();
     };
     img.src = imageUrl;
   }, [imageUrl]);
+
+  const saveToUndoStack = useCallback(() => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas) return;
+    const mCtx = maskCanvas.getContext('2d')!;
+    const imgData = mCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    undoStack.current.push(imgData);
+    if (undoStack.current.length > MAX_UNDO) {
+      undoStack.current.shift();
+    }
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.current.length === 0) return;
+    const prevData = undoStack.current.pop();
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas || !prevData) return;
+    const mCtx = maskCanvas.getContext('2d')!;
+    mCtx.putImageData(prevData, 0, 0);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo]);
 
   const resetView = useCallback(() => {
     setZoom(1);
@@ -107,11 +139,11 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       clientY = e.clientY;
     }
     
-    const rectLeft = canvasRect.left + pan.x;
-    const rectTop = canvasRect.top + pan.y;
-    
-    const scaleX = canvas.width / canvasRect.width;
-    const scaleY = canvas.height / canvasRect.height;
+    const rectLeft = canvasRect.left;
+    const rectTop = canvasRect.top;
+
+    const scaleX = canvas.width / (canvasRect.width || 1);
+    const scaleY = canvas.height / (canvasRect.height || 1);
     
     const imageX = (clientX - rectLeft) * scaleX;
     const imageY = (clientY - rectTop) * scaleY;
@@ -223,12 +255,27 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   }, [color, brushSize, getAdaptiveSampleDistance, drawLine]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return;
     try {
       e.preventDefault();
-    } catch (err) {
-      // 被动事件监听器中无法调用 preventDefault，忽略此错误
+    } catch (err) {}
+
+    const now = Date.now();
+    if (now - lastClickTime.current < DOUBLE_CLICK_MS && isDrawing) {
+      lastClickTime.current = 0;
+      setIsDrawing(false);
+      if (tool === 'brush') {
+        strokePoints.current = [];
+        lastPoint.current = null;
+        velocity.current = 0;
+      }
+      snapshotRef.current = null;
+      return;
     }
-    
+    lastClickTime.current = now;
+
+    saveToUndoStack();
+
     const pos = getPos(e);
     setIsDrawing(true);
     startPos.current = pos;
@@ -250,7 +297,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     } else {
       snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
     }
-  }, [getPos, tool, color, brushSize]);
+  }, [getPos, tool, color, brushSize, isDrawing, saveToUndoStack]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     try {
@@ -303,22 +350,18 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     }
   }, [isPanning, panStart, isDrawing, getPos, tool, color, brushSize, handleBrushStroke]);
 
-  const handleMouseUp = useCallback(() => {
-    if (isPanning) {
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button === 2) {
       setIsPanning(false);
       return;
     }
 
     if (!isDrawing) return;
-    setIsDrawing(false);
     
-    if (tool === 'brush') {
-      strokePoints.current = [];
-      lastPoint.current = null;
-      velocity.current = 0;
-    }
-    
-    if (tool === 'lasso' && lassoPoints.current.length > 2) {
+    if (tool === 'rect' || tool === 'ellipse') {
+      setIsDrawing(false);
+      snapshotRef.current = null;
+    } else if (tool === 'lasso' && lassoPoints.current.length > 2) {
       const mCtx = maskCanvasRef.current!.getContext('2d')!;
       if (snapshotRef.current) mCtx.putImageData(snapshotRef.current, 0, 0);
       mCtx.fillStyle = color;
@@ -328,8 +371,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       mCtx.fill();
       lassoPoints.current = [];
     }
-    snapshotRef.current = null;
-  }, [isPanning, isDrawing, tool, color]);
+  }, [isDrawing, tool, color]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -339,14 +381,15 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   }, [zoom]);
 
   const handleContainerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button === 0) {
+    if (e.button === 2) {
+      e.preventDefault();
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
   }, [pan]);
 
-  const handleContainerMouseUp = useCallback(() => {
-    if (isPanning) {
+  const handleContainerMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button === 2 && isPanning) {
       setIsPanning(false);
     }
   }, [isPanning]);
@@ -356,14 +399,40 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       setIsPanning(false);
     }
     if (isDrawing) {
-      handleMouseUp();
+      setIsDrawing(false);
+      if (tool === 'brush') {
+        strokePoints.current = [];
+        lastPoint.current = null;
+        velocity.current = 0;
+      }
+      snapshotRef.current = null;
     }
-  }, [isPanning, isDrawing, handleMouseUp]);
+  }, [isPanning, isDrawing, tool]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      const pos = getPos(e);
+  const handleTouchStart = useCallback((e: React.TouchEvent | TouchEvent) => {
+    if ('preventDefault' in e) {
+      try { (e as Event).preventDefault(); } catch(_) {}
+    }
+    
+    const touchE = 'touches' in e ? e : (e as React.TouchEvent);
+    if (touchE.touches.length === 1) {
+      const now = Date.now();
+      if (now - lastClickTime.current < DOUBLE_CLICK_MS && isDrawing) {
+        lastClickTime.current = 0;
+        setIsDrawing(false);
+        if (tool === 'brush') {
+          strokePoints.current = [];
+          lastPoint.current = null;
+          velocity.current = 0;
+        }
+        snapshotRef.current = null;
+        return;
+      }
+      lastClickTime.current = now;
+
+      saveToUndoStack();
+
+      const pos = getPos(touchE);
       setIsDrawing(true);
       startPos.current = pos;
       const mCtx = maskCanvasRef.current!.getContext('2d')!;
@@ -383,9 +452,9 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       } else {
         snapshotRef.current = mCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height);
       }
-    } else if (e.touches.length === 2) {
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
+    } else if (touchE.touches.length === 2) {
+      const touch1 = touchE.touches[0];
+      const touch2 = touchE.touches[1];
       const initialDistance = Math.sqrt(
         Math.pow(touch2.clientX - touch1.clientX, 2) + 
         Math.pow(touch2.clientY - touch1.clientY, 2)
@@ -408,13 +477,11 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
         document.removeEventListener('touchmove', handlePinch);
       }, { once: true });
     }
-  }, [zoom, pan.x, pan.y, tool, color, brushSize, getPos]);
+  }, [zoom, pan.x, pan.y, tool, color, brushSize, getPos, isDrawing, saveToUndoStack]);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    try {
-      e.preventDefault();
-    } catch (err) {
-      // 被动事件监听器中无法调用 preventDefault，忽略此错误
+  const handleTouchMove = useCallback((e: React.TouchEvent | TouchEvent) => {
+    if ('preventDefault' in e) {
+      try { (e as Event).preventDefault(); } catch(_) {}
     }
     if (e.touches.length === 1 && isDrawing) {
       const pos = getPos(e);
@@ -454,21 +521,37 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     }
   }, [isDrawing, getPos, tool, color, brushSize, handleBrushStroke]);
 
+  useEffect(() => {
+    const canvas = maskCanvasRef.current;
+    const container = canvasContainerRef.current;
+    if (!canvas || !container) return;
+
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); handleWheel(e as unknown as React.WheelEvent); };
+    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); handleTouchStart(e as unknown as React.TouchEvent); };
+    const onTouchMove = (e: TouchEvent) => { e.preventDefault(); handleTouchMove(e as unknown as React.TouchEvent); };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [handleWheel, handleTouchStart, handleTouchMove]);
+
   const handleTouchEnd = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
     }
     
     if (!isDrawing) return;
-    setIsDrawing(false);
     
-    if (tool === 'brush') {
-      strokePoints.current = [];
-      lastPoint.current = null;
-      velocity.current = 0;
-    }
-    
-    if (tool === 'lasso' && lassoPoints.current.length > 2) {
+    if (tool === 'rect' || tool === 'ellipse') {
+      setIsDrawing(false);
+      snapshotRef.current = null;
+    } else if (tool === 'lasso' && lassoPoints.current.length > 2) {
       const mCtx = maskCanvasRef.current!.getContext('2d')!;
       if (snapshotRef.current) mCtx.putImageData(snapshotRef.current, 0, 0);
       mCtx.fillStyle = color;
@@ -478,7 +561,6 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       mCtx.fill();
       lassoPoints.current = [];
     }
-    snapshotRef.current = null;
   }, [isPanning, isDrawing, tool, color]);
 
   const handleSaveMask = useCallback(() => {
@@ -544,12 +626,12 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
   }, [prompt, role, onSubmit]);
 
   const handleClear = useCallback(() => {
+    saveToUndoStack();
     const maskCanvas = maskCanvasRef.current;
     if (!maskCanvas) return;
     const mCtx = maskCanvas.getContext('2d')!;
-    mCtx.fillStyle = 'rgba(128, 128, 128, 0.3)';
-    mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-  }, []);
+    mCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  }, [saveToUndoStack]);
 
   const toolLabels = language === 'zh-CN'
     ? { brush: '画笔', rect: '矩形', ellipse: '椭圆', lasso: '套索' }
@@ -585,12 +667,12 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
 
         <div
           ref={canvasContainerRef}
-          className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-black/20 cursor-crosshair"
-          onWheel={handleWheel}
+          className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-black/20"
           onMouseDown={handleContainerMouseDown}
           onMouseUp={handleContainerMouseUp}
           onMouseLeave={handleContainerMouseLeave}
-          style={{ cursor: isPanning ? 'grabbing' : tool === 'brush' ? 'crosshair' : 'grab' }}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ cursor: isPanning ? 'grabbing' : tool === 'brush' ? 'crosshair' : 'default' }}
         >
           <div
             className="relative transition-transform duration-100 ease-out"
@@ -613,9 +695,8 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
               className="absolute top-0 left-0 cursor-crosshair"
               style={{
                 maxWidth: '100%',
@@ -687,15 +768,18 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
           </div>
 
           <div className="flex items-center gap-3">
+            <button onClick={handleUndo} className="min-h-[36px] px-3 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70 transition-all active:scale-95 text-[12px] font-medium" title={language === 'zh-CN' ? '回退 (Ctrl+Z)' : 'Undo (Ctrl+Z)'}>
+              ↩ {language === 'zh-CN' ? '回退' : 'Undo'}
+            </button>
             <button onClick={handleClear} className="min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70 transition-all active:scale-95 text-[12px] font-medium">
               {language === 'zh-CN' ? '清除' : 'Clear'}
             </button>
-            <input
-              type="text"
+            <textarea
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
-              placeholder={language === 'zh-CN' ? '描述您想要修改的内容（可选）' : 'Describe what you want to modify (optional)'}
-              className="flex-1 min-h-[36px] px-4 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/80 placeholder-white/25 text-[12px] focus:outline-none focus:border-blue-500/50"
+              placeholder={language === 'zh-CN' ? '描述您想要修改的内容（可选）\n支持多行输入...' : 'Describe what you want to modify (optional)\nMulti-line supported...'}
+              rows={2}
+              className="flex-1 min-h-[36px] max-h-[80px] px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/80 placeholder-white/25 text-[12px] focus:outline-none focus:border-blue-500/50 resize-y"
             />
             <button onClick={handleSubmit} disabled={!role}
               className={`min-h-[36px] px-6 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${role ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600' : 'bg-white/[0.04] border border-white/[0.06] text-white/30 cursor-not-allowed'}`}>

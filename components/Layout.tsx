@@ -21,6 +21,7 @@ interface LayoutProps {
   userTier?: UserTier;
   onToggleDeveloper: (pass?: string) => boolean;
   onToggleSystemVisible: () => void;
+  isSystemVisible?: boolean;
   onOpenSettings: () => void;
   currentModelName: string;
   modelStatus: 'connected' | 'assigning' | 'error';
@@ -184,7 +185,7 @@ const TreeNode: React.FC<{
 const Layout: React.FC<LayoutProps> = ({
   children, activeTab, onTabChange, currentDomain, onDomainChange, onDomainDoubleClick,
   isDeveloper, isDeveloperMode = false, userTier = 'free',
-  onToggleDeveloper, onToggleSystemVisible, onOpenSettings,
+  onToggleDeveloper, onToggleSystemVisible, isSystemVisible = false, onOpenSettings,
   currentModelName, modelStatus, dailyUsage = 0, balance = 0,
   activeSessionId = '', onSessionChange,
   preferences, onPreferencesChange,
@@ -525,30 +526,29 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5">
-              {/* 状态指示 + 模型名 */}
-              <div className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-                <span className="text-[9px] font-mono truncate" style={{ color: 'var(--text-tertiary)' }} title={currentModelName}>{currentModelName}</span>
+            <div className="flex items-center gap-2">
+              {/* 状态指示灯（仅图标，无文字） */}
+              <div className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
               </div>
-              {/* 积分 */}
-              <div className="flex flex-col items-end shrink-0 text-[9px] font-mono leading-tight">
-                <span className="flex items-center gap-1">
-                  <span className="text-[7px] opacity-40">{t.sidebar.balance}</span>
-                  <span className={`font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>{balance.toLocaleString()}</span>
-                </span>
-                <span className="flex items-center gap-0.5">
-                  <span className="text-[7px] opacity-40">{t.sidebar.used}</span>
-                  <span className="font-bold text-amber-400/70 tabular-nums">{dailyUsage.toLocaleString()}</span>
+              
+              {/* 积分显示区（带标签文字，无钻石图标） */}
+              <div className="flex-1 flex items-center justify-end gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                <span className="text-[9px] opacity-50 whitespace-nowrap" style={{ color: 'var(--text-tertiary)' }}>{t.sidebar.balance}:</span>
+                <span className={`text-[11px] font-black tabular-nums ${balance < 10 ? 'text-rose-400' : 'text-theme-light'}`}>
+                  {balance.toLocaleString()}
                 </span>
               </div>
-              {/* 主题 + 设置 */}
-              <button onClick={toggleTheme} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title={preferences?.lightMode ? '切换深色模式' : '切换亮色模式'}>
-                {preferences?.lightMode ? <Moon className="w-4 h-4" strokeWidth={1.5} /> : <Sun className="w-4 h-4" strokeWidth={1.5} />}
-              </button>
-              <button onClick={onOpenSettings} className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-white/8 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title="设置">
-                <Settings className="w-4 h-4" strokeWidth={1.5} />
-              </button>
+              
+              {/* 右侧按钮组（国际化 title） */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title={preferences?.lightMode ? t.buttons.toggleDark : t.buttons.toggleLight}>
+                  {preferences?.lightMode ? <Moon className="w-4 h-4" strokeWidth={1.5} /> : <Sun className="w-4 h-4" strokeWidth={1.5} />}
+                </button>
+                <button onClick={onOpenSettings} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-all duration-150 btn-scale" style={{ color: 'var(--text-tertiary)' }} title={t.main.settings}>
+                  <Settings className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+              </div>
             </div>
           )}
         </div>

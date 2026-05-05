@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const usageLimiter = require('../middleware/usageLimiter');
+const ph8TokenService = require('../services/ph8TokenService');
 const db = require('../db');
 
 /**
@@ -137,6 +138,12 @@ router.post('/record', async (req, res) => {
   
   try {
     await usageLimiter.recordTokenUsage(userId, tokens, model, requestType, requestId);
+    
+    const cost = ((tokens.prompt || 0) * 0.3 + (tokens.completion || 0) * 0.6) / 1000000;
+    if (cost > 0 && userId !== 'guest' && userId !== '0') {
+      try { await ph8TokenService.deductBalance(userId, cost); } catch(e) { console.error('[Record] deductBalance failed:', e.message); }
+    }
+    
     res.json({ success: true });
   } catch (err) {
     console.error('[Record Usage Error]', err);

@@ -117,6 +117,8 @@ app.use(validateRequest);         // 清理和验证输入
 app.use(monitoringMiddleware);    // 添加监控
 
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/admin/favicon.ico', (req, res) => res.status(204).end());
 
 app.use('/api/invite', inviteRoutes);
 app.use('/api/watermark', watermarkRoutes);
@@ -173,6 +175,7 @@ app.put('/api/user/nickname', userController.updateNickname);
 // ==================== 内容注册 API ====================
 
 app.post('/api/content/register', contentController.registerContent);
+app.get('/api/content/register', contentController.registerContent);
 
 app.get('/api/content/verify/:contentId', contentController.verifyContent);
 

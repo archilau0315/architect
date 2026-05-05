@@ -176,7 +176,8 @@
                             <thead>
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户昵称</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">邮箱</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">功能</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">模型</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">消耗（积分 / 金额）</th>
@@ -324,12 +325,20 @@
                         ? `<div class="font-semibold text-orange-600">${pointsCost} <span class="text-xs text-gray-400 font-normal">积分</span></div><div class="text-xs text-gray-500">¥${actualCost.toFixed(4)}</div>`
                         : '<span class="text-gray-400">-</span>';
                     
-                    // 用户显示：使用后端返回的 display_name（已处理user_id=0的情况）
-                    let userDisplay = log.display_name || log.user_nickname || log.user_email;
-                    if (!userDisplay) {
-                      userDisplay = log.user_id === 0 ? '<span class="text-gray-400 italic">未识别</span>' : safe(log.user_id);
+                    // 用户昵称显示
+                    let nicknameDisplay = log.user_nickname || log.display_name;
+                    if (!nicknameDisplay) {
+                      nicknameDisplay = log.user_id === 0 ? '<span class="text-gray-400 italic">未识别</span>' : safe(log.user_id);
                     } else if (log.user_id === 0) {
-                      userDisplay = '<span class="text-gray-400 italic">' + safe(userDisplay) + '</span>';
+                      nicknameDisplay = '<span class="text-gray-400 italic">' + safe(nicknameDisplay) + '</span>';
+                    }
+                    
+                    // 用户邮箱显示
+                    let emailDisplay = log.user_email || log.email || '';
+                    if (!emailDisplay || emailDisplay === 'undefined' || emailDisplay === 'null') {
+                      emailDisplay = '-';
+                    } else if (log.user_id === 0) {
+                      emailDisplay = '<span class="text-gray-400 italic">' + emailDisplay + '</span>';
                     }
                     
                     const _f = (log.feature && log.feature !== 'undefined' && log.feature !== 'null') ? log.feature : '-';
@@ -340,7 +349,8 @@
                     
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${log.id}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${userDisplay}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${nicknameDisplay}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${emailDisplay}</td>
                         <td class="px-6 py-4 whitespace-nowrap"><span class="badge badge-info px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">${_featLabel}</span></td>
                         <td class="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-600">${_safe(_m)}</td>
                         <td class="px-6 py-4 whitespace-nowrap">${costDisplay}</td>

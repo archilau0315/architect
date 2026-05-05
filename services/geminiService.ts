@@ -11,8 +11,15 @@ export const getCurrentUserId = (): string => {
     const sessionData = localStorage.getItem('architect-invite-session');
     if (sessionData) {
       const parsed = JSON.parse(sessionData);
-      return parsed.user_id || parsed.userId || parsed.email || 'guest';
+      const userId = parsed.user_id || parsed.userId || parsed.email || 'guest';
+      if (userId === 'guest') {
+        console.warn('[getCurrentUserId] ⚠️ 返回guest! session原始数据:', JSON.stringify(parsed).substring(0, 200));
+      } else {
+        console.log('[getCurrentUserId] ✅ 用户ID:', userId, '(类型:', typeof userId, ')');
+      }
+      return userId;
     }
+    console.warn('[getCurrentUserId] ⚠️ localStorage中未找到 architect-invite-session');
   } catch (e) {
     console.error('[getCurrentUserId] 解析用户会话失败:', e);
   }
@@ -830,11 +837,11 @@ export const GeminiService = {
     if (node && node.provider !== "Google Cloud") {
       try {
         const proxiedUrl = getProxiedUrl(node.url);
-        const response = await fetch(`${proxiedUrl}/chat/completions`, {
+        const response = await fetchWithRetry(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
-            // Authorization 头由后端代理自动添加
+            // Authorization 头由后端代理自动添加，x-user-id 由 fetchWithRetry 自动注入
           },
           body: JSON.stringify({
             model: modelId,
@@ -1835,7 +1842,7 @@ ${colorMappingDescription}
         const proxiedUrl = getProxiedUrl(node.url, true);
         // 直接使用 base64 数据传递图片
         const imageUrl = `data:image/jpeg;base64,${base64Data}`;
-        const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
+        const fetchResponse = await fetchWithRetry(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1850,7 +1857,7 @@ ${colorMappingDescription}
             max_tokens: 2048
           }),
           signal
-        });
+        }, 3);
 
         if (!fetchResponse.ok) {
           const errorData = await fetchResponse.json().catch(() => ({}));
@@ -1899,7 +1906,7 @@ ${colorMappingDescription}
         const proxiedUrl = getProxiedUrl(node.url, true);
         const imageUrl = `data:image/jpeg;base64,${base64ForGateway}`;
         console.log(`[反推] 网关请求 base64 长度: ${base64ForGateway.length} (${(base64ForGateway.length/1024).toFixed(1)}KB)`);
-        const fetchResponse = await fetch(`${proxiedUrl}/chat/completions`, {
+        const fetchResponse = await fetchWithRetry(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -2068,11 +2075,11 @@ ${colorMappingDescription}
         console.log(`[Chat Gateway] 图片数量: ${files.length}`);
         console.log(`[Chat Gateway] 系统指令: ${systemInstruction.substring(0, 100)}...`);
 
-        const response = await fetch(`${proxiedUrl}/chat/completions`, {
+        const response = await fetchWithRetry(`${proxiedUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
-            // Authorization 头由后端代理自动添加
+            // Authorization 头由后端代理自动添加，x-user-id 由 fetchWithRetry 自动注入
           },
           body: JSON.stringify({
             model: modelId,
@@ -2080,7 +2087,7 @@ ${colorMappingDescription}
             max_tokens: 1024
           }),
           signal
-        });
+        }, 3);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -2348,8 +2355,8 @@ ${colorMappingDescription}
           hasImage: !!requestBody.image
         }));
         
-        // 创建视频任务
-        const createResponse = await fetch(`${proxiedUrl}/videos`, {
+        // 创建视频任务（使用fetchWithRetry自动注入x-user-id头）
+        const createResponse = await fetchWithRetry(`${proxiedUrl}/videos`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -2357,7 +2364,7 @@ ${colorMappingDescription}
           },
           body: JSON.stringify(requestBody),
           signal
-        });
+        }, 1); // 1次重试，避免超时等待太久
 
         const responseText = await createResponse.text().catch(() => '');
         let task: any = null;
@@ -2408,24 +2415,26 @@ ${colorMappingDescription}
           retryCount++;
           
           try {
-            // 尝试多种状态查询端点格式
+            // 尝试多种状态查询端点格式（使用fetchWithRetry自动注入x-user-id头）
             let statusData: any = null;
             
             // ph8 视频 API 使用 openai/v1 路径进行状态查询
             const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
             
             // 格式1: GET /videos/{id} (使用 openai 路径)
-            let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {
+            let statusResponse = await fetchWithRetry(`${openaiProxiedUrl}/videos/${videoId}`, {
+              method: 'GET',
               // headers: Authorization 头由后端代理自动添加
-            });
+            }, 1);
             
             if (statusResponse.ok) {
               statusData = await statusResponse.json();
             } else {
               // 格式2: GET /videos/{id} (使用 v1 路径)
-              statusResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {
+              statusResponse = await fetchWithRetry(`${proxiedUrl}/videos/${videoId}`, {
+                method: 'GET',
                 // headers: Authorization 头由后端代理自动添加
-              });
+              }, 1);
               
               if (statusResponse.ok) {
                 statusData = await statusResponse.json();
@@ -2504,9 +2513,9 @@ ${colorMappingDescription}
                     for (const contentUrl of contentUrls) {
                       console.log(`[Video Gateway] Trying content URL: ${contentUrl}`);
                       
-                      const downloadResponse = await fetch(contentUrl, {
-                        // headers: Authorization 头由后端代理自动添加
-                      });
+                      const downloadResponse = await fetchWithRetry(contentUrl, {
+                        method: 'GET',
+                      }, 0);
                       
                       if (downloadResponse.ok) {
                         const arrayBuffer = await downloadResponse.arrayBuffer();
@@ -2549,9 +2558,9 @@ ${colorMappingDescription}
         }
         
         // 超时后尝试获取最终结果
-        const finalResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {
-          // headers: Authorization 头由后端代理自动添加
-        }).catch(() => null);
+        const finalResponse = await fetchWithRetry(`${proxiedUrl}/videos/${videoId}`, {
+          method: 'GET',
+        }, 0).catch(() => null);
         
         if (finalResponse && finalResponse.ok) {
           const finalData = await finalResponse.json();
@@ -2615,12 +2624,12 @@ ${colorMappingDescription}
         }
         
         // 创建视频任务
-        const createResponse = await fetch(`${proxiedUrl}/videos`, {
+        const createResponse = await fetchWithRetry(`${proxiedUrl}/videos`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
           signal
-        });
+        }, 1);
 
         const responseText = await createResponse.text().catch(() => '');
         let task: any = null;
@@ -2661,10 +2670,14 @@ ${colorMappingDescription}
           
           try {
             const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
-            let statusResponse = await fetch(`${openaiProxiedUrl}/videos/${videoId}`, {});
+            let statusResponse = await fetchWithRetry(`${openaiProxiedUrl}/videos/${videoId}`, {
+              method: 'GET',
+            }, 1);
             
             if (!statusResponse.ok) {
-              statusResponse = await fetch(`${proxiedUrl}/videos/${videoId}`, {});
+              statusResponse = await fetchWithRetry(`${proxiedUrl}/videos/${videoId}`, {
+                method: 'GET',
+              }, 1);
             }
             
             if (statusResponse.ok) {
