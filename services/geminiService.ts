@@ -175,7 +175,7 @@ const overlayMaskOnBaseImage = async (baseImageDataUrl: string, maskDataUrl: str
 };
 
 // API Key 管理 - 已由后端接管，前端不直接持有任何 Key
-const getNextApiKey = (): string => '';
+export const getNextApiKey = (): string => '';
 const markApiKeyAsInactive = (_key: string): void => {};
 
 // 底图缓存管理
@@ -246,6 +246,7 @@ export interface ImageGenerationConfig {
   imageCount?: number;
   temperature?: number;
   top_p?: number;
+  seed?: number | null;
 }
 
 export interface EnhancedPrompt {
@@ -438,9 +439,7 @@ const updateGatewayMode = (enabled: boolean) => {
 const getAI = (modelConfig?: CustomModel, targetModelId?: string) => {
   console.log(`%c[getAI] useThirdPartyGateway = ${useThirdPartyGateway}`, 'color: #f59e0b; font-weight: bold;');
   
-  let apiKey = (modelConfig && !modelConfig.isOfficial && modelConfig.apiKey) 
-    ? modelConfig.apiKey 
-    : getNextApiKey(); // 使用循环API Key
+  let apiKey = getNextApiKey(); // API Key 由后端管理，前端不直接接触
   
   let baseUrl = (modelConfig && !modelConfig.isOfficial && modelConfig.baseUrl) 
     ? modelConfig.baseUrl 
@@ -1052,13 +1051,13 @@ The attached image IS the source material for this upscale operation.`;
       }
       
       // 检测遮罩中存在的颜色
-      let detectedColors: { name: string; count: number }[] = [];
+      let detectedColors: { name: string; rgb: { r: number; g: number; b: number }; hex: string }[] = [];
       try {
         detectedColors = await detectMaskColors(maskB);
         console.log(`[语义遮盖] 检测到 ${detectedColors.length} 种颜色: ${detectedColors.map(c => c.name).join(', ')}`);
       } catch (e) {
         console.warn("[语义遮盖] 颜色检测失败，使用默认描述", e);
-        detectedColors = [{ name: '彩色', count: 0 }];
+        detectedColors = [];
       }
       
       // 语义遮盖方式：把遮罩叠加到底图上，生成一张合成图
@@ -1806,7 +1805,7 @@ ${colorMappingDescription}
     }
 
     const images: string[] = [];
-    for (const candidate of response.candidates || []) {
+    for (const candidate of response?.candidates || []) {
       for (const part of candidate?.content?.parts || []) {
         if (part.inlineData) {
           images.push(`data:image/png;base64,${part.inlineData.data}`);
@@ -2034,7 +2033,7 @@ ${colorMappingDescription}
         // 构建历史消息（包含图片）
         const historyMessages = history.map(h => {
           const role = h.role === 'model' ? 'assistant' : h.role;
-          const hasImages = h.parts.some(p => p.inlineData && p.inlineData.mimeType);
+          const hasImages = h.parts.some((p: any) => p.inlineData && p.inlineData.mimeType);
           if (hasImages) {
             const content: any[] = [];
             for (const part of h.parts) {
@@ -2323,7 +2322,7 @@ ${colorMappingDescription}
         console.log(`[Video Gateway] Model: ${remoteModelId}, Endpoint: ${proxiedUrl}/videos`);
         
         // 构建请求体（使用 UI 传入的参数，带默认值兜底）
-        const opt = videoOptions || {};
+        const opt = videoOptions || { resolution: '', duration: 5, camerafixed: false, seed: null };
         const requestBody: any = {
           model: remoteModelId,
           prompt: prompt,
@@ -2604,7 +2603,7 @@ ${colorMappingDescription}
         console.log(`[Video Gateway] Model: ${nodeModelId}, Endpoint: ${proxiedUrl}/videos`);
         
         // 构建请求体
-        const opt = videoOptions || {};
+        const opt = videoOptions || { resolution: '', duration: 5, camerafixed: false, seed: null };
         const requestBody: any = {
           model: nodeModelId,
           prompt: prompt,

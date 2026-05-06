@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { GeminiService, MASTER_STYLES } from '../services/geminiService.ts';
+import { GeminiService, MASTER_STYLES, ImageGenerationConfig } from '../services/geminiService.ts';
 import { ConversationMode, CustomModel, CreativeDomain, UserTier } from '../types.ts';
 import UnifiedInput, { UnifiedPayload } from './UnifiedInput.tsx';
 import InpaintEditor from './InpaintEditor.tsx';
@@ -215,7 +215,7 @@ const ImageBubble: React.FC<{
           <button
             onClick={() => {
               // 左键：锁定/解锁seed（切换状态）
-              setSeedLocked(prev => {
+              setSeedLocked((prev: boolean) => {
                 const next = !prev;
                 localStorage.setItem('architect-seed-lock-v120', JSON.stringify(next));
                 return next;
@@ -584,7 +584,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               watermarkedVideoUrl={msg.watermarkedVideoUrl}
               isDeveloper={isDeveloper}
               userTier={userTier}
-              onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload) : undefined}
+              onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload!) : undefined}
               t={{
                 buttons: {
                   stdDownload: t.buttons.stdDownload,
@@ -657,7 +657,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const chatHistoryRef = useRef<any[]>([]);
-  const inputRef = useRef<{ setText: (text: string) => void }>(null);
+  const inputRef = useRef<{ setText: (text: string) => void; appendText: (text: string) => void }>(null);
 
   const domainStyles = MASTER_STYLES.filter(s => s.domain === domain);
   const domainPresets = t.presets[domain] || [];
@@ -749,7 +749,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       // ── CHAT ──────────────────────────────────────────────────────────────
         if (m === 'chat') {
           const files = payload.images.map(f => {
-            let mimeType = f.type || f.mimeType || '';
+            let mimeType = f.type || '';
             if (!mimeType || mimeType === 'image/' || mimeType.length <= 6) {
               const dataUrlMatch = f.data.match(/^data:([^;]+);/);
               if (dataUrlMatch) {
@@ -865,7 +865,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         const maskA = donorImages[0]?.maskDataUrl;
         const maskB = recipientImages[0]?.maskDataUrl;
         
-        const config = payload.imageConfig || { aspectRatio: '1:1', imageSize: '1K', modelTier: 'FAST', imageCount: 1 };
+        const config = payload.imageConfig || { aspectRatio: '1:1', imageSize: '1K', modelTier: 'FAST', imageCount: 1 } as ImageGenerationConfig;
         const forcedSeed = (payload as any).lockedSeed || config.seed || undefined;
         
         console.log(`[Donor/Recipient] 供体: ${donorImages.length}张, 受体: ${recipientImages.length}张, 普通: ${normalImages.length}张`);

@@ -34,6 +34,7 @@ interface SettingsPanelProps {
     total_points?: number;      // 总积分 = 赠送 + 购买
     total_balance?: number;     // 余额 = 总积分 - 累计消耗
     daily_balance?: number;     // 每日余额 = 当日剩余
+    daily_remaining?: number;   // 每日剩余（备用）
     daily_quota?: number;       // 每日限额（按等级）
     daily_used?: number;        // 每日消耗
   };
@@ -42,6 +43,8 @@ interface SettingsPanelProps {
   onToggleGateway: (enabled: boolean) => void;
   showTokenMonitor: boolean;
   onToggleTokenMonitor: (enabled: boolean) => void;
+  usePromptEnhance?: boolean;
+  onTogglePromptEnhance?: (enabled: boolean) => void;
   onLogout?: () => void;
   userInfo?: {
     email?: string;
@@ -504,11 +507,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     // 以下原有代码保留（灰度测试结束后可删除上方 return 语句恢复）
     if (isCheckout) return renderCheckout();
 
-    const tierInfo = {
+    const tierInfo: Record<UserTier, { name: string; color: string; icon: string }> = {
       free: { name: '免费用户', color: 'text-slate-500', icon: '🌱' },
+      beta: { name: 'Beta 用户', color: 'text-purple-500', icon: '🎯' },
       basic: { name: '基础级', color: 'text-sky-600', icon: '⭐' },
       pro: { name: 'PRO 级', color: 'text-theme', icon: '💎' },
-      plus: { name: 'PLUS 级', color: 'text-emerald-600', icon: '👑' }
+      plus: { name: 'PLUS 级', color: 'text-emerald-600', icon: '👑' },
+      dev: { name: '开发人员', color: 'text-orange-500', icon: '🛠️' }
     };
 
     const currentTier = tierInfo[userTier];

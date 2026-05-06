@@ -421,12 +421,7 @@ const Layout: React.FC<LayoutProps> = ({
               style={{ 
                 border: '1px solid var(--border-color)',
                 background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-tertiary) 50%, transparent), color-mix(in srgb, var(--bg-tertiary) 30%, transparent))',
-                color: 'var(--text-secondary)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-tertiary) 80%, transparent), color-mix(in srgb, var(--bg-tertiary) 60%, transparent))',
-                  borderColor: 'var(--border-hover)',
-                  color: 'var(--text-primary)'
-                }
+                color: 'var(--text-secondary)'
               }}>
               <Plus className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-90" strokeWidth={2} />
               {t.main.newConversation}

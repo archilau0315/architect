@@ -1,4 +1,5 @@
 import gatewayConfig from "../config/gateway_config.json";
+import { getNextApiKey } from "./geminiService";
 
 /**
  * 获取代理 URL
@@ -179,11 +180,11 @@ export const getAI = (modelConfig?: any, targetModelId?: string) => {
           } else {
             // 兼容旧配置：如果是 ph8.co 节点，从 api_keys 中获取
             if (providerName === "ph8.co") {
-              const ph8Key = (gatewayConfig.api_keys as any)?.ph8;
-              if (ph8Key) {
-                apiKey = ph8Key;
+                const ph8Key = ((gatewayConfig as any).api_keys)?.ph8;
+                if (ph8Key) {
+                  apiKey = ph8Key;
+                }
               }
-            }
           }
         }
       }

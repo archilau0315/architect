@@ -610,6 +610,7 @@ export const translations: Record<Language, Translations> = {
       title: 'Style Presets',
       clearAll: 'Clear All',
       masterStyles: 'Master Styles',
+      doubleClickToInsert: 'Double-click to insert text',
       architecture: [
         { label: 'Time & Atmosphere', tags: ['Dawn', 'Noon', 'Golden Hour', 'Blue Hour', 'Dusk', 'Deep Night'] },
         { label: 'Arch Style', tags: ['Minimalism', 'Cyberpunk', 'Wabi-sabi', 'Bauhaus', 'Parametric', 'Brutalism'] },
@@ -814,6 +815,7 @@ export const translations: Record<Language, Translations> = {
       title: 'スタイルプリセット',
       clearAll: 'すべてクリア',
       masterStyles: 'マスタースタイル',
+      doubleClickToInsert: 'ダブルクリックでテキストを挿入',
       architecture: [
         { label: '時間帯・雰囲気', tags: ['夜明け', '正午', 'ゴールデンアワー', 'ブルーアワー', '夕暮れ', '深夜'] },
         { label: '建築スタイル', tags: ['ミニマリズム', 'サイバーパンク', '侘び寂び', 'バウハウス', 'パラメトリック', 'ブルータリズム'] },
@@ -1018,6 +1020,7 @@ export const translations: Record<Language, Translations> = {
       title: '스타일 프리셋',
       clearAll: '모두 지우기',
       masterStyles: '마스터 스타일',
+      doubleClickToInsert: '더블 클릭으로 텍스트 삽입',
       architecture: [
         { label: '시간대·분위기', tags: ['새벽', '정오', '골든아워', '블루아워', '황혼', '심야'] },
         { label: '건축 스타일', tags: ['미니멀리즘', '사이버펑크', '와비사비', '바우하우스', '파라메트릭', '브루탈리즘'] },
@@ -1222,6 +1225,7 @@ export const translations: Record<Language, Translations> = {
       title: 'Estilos Predefinidos',
       clearAll: 'Borrar Todo',
       masterStyles: 'Estilos Maestros',
+      doubleClickToInsert: 'Haz doble clic para insertar texto',
       architecture: [
         { label: 'Tiempo y Atmósfera', tags: ['Amanecer', 'Mediodía', 'Hora Dorada', 'Hora Azul', 'Crepúsculo', 'Noche Profunda'] },
         { label: 'Estilo Arquitectónico', tags: ['Minimalismo', 'Cyberpunk', 'Wabi-sabi', 'Bauhaus', 'Paramétrico', 'Brutalismo'] },
@@ -1426,6 +1430,7 @@ export const translations: Record<Language, Translations> = {
       title: 'Styles Prédéfinis',
       clearAll: 'Tout Effacer',
       masterStyles: 'Styles Maîtres',
+      doubleClickToInsert: 'Double-cliquez pour insérer du texte',
       architecture: [
         { label: 'Temps et Atmosphère', tags: ['Aube', 'Midi', 'Heure Dorée', 'Heure Bleue', 'Crépuscule', 'Nuit Profonde'] },
         { label: 'Style Architectural', tags: ['Minimalisme', 'Cyberpunk', 'Wabi-sabi', 'Bauhaus', 'Paramétrique', 'Brutalisme'] },
@@ -1630,6 +1635,7 @@ export const translations: Record<Language, Translations> = {
       title: 'Stil-Voreinstellungen',
       clearAll: 'Alle Löschen',
       masterStyles: 'Meisterstile',
+      doubleClickToInsert: 'Doppelklick zum Einfügen von Text',
       architecture: [
         { label: 'Zeit und Atmosphäre', tags: ['Morgendämmerung', 'Mittag', 'Goldene Stunde', 'Blaue Stunde', 'Dämmerung', 'Tiefe Nacht'] },
         { label: 'Architekturstil', tags: ['Minimalismus', 'Cyberpunk', 'Wabi-sabi', 'Bauhaus', 'Parametrisch', 'Brutalismus'] },
@@ -1834,6 +1840,7 @@ export const translations: Record<Language, Translations> = {
       title: 'Стили Пресетов',
       clearAll: 'Очистить Всё',
       masterStyles: 'Стили Мастеров',
+      doubleClickToInsert: 'Двойной клик для вставки текста',
       architecture: [
         { label: 'Время и Атмосфера', tags: ['Рассвет', 'Полдень', 'Золотой Час', 'Синий Час', 'Сумерки', 'Глубокая Ночь'] },
         { label: 'Архитектурный Стиль', tags: ['Минимализм', 'Киберпанк', 'Ваби-саби', 'Баухаус', 'Параметрический', 'Брутализм'] },

@@ -277,11 +277,14 @@ export const Ph8UsageService = {
     data?: {
       request_id: string;
       model: string;
+      model_id?: string;
       prompt_tokens: number;
       completion_tokens: number;
       total_tokens: number;
       request_type: string;
       created_at: string;
+      actual_cost?: number;
+      points_cost?: number;
     };
     message?: string;
   }> {

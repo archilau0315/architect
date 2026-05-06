@@ -138,7 +138,7 @@ const SystemSpec: React.FC<SystemSpecProps> = ({ versionHistory, currentPresets,
               <p className="text-slate-500 text-sm mt-1">添加和管理自定义 AI 模型实例</p>
             </div>
             <button 
-              onClick={() => onModelsChange([...models, { id: 'custom-'+Date.now(), name: '', modelId: '', isOfficial: false, baseUrl: '', apiKey: '' }])} 
+              onClick={() => onModelsChange([...models, { id: 'custom-'+Date.now(), name: '', modelId: '', isOfficial: false, baseUrl: '' }])} 
               className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-[11px] font-black uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-100 transition-all"
             >
               + 新增模型

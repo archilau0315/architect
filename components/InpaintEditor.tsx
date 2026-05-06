@@ -123,7 +123,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
     setIsFullscreen(prev => !prev);
   }, []);
 
-  const getPos = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent) => {
+  const getPos = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent | TouchEvent) => {
     const canvas = maskCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
@@ -729,15 +729,15 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
             {(['donor', 'recipient'] as const).map(r => (
               <button key={r} onClick={() => setRole(prev => prev === r ? null : r)}
                 className={`min-h-[36px] px-4 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${role === r ? (r === 'donor' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30') : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:bg-white/8 hover:text-white/70'}`}>
-                {language === 'zh-CN'
-                  ? (r === 'donor' ? '供体 · 提取' : '受体 · 融合')
-                  : (r === 'donor' ? 'Donor' : 'Recipient')}
+                {r === 'donor' ? (language === 'zh-CN' ? '供体 · 提取' : 'Donor') : (language === 'zh-CN' ? '受体 · 融合' : 'Recipient')}
               </button>
             ))}
             <span className="text-[11px] text-white/25 ml-1">
-              {language === 'zh-CN'
-                ? (role === 'donor' ? '提取此图遮罩区域内容' : role === 'recipient' ? '将供体融合到此图遮罩区域' : '点亮角色即自动保存遮罩')
-                : (role === 'donor' ? 'Extract from this mask' : role === 'recipient' ? 'Blend donor into this mask' : 'Select role to save mask')}
+              {role === 'donor' 
+                ? (language === 'zh-CN' ? '提取此图遮罩区域内容' : 'Extract from this mask')
+                : role === 'recipient' 
+                  ? (language === 'zh-CN' ? '将供体融合到此图遮罩区域' : 'Blend donor into this mask')
+                  : (language === 'zh-CN' ? '点亮角色即自动保存遮罩' : 'Select role to save mask')}
             </span>
           </div>
 

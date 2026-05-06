@@ -520,9 +520,11 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     const effectiveConfig = isInpaintMode ? { ...config, aspectRatio: finalRatio, imageCount: 1 } : { ...config, aspectRatio: finalRatio };
     
     try {
-      const urls = await GeminiService.generateImage(currentPrompt, effectiveConfig, isCompositeMode, baseRefs, slotARefs, slotBRefs, styleRefs, maskRefB || undefined, inpaintPrompt, maskRefA || undefined, instructions, modelConfig, controller.signal, domain, baseRefsOriginalSizes);
-      const newImages = Array.isArray(urls) ? urls : [urls];
-      setGeneratedImages(newImages);
+      const result = await GeminiService.generateImage(currentPrompt, effectiveConfig, isCompositeMode, baseRefs, slotARefs, slotBRefs, styleRefs, maskRefB || undefined, inpaintPrompt, maskRefA || undefined, instructions, modelConfig, controller.signal, domain, baseRefsOriginalSizes);
+      const newImages = Array.isArray(result) ? result.map(r => typeof r === 'string' ? r : r.images?.[0] || '') : 
+                        typeof result === 'string' ? [result] : 
+                        result?.images || [];
+      setGeneratedImages(newImages.filter(Boolean));
       setSelectedImageIndices([]);
       setHoveredImageIndex(null);
       const newWatermarked: string[] = [];
@@ -1024,11 +1026,11 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
           {/* 左右翻页按钮 */}
           {generatedImages.length > 1 && (
             <>
-              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(p => p > 0 ? p - 1 : generatedImages.length - 1); }}
+              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex((p: number | null) => (p ?? 0) > 0 ? (p ?? 0) - 1 : generatedImages.length - 1); }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm z-[10001]">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
               </button>
-              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(p => p < generatedImages.length - 1 ? p + 1 : 0); }}
+              <button onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex((p: number | null) => (p ?? 0) < generatedImages.length - 1 ? (p ?? 0) + 1 : 0); }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-all btn-scale shadow-lg backdrop-blur-sm z-[10001]">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M9 5l7 7-7 7" /></svg>
               </button>

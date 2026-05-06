@@ -192,12 +192,12 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
       } else {
         setError(data.error || '登录失败');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('登录失败:', err);
       console.error('错误详情:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name
+        message: (err as Error)?.message,
+        stack: (err as Error)?.stack,
+        name: (err as Error)?.name
       });
       setError('网络错误，请检查后端服务是否运行');
     } finally {
@@ -415,8 +415,8 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   id="invite-code"
                   maxLength={12}
                   isFocused={focusedField === 'invite-code'}
-                  hasError={inviteCode && codeStatus === 'invalid'}
-                  hasSuccess={inviteCode && codeStatus === 'valid'}
+                  hasError={!!inviteCode && codeStatus === 'invalid'}
+                  hasSuccess={!!inviteCode && codeStatus === 'valid'}
                   errorMessage="邀请码格式不正确（6-12位字母或数字）"
                   onFocus={() => handleFocus('invite-code')}
                   onBlur={() => {
@@ -582,8 +582,8 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   <input 
                     type="email" 
                     value={registerData.email}
-                    onChange={(value) => {
-                      setRegisterData({...registerData, email: value});
+                    onChange={(e) => {
+                      setRegisterData({...registerData, email: e.target.value});
                       setError('');
                     }}
                     placeholder="name@kbit-ai.com" 
@@ -597,9 +597,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   <input 
                     type="password"
                     value={registerData.password}
-                    onChange={(value) => {
-                      setRegisterData({...registerData, password: value});
-                      validatePassword(value);
+                    onChange={(e) => {
+                      setRegisterData({...registerData, password: e.target.value});
+                      validatePassword(e.target.value);
                       setError('');
                     }}
                     placeholder="设置登录密码" 
@@ -640,7 +640,7 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
                   <input 
                     type="text" 
                     value={registerData.nickname}
-                    onChange={(value) => setRegisterData({...registerData, nickname: value})}
+                    onChange={(e) => setRegisterData({...registerData, nickname: e.target.value})}
                     placeholder="为自己取个昵称" 
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" 
                   />

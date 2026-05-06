@@ -20,7 +20,7 @@ export interface ImageItem {
   type: string;
   data: string;
   maskDataUrl?: string;
-  role?: 'donor' | 'recipient';
+  role?: 'donor' | 'recipient' | null;
   detectedRatio?: string;
   fileCategory?: 'image' | 'pdf' | 'ppt' | 'text'; // 文件分类
 }

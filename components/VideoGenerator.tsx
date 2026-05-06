@@ -95,7 +95,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   // 根据用户等级决定预览视频源
   // free 用户：预览已烧录水印的视频，右键保存也是带水印的
   // pro/plus/dev：预览原始高清，CSS 叠加层仅作品牌展示
-  const previewVideoSrc = isDeveloper ? videoUrl : (watermarkedVideoUrl || videoUrl);
+  const previewVideoSrc = (isDeveloper ? videoUrl : (watermarkedVideoUrl || videoUrl)) || '';
   const shouldShowWatermarkOverlay = isDeveloper; // 仅付费用户显示叠加层作为视觉提示
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -133,8 +133,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           VWU.preloadLogo('/public/LOGOkbitwater.png')
         ]);
         console.log('[资源预加载] FFmpeg 和 Logo 预加载完成');
-      } catch (e) {
-        console.warn('[资源预加载] FFmpeg/WASM 加载失败(非致命):', e?.message || e);
+      } catch (e: unknown) {
+        console.warn('[资源预加载] FFmpeg/WASM 加载失败(非致命):', (e as Error)?.message || e);
       }
     };
     const timer = setTimeout(loadResourcesAsync, 2000);
@@ -157,7 +157,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       const match = durStr.match(/(\d+)/);
       if (match) return [parseInt(match[1])];
     }
-    return durStr.split(/\s*\/\s*/).map(s => parseInt(s.replace(/[^0-9]/g, ''))).filter(n => n > 0);
+    return durStr.split(/\s*\/\s*/).map((s: string) => parseInt(s.replace(/[^0-9]/g, ''))).filter((n: number) => n > 0);
   }, [currentEngineDetails]);
 
   const autoCalculatedDuration = useMemo(() => {
@@ -333,15 +333,31 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     return () => { cancelled = true; };
   }, [aspectRatio]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // localStorage 防抖写入
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
-    try {
-      const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {
-      // 捕获 QuotaExceededError 溢出错误，防止崩溃
-      console.warn("LocalStorage Quota Exceeded. State maintained in RAM only.");
+    // 清除之前的定时器
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
-  }, [prompt, assets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef]);
+    
+    // 300ms 防抖写入
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.warn("LocalStorage Quota Exceeded. State maintained in RAM only.");
+      }
+    }, 300);
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [prompt, assets, aspectRatio, selectedEngine, videoUrl, watermarkedVideoUrl, lastVideoRef, videoResolution, videoDuration, cameraFixed, videoSeed]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -500,16 +516,25 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       // 水印处理：完全非致命，失败不影响已显示的视频
       setTimeout(async () => {
         try {
+          // 添加超时控制（30秒）
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('水印处理超时')), 30000)
+          );
+          
           const { VideoWatermarkUtils } = await import('../services/videoWatermarkService');
-          const watermarkResult = await VideoWatermarkUtils.addWatermark(result.url);
+          const watermarkResult = await Promise.race([
+            VideoWatermarkUtils.addWatermark(result.url),
+            timeoutPromise
+          ]);
+          
           if (watermarkResult.objectUrl.startsWith('blob:')) {
             videoBlobService.markAsPersistent(watermarkResult.objectUrl);
           }
           setWatermarkedVideoUrl(watermarkResult.objectUrl);
           console.log('[VideoGenerator] ✅ 水印添加成功');
-        } catch (error) {
+        } catch (error: unknown) {
           // 水印失败 = 仅影响无水印下载，视频本身已正常显示
-          console.warn('[VideoGenerator] ⚠️ 水印添加失败(非致命，视频已正常显示):', error?.message || error);
+          console.warn('[VideoGenerator] ⚠️ 水印添加失败(非致命，视频已正常显示):', (error as Error)?.message || error);
           setWatermarkedVideoUrl(null); // 标记无水印版本
         }
       }, 1000);
@@ -848,7 +873,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
               <div className="space-y-2">
                 <label className="text-[10px] font-medium text-white/30 uppercase tracking-widest">画面比例 / Aspect Ratio</label>
                 <div className="flex flex-wrap gap-2">
-                  {currentEngineDetails.supportedRatios.map((ratio) => (
+                  {currentEngineDetails.supportedRatios.map((ratio: string) => (
                     <button
                       key={ratio}
                       type="button"
@@ -895,7 +920,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                       )}
                     </div>
                     <div className="flex gap-1.5 flex-wrap">
-                      {supportedDurations.map(d => (
+                      {supportedDurations.map((d: number) => (
                         <button key={d} type="button" onClick={() => setVideoDuration(d)}
                           className={`px-2 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-all active:scale-95 ${
                             videoDuration === d

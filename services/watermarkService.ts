@@ -117,7 +117,7 @@ export const WatermarkUtils = {
       const binaryData = atob(base64Data);
 
       const exifBytes = new Uint8Array(
-        Array.from(exifStr).map((c: string) => c.charCodeAt(0))
+        Array.from(exifStr).map((c: unknown) => (c as string).charCodeAt(0))
       );
 
       const pngSignature = new Uint8Array([0x89, 0x50, 0x4E, 0x47]);

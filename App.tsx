@@ -372,16 +372,16 @@ const App: React.FC = () => {
             document.documentElement.style.setProperty('--accent-color', mergedPrefs.accentColor);
 
             const radiusMap = { sharp: '0px', normal: '0.5rem', rounded: '0.75rem', pill: '9999px' };
-            document.documentElement.style.setProperty('--border-radius', radiusMap[mergedPrefs.borderRadius]);
+            document.documentElement.style.setProperty('--border-radius', radiusMap[mergedPrefs.borderRadius as keyof typeof radiusMap]);
 
             const densityMap = { compact: '0.75', normal: '1', comfortable: '1.25' };
-            document.documentElement.style.setProperty('--density-scale', densityMap[mergedPrefs.density]);
+            document.documentElement.style.setProperty('--density-scale', densityMap[mergedPrefs.density as keyof typeof densityMap]);
 
             const speedMap = { none: '0s', fast: '0.15s', normal: '0.3s', slow: '0.5s' };
-            document.documentElement.style.setProperty('--animation-duration', speedMap[mergedPrefs.animationSpeed]);
+            document.documentElement.style.setProperty('--animation-duration', speedMap[mergedPrefs.animationSpeed as keyof typeof speedMap]);
 
             const fontSizeMap = { small: '12px', medium: '14px', large: '16px' };
-            document.documentElement.style.setProperty('--base-font-size', fontSizeMap[mergedPrefs.fontSize]);
+            document.documentElement.style.setProperty('--base-font-size', fontSizeMap[mergedPrefs.fontSize as keyof typeof fontSizeMap]);
             document.documentElement.setAttribute('data-font-size', mergedPrefs.fontSize || 'medium');
 
             // 设置默认语言
