@@ -571,144 +571,118 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
             </>
           ) : (
             <>
-              <div className="text-center mb-8">
-                <h2 className="text-xl font-black text-white mb-2">邀请码有效</h2>
-                <p className="text-slate-400 text-sm">请完成账号注册以开始体验</p>
+              <div className="text-center space-y-2 mb-6">
+                <h3 className="text-xl font-semibold text-white/90">创建您的数字工坊</h3>
+                <p className="text-xs text-white/60 uppercase tracking-widest">Join the Collective</p>
               </div>
 
               <div className="space-y-4">
-                <InputField
-                  label="邮箱地址"
-                  type="email"
-                  value={registerData.email}
-                  onChange={(value) => {
-                    setRegisterData({...registerData, email: value});
-                    setError('');
-                  }}
-                  placeholder="xxx@email.com"
-                  id="register-email"
-                  isFocused={focusedField === 'register-email'}
-                  hasError={!!emailError}
-                  hasSuccess={/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerData.email)}
-                  errorMessage={emailError}
-                  onFocus={() => handleFocus('register-email')}
-                  onBlur={() => {
-                    handleBlur();
-                    validateEmail(registerData.email);
-                  }}
-                />
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={registerData.email}
+                    onChange={(value) => {
+                      setRegisterData({...registerData, email: value});
+                      setError('');
+                    }}
+                    placeholder="name@kbit-ai.com" 
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" 
+                  />
+                  {emailError && <p className="text-red-400 text-[10px] ml-1">{emailError}</p>}
+                </div>
 
-                <InputField
-                  label="登录密码"
-                  type="password"
-                  value={registerData.password}
-                  onChange={(value) => {
-                    setRegisterData({...registerData, password: value});
-                    validatePassword(value);
-                    setError('');
-                  }}
-                  placeholder="设置登录密码"
-                  id="register-password"
-                  showToggle={true}
-                  toggleState={showPassword}
-                  onToggle={() => setShowPassword(p => !p)}
-                  isFocused={focusedField === 'register-password'}
-                  hasError={!!passwordError}
-                  errorMessage={passwordError}
-                  onFocus={() => handleFocus('register-password')}
-                  onBlur={handleBlur}
-                />
-                {registerData.password && (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                        密码强度
-                      </span>
-                      <span className={`text-[10px] font-medium ${
-                        passwordStrength === 1 ? 'text-red-400' :
-                        passwordStrength === 2 ? 'text-amber-400' :
-                        passwordStrength === 3 ? 'text-green-400' : 'text-slate-500'
-                      }`}>
-                        {passwordStrength === 1 ? '弱' : passwordStrength === 2 ? '中等' : passwordStrength === 3 ? '强' : '-'}
-                      </span>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Security Key</label>
+                  <input 
+                    type="password"
+                    value={registerData.password}
+                    onChange={(value) => {
+                      setRegisterData({...registerData, password: value});
+                      validatePassword(value);
+                      setError('');
+                    }}
+                    placeholder="设置登录密码" 
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" 
+                  />
+                  {passwordError && <p className="text-red-400 text-[10px] ml-1">{passwordError}</p>}
+                  {registerData.password && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-white/50 uppercase tracking-widest">Password Strength</span>
+                        <span className={`text-[10px] font-medium ${
+                          passwordStrength === 1 ? 'text-red-400' :
+                          passwordStrength === 2 ? 'text-amber-400' :
+                          passwordStrength === 3 ? 'text-green-400' : 'text-slate-500'
+                        }`}>
+                          {passwordStrength === 1 ? 'Weak 弱' : passwordStrength === 2 ? 'Medium 中等' : passwordStrength === 3 ? 'Strong 强' : '-'}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        {[1, 2, 3].map((level) => (
+                          <div
+                            key={level}
+                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                              level <= passwordStrength
+                                ? passwordStrength === 1 ? 'bg-red-500' :
+                                  passwordStrength === 2 ? 'bg-amber-500' : 'bg-green-500'
+                                : 'bg-white/10'
+                            }`}
+                          />
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      {[1, 2, 3].map((level) => (
-                        <div
-                          key={level}
-                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                            level <= passwordStrength
-                              ? passwordStrength === 1 ? 'bg-red-500' :
-                                passwordStrength === 2 ? 'bg-amber-500' : 'bg-green-500'
-                              : 'bg-white/10'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                <InputField
-                  label="昵称 (选填)"
-                  type="text"
-                  value={registerData.nickname}
-                  onChange={(value) => setRegisterData({...registerData, nickname: value})}
-                  placeholder="为自己取个昵称"
-                  id="register-nickname"
-                  isFocused={focusedField === 'register-nickname'}
-                  onFocus={() => handleFocus('register-nickname')}
-                  onBlur={handleBlur}
-                />
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium text-white/60 uppercase tracking-widest ml-1">Nickname (Optional)</label>
+                  <input 
+                    type="text" 
+                    value={registerData.nickname}
+                    onChange={(value) => setRegisterData({...registerData, nickname: value})}
+                    placeholder="为自己取个昵称" 
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white/90 placeholder-white/40 text-sm outline-none focus:border-white/30 transition-all" 
+                  />
+                </div>
 
                 {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-[fadeIn_0.3s_ease-out]">
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl animate-[fadeIn_0.3s_ease-out]">
                     <p className="text-red-400 text-sm text-center">{error}</p>
                   </div>
                 )}
 
-                <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/20 rounded-2xl">
-                  <svg className="w-7 h-7 flex-shrink-0 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5H3.75A.75.75 0 003 8.25v1.5c0 .414.336.75.75.75h16.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V21M3.75 10.5v9.75c0 .414.336.75.75.75h15c.414 0 .75-.336.75-.75V10.5" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5c0-1.657-1.343-3-3-3S6 5.843 6 7.5M12 7.5c0-1.657 1.343-3 3-3s3 1.343 3 3" />
+                <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <svg className="w-5 h-5 flex-shrink-0 text-blue-400 mt-0.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div>
-                    <p className="text-indigo-300 text-sm font-bold">内测专属福利</p>
-                    <p className="text-slate-400 text-xs">注册即送 <span className="text-green-400 font-bold">1000 积分</span> 体验金</p>
+                    <p className="text-blue-400 text-sm font-medium">内测专属福利</p>
+                    <p className="text-white/50 text-xs">注册即送 <span className="text-green-400 font-bold">1000 积分</span> 体验金</p>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleRegister}
-                  disabled={isRegistering}
-                  className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white rounded-2xl font-bold text-base uppercase tracking-wide transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none shadow-xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110 active:brightness-95 border border-white/10"
-                >
-                  {isRegistering ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      注册中...
-                    </span>
-                  ) : (
-                    '创建账号开始体验'
-                  )}
-                </button>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <button
+                onClick={handleRegister}
+                disabled={isRegistering}
+                className="w-full py-3 bg-blue-500/80 text-white rounded-xl font-medium text-sm hover:bg-blue-500 transition-all active:scale-[0.99]"
+              >
+                {isRegistering ? '注册中...' : '开启架构权限'}
+              </button>
+
+              <div className="pt-4 space-y-3">
                 {error === '该邮箱已注册' && (
                   <button
                     onClick={() => setShowLoginForm(true)}
-                    className="w-full py-3 bg-white/8 border border-white/20 rounded-2xl text-white font-bold text-sm hover:bg-white/15 transition-all duration-300 hover:border-white/40 hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-black/20 hover:shadow-black/30"
+                    className="w-full py-3 bg-white/[0.04] border border-white/[0.06] rounded-xl text-white/60 font-medium text-sm hover:text-white hover:bg-white/[0.08] transition-all"
                   >
                     已有账号？点击登录
                   </button>
                 )}
                 <button
                   onClick={() => setShowRegister(false)}
-                  className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 font-medium text-sm hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+                  className="w-full py-3 bg-white/[0.04] border border-white/[0.06] rounded-xl text-white/40 font-medium text-sm hover:text-white/60 transition-all"
                 >
                   ← 返回修改邀请码
                 </button>

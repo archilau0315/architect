@@ -406,16 +406,6 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     });
   };
 
-  // Token 到积分的换算比例：1 积分 = 100 token
-  const TOKENS_PER_POINT = 100;
-
-  // 计算视频生成成本（按秒数估算）
-  const calculateVideoCost = () => {
-    // 视频生成成本较高，5秒视频约 20000-30000 token
-    // 按 25000 token 计算 = 167 积分
-    return Math.ceil(25000 / TOKENS_PER_POINT); // 约 167 积分
-  };
-
   // 撤销功能：回退到上一次生成的视频
   const handleUndo = () => {
     if (!previousVideoUrl) return;
@@ -433,19 +423,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       return;
     }
 
-    // [前置余额检查] 非开发者模式且使用第三方网关时，先检查积分余额
-    if (!isDeveloperMode && useThirdPartyGateway && onConsumePoints) {
-      // 视频PH8标准费用: ≤10s=42分, >10s=420分
-      const estimatedCost = (displayDuration > 0 ? displayDuration : 5) <= 10 ? 42 : 420;
-      const currentBalance = points?.daily_balance ?? points?.total_points ?? 0;
-      
-      if (currentBalance < estimatedCost) {
-        window.alert(`⚠️ 积分余额不足\n\n视频生成需要 ${estimatedCost} 积分\n当前可用余额: ${currentBalance} 积分\n\n每日免费额度: ${points?.daily_quota || 200} 次\n今日已用: ${points?.daily_used || 0} 次\n\n请明日重试或联系管理员充值`);
-        return; // 拦截，不调用API，不扣费
-      }
-    }
-
-    // 视频生成走 PH8 后端代理，不需要前端检查 API Key
+    // 视频生成走 PH8 后端代理，扣费由后端统一处理
 
     // 保存当前视频作为上一次版本，用于撤销
     if (videoUrl) {
@@ -525,7 +503,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         }
       }, 1000);
 
-      // 积分扣除由 ConversationView.deductPh8Cost 统一处理（从PH8账单读取actual_cost×1000）
+      // [扣费已由后端PH8代理 deductBalance 统一处理]
     } catch (err: any) {
       console.error('[VideoGenerator] ❌ 视频生成失败:', err?.message || err);
       console.error('[VideoGenerator] 错误详情:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
