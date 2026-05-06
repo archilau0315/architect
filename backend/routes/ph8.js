@@ -537,14 +537,30 @@ router.post('/v1/images/generations', async (req, res) => {
       // 尝试从PH8响应中提取真实费用（图像生成）
       let ph8ActualCost2 = 0;
       try {
-        if (!isBinaryContent && typeof data === 'string' && data.trim()) {
+        // 首先尝试从响应头中提取费用（PH8会在响应头中返回费用）
+        const costHeader = proxyRes.headers['x-ph8-cost'] || proxyRes.headers['x-cost'] || proxyRes.headers['x-api-cost'] || proxyRes.headers['cost'];
+        if (costHeader) {
+          ph8ActualCost2 = parseFloat(costHeader);
+          console.log('[PH8 Image v1] 从响应头获取费用: ' + ph8ActualCost2 + '元');
+        }
+        
+        // 如果响应头没有，尝试从JSON响应体中提取
+        if (!ph8ActualCost2 && !isBinaryContent && typeof data === 'string' && data.trim()) {
           const respBody = JSON.parse(data);
           ph8ActualCost2 = respBody.usage?.cost 
                        || respBody.usage?.price 
                        || respBody.cost || respBody.price || respBody.charge
                        || respBody.usage?.total_cost || 0;
+          console.log('[PH8 Image v1] 从响应体获取费用: ' + ph8ActualCost2 + '元');
         }
-      } catch(e) {}
+        
+        // 不使用请求头中的预估费用，只使用PH8返回的真实费用
+        if (!ph8ActualCost2) {
+          console.log('[PH8 Image v1] PH8未返回费用数据，cost=0');
+        }
+      } catch(e) {
+        console.log('[PH8 Image v1] 提取费用失败: ' + e.message);
+      }
       
       // 仅使用 PH8 返回的真实费用，不做任何估算
       const finalCost2 = ph8ActualCost2 > 0 ? ph8ActualCost2 : 0;
@@ -842,21 +858,14 @@ router.all('/*', requireAuth, async (req, res) => {
                   console.log('[PH8 Proxy] 原始费用值:', usage.cost);
                   console.log('[PH8 Proxy] 响应体:', JSON.stringify(responseBody, null, 2));
                   
-                  // 视频费用特殊处理：确保cost计算正确
+                  // 费用处理：严格使用PH8返回的值，不做任何估算
                   let calculatedCost = usage.cost;
                   let totalTokens = usage.totalTokens;
-                  if (requestType === 'video') {
-                    // 如果有totalTokens但没有cost，按PH8视频费率计算
-                    if ((!calculatedCost || calculatedCost === 0) && totalTokens && totalTokens > 0) {
-                      const PH8_VIDEO_TOKEN_PRICE = 0.0000042; // ¥0.42 / 100000 tokens
-                      calculatedCost = totalTokens * PH8_VIDEO_TOKEN_PRICE;
-                      console.log(`[PH8 Proxy] 视频费用重新计算: ${totalTokens} tokens × ¥0.0000042 = ¥${calculatedCost}`);
-                    }
-                    // 如果有cost但格式不对，确保是数字
-                    else if (calculatedCost && typeof calculatedCost === 'string') {
-                      calculatedCost = parseFloat(calculatedCost);
-                    }
+                  // 确保费用是数字格式
+                  if (calculatedCost && typeof calculatedCost === 'string') {
+                    calculatedCost = parseFloat(calculatedCost);
                   }
+                  console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${calculatedCost}, totalTokens=${totalTokens}`);
                   
                   await ph8TokenService.recordUsage({
                     userId: actualUserId,
@@ -890,27 +899,21 @@ router.all('/*', requireAuth, async (req, res) => {
               } else {
                 console.log('[PH8 Proxy] 响应中未找到 usage 数据');
                 
-                // 视频请求：PH8 API 可能不在响应中返回 usage/cost 字段
-                // 但可能在响应中有 total_tokens 字段
+                // 费用处理：严格使用PH8返回的值，不做任何估算
                 let videoCost = 0;
                 let totalTokens = 0;
-                if (requestType === 'video') {
-                  // 尝试从响应中直接获取tokens或cost（支持多种格式）
-                  totalTokens = responseBody.total_tokens || responseBody.tokens || 
-                               (responseBody.usage && responseBody.usage.total_tokens) || 0;
-                  let costFromResponse = responseBody.cost || responseBody.price || responseBody.charge || 
-                                        (responseBody.usage && (responseBody.usage.cost || responseBody.usage.price)) || 0;
-                  
-                  if (costFromResponse && costFromResponse > 0) {
-                    videoCost = parseFloat(costFromResponse);
-                    console.log(`[PH8 Proxy] 视频费用: 从响应直接读取 cost=${videoCost}`);
-                  } else if (totalTokens && totalTokens > 0) {
-                    const PH8_VIDEO_TOKEN_PRICE = 0.0000042; // ¥0.42 / 100000 tokens
-                    videoCost = totalTokens * PH8_VIDEO_TOKEN_PRICE;
-                    console.log(`[PH8 Proxy] 视频费用计算: ${totalTokens} tokens × ¥0.0000042 = ¥${videoCost}`);
-                  } else {
-                    console.log(`[PH8 Proxy] ⚠️ 视频请求: 未获取到费用数据, cost=0。响应体预览: ${JSON.stringify(responseBody).substring(0, 200)}`);
-                  }
+                
+                // 尝试从响应中直接获取费用（支持多种格式）
+                const costFromResponse = responseBody.cost || responseBody.price || responseBody.charge || 
+                                      (responseBody.usage && (responseBody.usage.cost || responseBody.usage.price)) || 0;
+                totalTokens = responseBody.total_tokens || responseBody.tokens || 
+                             (responseBody.usage && responseBody.usage.total_tokens) || 0;
+                
+                if (costFromResponse && costFromResponse > 0) {
+                  videoCost = parseFloat(costFromResponse);
+                  console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${videoCost}, totalTokens=${totalTokens}`);
+                } else {
+                  console.log(`[PH8 Proxy] ⚠️ 请求: PH8未返回费用数据, cost=0。响应体预览: ${JSON.stringify(responseBody).substring(0, 200)}`);
                 }
                 
                 // 即使没有 usage 数据，也记录一个基本的使用记录
@@ -1002,18 +1005,16 @@ router.all('/*', requireAuth, async (req, res) => {
             
             const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
             
-            // 计算费用：从PH8响应提取token数，按正确公式计算
-            // PH8视频费用公式：100000 tokens = ¥0.42 → ¥0.0000042 per token
+            // 费用处理：严格使用PH8返回的值，不做任何估算
             let calculatedCost = 0;
             let totalTokens = 0;
-            if (usage && usage.totalTokens > 0) {
-              totalTokens = usage.totalTokens;
-              const PH8_VIDEO_TOKEN_PRICE = 0.0000042; // ¥0.42 / 100000 tokens
-              calculatedCost = usage.totalTokens * PH8_VIDEO_TOKEN_PRICE;
-              console.log(`[PH8 Proxy] 视频费用计算: ${usage.totalTokens} tokens × ¥0.0000042 = ¥${calculatedCost}`);
-            } else if (requestType === 'video') {
-              console.log(`[PH8 Proxy] 视频请求: 未获取到usage数据，cost=0`);
+            
+            if (usage) {
+              calculatedCost = usage.cost ? parseFloat(usage.cost) : 0;
+              totalTokens = usage.totalTokens || 0;
             }
+            
+            console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${calculatedCost}, totalTokens=${totalTokens}`);
             
             await ph8TokenService.recordUsage({
               userId: actualUserId,

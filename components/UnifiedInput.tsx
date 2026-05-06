@@ -617,7 +617,7 @@ const UnifiedInput = React.forwardRef<UnifiedInputRef, UnifiedInputProps>(({ mod
           onSaveMask={(maskDataUrl: string, role: 'donor' | 'recipient') => {
             setImages((prev: ImageItem[]) => prev.map((img: ImageItem, i: number) => i === inpaintIdx ? { ...img, maskDataUrl, role } : img));
           }}
-          onSubmit={(maskDataUrl: string, _prompt: string, role: 'donor' | 'recipient') => {
+          onSubmit={(maskDataUrl: string, _prompt: string, role: 'donor' | 'recipient' | null) => {
             setImages((prev: ImageItem[]) => prev.map((img: ImageItem, i: number) => i === inpaintIdx ? { ...img, maskDataUrl, role } : img));
             setInpaintIdx(null);
           }}

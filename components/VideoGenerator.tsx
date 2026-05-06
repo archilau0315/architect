@@ -501,6 +501,17 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       setVideoUrl(result.url);
       setLastVideoRef(result.videoRef);
       
+      // [立即保存] 确保切换窗口时状态已持久化
+      setTimeout(() => {
+        try {
+          const data = { prompt, assets, originalAssets, lockedAssets, aspectRatio, selectedEngine, videoUrl: result.url, watermarkedVideoUrl: null, lastVideoRef: result.videoRef, videoResolution, videoDuration, cameraFixed, videoSeed };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          console.log('[VideoGenerator] ✅ 状态已立即保存到 localStorage');
+        } catch (e) {
+          console.warn('[VideoGenerator] ⚠️ localStorage 保存失败:', e);
+        }
+      }, 0);
+      
       // 通知父组件写入聊天气泡（必须在setVideoUrl之后）
       if (onVideoGenerated) {
         try { onVideoGenerated({ url: result.url, prompt: finalPrompt }); } catch(e) { console.warn('[VideoGenerator] onVideoGenerated回调失败(非致命):', e); }

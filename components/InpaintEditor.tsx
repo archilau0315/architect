@@ -5,7 +5,7 @@ import type { Language } from '../i18n/locales.ts';
 interface InpaintEditorProps {
   imageUrl: string;
   onSaveMask: (maskDataUrl: string, role: 'donor' | 'recipient') => void;
-  onSubmit: (maskDataUrl: string, prompt: string, role: 'donor' | 'recipient') => void;
+  onSubmit: (maskDataUrl: string, prompt: string, role: 'donor' | 'recipient' | null) => void;
   onClose: () => void;
   language?: Language;
 }
@@ -598,7 +598,7 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
 
   const handleSubmit = useCallback(() => {
     const maskCanvas = maskCanvasRef.current;
-    if (!maskCanvas || !role) return;
+    if (!maskCanvas) return;
     
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = maskCanvas.width;
@@ -781,8 +781,8 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
               rows={2}
               className="flex-1 min-h-[36px] max-h-[80px] px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/80 placeholder-white/25 text-[12px] focus:outline-none focus:border-blue-500/50 resize-y"
             />
-            <button onClick={handleSubmit} disabled={!role}
-              className={`min-h-[36px] px-6 rounded-lg text-[12px] font-medium transition-all active:scale-95 ${role ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600' : 'bg-white/[0.04] border border-white/[0.06] text-white/30 cursor-not-allowed'}`}>
+            <button onClick={handleSubmit}
+              className="min-h-[36px] px-6 rounded-lg text-[12px] font-medium transition-all active:scale-95 bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600">
               {language === 'zh-CN' ? '提交修改' : 'Submit'}
             </button>
           </div>
