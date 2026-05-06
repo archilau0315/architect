@@ -859,11 +859,11 @@ const App: React.FC = () => {
           daily_balance: Math.max(0, dailyQuota - dailyUsed),
           daily_used: dailyUsed,
           daily_quota: dailyQuota,
-          // 兼容旧字段（避免UI显示异常）
+          // 基础字段（从后端 /api/user/quota 直接读取，用于订阅页等计算）
           daily: Math.max(0, dailyQuota - dailyUsed),
-          purchased: 0,
-          bonus: 0,
-          totalConsumed: 0
+          purchased: purchasedPoints,
+          bonus: bonusPoints,
+          totalConsumed: totalConsumedPoints
         }}
         onBuyPoints={handleBuyPoints}
         useThirdPartyGateway={useThirdPartyGateway}

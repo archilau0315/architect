@@ -363,6 +363,8 @@ export const translations: Record<Language, Translations> = {
       undo: '回退',
       imageCount: '图',
       inpaintConfirm: '将对图 {n} 进行局部修改，确认？',
+      toggleDark: '切换深色模式',
+      toggleLight: '切换亮色模式',
     },
     parameters: {
       title: '参数设置',
@@ -566,6 +568,8 @@ export const translations: Record<Language, Translations> = {
       undo: 'Undo',
       imageCount: 'Img',
       inpaintConfirm: 'Inpaint image {n}. Confirm?',
+      toggleDark: 'Switch to Dark Mode',
+      toggleLight: 'Switch to Light Mode',
     },
     parameters: {
       title: 'Parameters',
@@ -768,6 +772,8 @@ export const translations: Record<Language, Translations> = {
       undo: '元に戻す',
       imageCount: '枚',
       inpaintConfirm: '画像 {n} を部分編集します。確認しますか？',
+      toggleDark: 'ダークモードに切り替え',
+      toggleLight: 'ライトモードに切り替え',
     },
     parameters: {
       title: 'パラメータ設定',
@@ -1174,6 +1180,8 @@ export const translations: Record<Language, Translations> = {
       undo: 'Deshacer',
       imageCount: 'Img',
       inpaintConfirm: 'Retocar imagen {n}. ¿Confirmar?',
+      toggleDark: 'Cambiar a Modo Oscuro',
+      toggleLight: 'Cambiar a Modo Claro',
     },
     parameters: {
       title: 'Configuración de Parámetros',
@@ -1580,6 +1588,8 @@ export const translations: Record<Language, Translations> = {
       undo: 'Rückgängig',
       imageCount: 'Bild',
       inpaintConfirm: 'Bild {n} teilweise bearbeiten. Bestätigen?',
+      toggleDark: 'Zu Dunkelmodus wechseln',
+      toggleLight: 'Zu Hellmodus wechseln',
     },
     parameters: {
       title: 'Parametereinstellungen',
