@@ -478,13 +478,22 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         } catch (e) {
           console.error('获取用户ID失败:', e);
         }
-        const upscaleCost = targetSize === '4K' ? 250 : 180; // 放大的积分成本（万分之一元）
-        Ph8UsageService.recordUsage(
-          userId,
-          { total: upscaleCost },
-          targetTier || 'FAST',
-          'image_upscale'
-        ).catch(err => console.error('记录token使用失败:', err));
+        // [扣费已由后端PH8代理 deductBalance 统一处理，前端仅展示费用日志]
+        setTimeout(async () => {
+          try {
+            const result = await Ph8UsageService.getLatestUsage(userId);
+            if (result.success && result.data) {
+              console.log('[放大模式-PH8费用(后端已扣)]', {
+                requestId: result.data.request_id,
+                actualCost: result.data.actual_cost,
+                pointsCost: result.data.points_cost,
+                model: result.data.model_id
+              });
+            }
+          } catch (err) {
+            console.error('获取放大模式费用日志失败:', err);
+          }
+        }, 500);
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') alert(`${targetSize} ${t.parameters.upscaleFailed}，请稍后重试`); // [安全修复] 不暴露原始错误信息
@@ -495,34 +504,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   };
 
   const triggerUpscale = (img: string) => handleUpscale(undefined, img);
-
-  // PH8 返回的费用单位是万分之一元（0.0001元）
-  // 1 积分 = 0.0001 元（万分之一元）
-  // 例如：140 = 0.0140 元 = 140 积分
-  const COST_PRECISION = 4; // 小数点后4位
-
-  const calculateCost = () => {
-    const size = config.imageSize;
-    const tier = config.modelTier;
-    let cost = 140; // 默认费用（万分之一元），0.0140元
-
-    if (tier === "FAST") {
-      if (size === "1K") cost = 140; // 0.0140元
-      if (size === "2K") cost = 180; // 0.0180元
-      if (size === "4K") cost = 250; // 0.0250元
-    } else if (tier === "QUALITY") {
-      if (size === "1K") cost = 180; // 0.0180元
-      if (size === "2K") cost = 250; // 0.0250元
-      if (size === "4K") cost = 350; // 0.0350元
-    } else if (tier === "HIGH") {
-      if (size === "1K") cost = 250; // 0.0250元
-      if (size === "2K") cost = 350; // 0.0350元
-      if (size === "4K") cost = 500; // 0.0500元
-    }
-
-    // 1 积分 = 0.0001 元
-    return cost;
-  };
 
   const handleGenerate = async () => {
     if (isGenerating) { abortControllerRef.current?.abort(); setIsGenerating(false); onBusyStateChange?.(false); return; }
@@ -572,30 +553,20 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         console.error('获取用户ID失败:', e);
       }
 
-      // 获取真实的费用并扣除积分
+      // [扣费已由后端PH8代理 deductBalance 统一处理，前端仅展示费用日志]
       setTimeout(async () => {
         try {
           const result = await Ph8UsageService.getLatestUsage(userId);
           if (result.success && result.data) {
-            const realCost = result.data.total_tokens || 0;
-            console.log('[PH8真实费用]', {
+            console.log('[PH8费用(后端已扣)]', {
               requestId: result.data.request_id,
-              cost: realCost,
-              costInYuan: (realCost * 0.0001).toFixed(4),
-              model: result.data.model
+              actualCost: result.data.actual_cost,
+              pointsCost: result.data.points_cost,
+              model: result.data.model_id
             });
-
-            // 用真实费用扣除积分（利润10倍：用户积分 = cost ÷ 10，向上取整）
-            if (realCost > 0 && onConsumePoints) {
-              const userPoints = Math.ceil(realCost / 10);
-              const deducted = await onConsumePoints({ amount: userPoints, feature: 'Image', modelId: result.data.model });
-              if (!deducted) {
-                console.warn('[PH8费用] 积分不足，无法扣除:', userPoints);
-              }
-            }
           }
         } catch (err) {
-          console.error('获取PH8真实费用失败:', err);
+          console.error('获取费用日志失败:', err);
         }
       }, 500);
     } catch (err: any) {

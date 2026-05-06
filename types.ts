@@ -13,7 +13,7 @@ export interface ConversationNode {
   isExpanded?: boolean;
 }
 export type CreativeDomain = 'architecture' | 'product' | 'art' | 'character';
-export type UserTier = 'free' | 'beta' | 'basic' | 'pro' | 'plus';
+export type UserTier = 'free' | 'beta' | 'basic' | 'pro' | 'plus' | 'dev';
 
 export interface Point {
   x: number;
