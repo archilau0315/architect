@@ -1,34 +1,47 @@
--- 修复图像生成记录的费用
 USE kbitai0302;
 
--- 1. 查看所有图像生成记录的费用情况
-SELECT id, user_id, feature, model_id, points_cost, actual_cost, status, created_at
-FROM kbit_usage_logs
-WHERE feature = 'image_gen'
-  AND status = 'success'
-ORDER BY created_at DESC;
-
--- 2. 修复图像生成记录 (PH8图像费用通常为 ¥0.0120 - ¥0.0800)
--- 根据PH8平台记录，gemini-3.1-flash-image-preview 每次约 ¥0.0120
 UPDATE kbit_usage_logs
 SET actual_cost = 0.0120, points_cost = 12
 WHERE feature = 'image_gen'
   AND model_id = 'gemini-3.1-flash-image-preview'
   AND status = 'success'
-  AND (actual_cost = 0 OR points_cost = 0);
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
 
--- 3. 修复视频生成记录 (PH8视频费用通常为 ¥0.2100)
+UPDATE kbit_usage_logs
+SET actual_cost = 0.0120, points_cost = 12
+WHERE feature = 'image_gen'
+  AND status = 'success'
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL)
+  AND model_id != 'gemini-3.1-flash-image-preview';
+
 UPDATE kbit_usage_logs
 SET actual_cost = 0.2100, points_cost = 210
 WHERE feature = 'video_gen'
   AND status = 'success'
-  AND (actual_cost = 0 OR points_cost = 0);
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
 
--- 4. 验证修复结果
-SELECT id, feature, model_id, points_cost, actual_cost, status
-FROM kbit_usage_logs
-WHERE user_id = 13
+UPDATE kbit_usage_logs
+SET actual_cost = 0.0050, points_cost = 5
+WHERE feature = 'chat'
   AND status = 'success'
-ORDER BY created_at DESC;
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
 
-SELECT '图像生成记录修复完成！' AS result;
+UPDATE kbit_usage_logs
+SET actual_cost = 0.0080, points_cost = 8
+WHERE feature = 'image_analyze'
+  AND status = 'success'
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
+
+UPDATE kbit_usage_logs
+SET actual_cost = 0.0030, points_cost = 3
+WHERE feature = 'prompt_enhance'
+  AND status = 'success'
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
+
+SELECT feature, COUNT(*) AS count, SUM(actual_cost) AS total_cost, SUM(points_cost) AS total_points
+FROM kbit_usage_logs
+WHERE status = 'success'
+GROUP BY feature
+ORDER BY feature;
+
+SELECT '历史记录修复完成！' AS result;

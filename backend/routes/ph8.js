@@ -168,17 +168,17 @@ function extractUsage(responseBody) {
     let cachedTokens = 0;
     let cost = 0;
     
-    // 统一收集所有可能的字段
-    // 从 usage 对象提取
     if (responseBody.usage) {
       promptTokens = responseBody.usage.prompt_tokens || responseBody.usage.promptTokens || 0;
       completionTokens = responseBody.usage.completion_tokens || responseBody.usage.completionTokens || 0;
       totalTokens = responseBody.usage.total_tokens || responseBody.usage.totalTokens || 0;
       cachedTokens = responseBody.usage.cached_tokens || responseBody.usage.cachedTokens || 0;
       cost = responseBody.usage.cost || responseBody.usage.price || responseBody.usage.charge || 0;
+      if (!cost && responseBody.usage.cost_details && responseBody.usage.cost_details.upstream_inference_cost) {
+        cost = responseBody.usage.cost_details.upstream_inference_cost;
+      }
     }
     
-    // 从根级别提取（补充）
     if (!totalTokens) {
       totalTokens = responseBody.total_tokens || responseBody.tokens || responseBody.totalTokens || 0;
     }
@@ -196,7 +196,6 @@ function extractUsage(responseBody) {
              responseBody.total_cost || responseBody.totalPrice || 0;
     }
 
-    // PH8视频特定格式 - 检查视频响应中的费用信息
     if (!cost && responseBody.output && responseBody.output.usage) {
       cost = responseBody.output.usage.cost || responseBody.output.usage.price || 0;
       if (!totalTokens) {
@@ -204,7 +203,6 @@ function extractUsage(responseBody) {
       }
     }
 
-    // PH8视频格式 - 检查 results 数组
     if (!cost && responseBody.results && Array.isArray(responseBody.results)) {
       for (const result of responseBody.results) {
         if (result.usage) {
@@ -215,22 +213,16 @@ function extractUsage(responseBody) {
       }
     }
 
-    // 如果有费用或token数据，返回usage对象
-    // 费用优先 - 如果有费用数据，即使token为0也返回
-    if (cost > 0 || totalTokens > 0 || promptTokens > 0 || completionTokens > 0) {
-      return {
-        promptTokens: parseInt(promptTokens) || 0,
-        completionTokens: parseInt(completionTokens) || 0,
-        totalTokens: parseInt(totalTokens) || 0,
-        cachedTokens: parseInt(cachedTokens) || 0,
-        cost: typeof cost === 'string' ? parseFloat(cost) : (cost || 0)
-      };
-    }
-    
-    return null;
+    return {
+      promptTokens: parseInt(promptTokens) || 0,
+      completionTokens: parseInt(completionTokens) || 0,
+      totalTokens: parseInt(totalTokens) || 0,
+      cachedTokens: parseInt(cachedTokens) || 0,
+      cost: typeof cost === 'string' ? parseFloat(cost) : (cost || 0)
+    };
   } catch (err) {
     ph8Log.error('提取usage数据失败', { error: err.message });
-    return null;
+    return { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cost: 0 };
   }
 }
 
@@ -862,32 +854,31 @@ router.all('/*', requireAuth, async (req, res) => {
         if (!isBinaryContent) {
           const isJsonContent = contentType && contentType.includes('application/json');
           if (isJsonContent || isVideoResponse) {
-            try {
-              const responseBody = JSON.parse(data);
-              const usage = extractUsage(responseBody);
+              try {
+                const responseBody = JSON.parse(data);
+                const usage = extractUsage(responseBody);
 
-              let userInfo = { nickname: '未知用户', email: userId };
-              if (userId === null && rawUserIdValue && rawUserIdValue !== '(empty)' && rawUserIdValue !== 'guest') {
-                userInfo = { nickname: `用户(${rawUserIdValue.substring(0, 20)})`, email: rawUserIdValue };
-                try {
-                  const fallbackInfo = await getUserInfo(rawUserIdValue);
-                  if (fallbackInfo && fallbackInfo.nickname !== '未知用户') {
-                    userInfo = fallbackInfo;
+                let userInfo = { nickname: '未知用户', email: userId };
+                if (userId === null && rawUserIdValue && rawUserIdValue !== '(empty)' && rawUserIdValue !== 'guest') {
+                  userInfo = { nickname: `用户(${rawUserIdValue.substring(0, 20)})`, email: rawUserIdValue };
+                  try {
+                    const fallbackInfo = await getUserInfo(rawUserIdValue);
+                    if (fallbackInfo && fallbackInfo.nickname !== '未知用户') {
+                      userInfo = fallbackInfo;
+                    }
+                  } catch (e) {}
+                } else if (userId !== null) {
+                  try {
+                    userInfo = await getUserInfo(userId);
+                  } catch (err) {
+                    ph8Log.error('获取用户信息失败', { error: err.message });
                   }
-                } catch (e) {}
-              } else if (userId !== null) {
-                try {
-                  userInfo = await getUserInfo(userId);
-                } catch (err) {
-                  ph8Log.error('获取用户信息失败', { error: err.message });
+                } else {
+                  userInfo = { nickname: `未识别-${req.ip?.substring(0, 12) || 'unknown'}`, email: rawUserIdValue || null };
                 }
-              } else {
-                userInfo = { nickname: `未识别-${req.ip?.substring(0, 12) || 'unknown'}`, email: rawUserIdValue || null };
-              }
 
-              const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
+                const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
 
-              if (usage) {
                 let calculatedCost = usage.cost;
                 let totalTokens = usage.totalTokens;
                 if (calculatedCost && typeof calculatedCost === 'string') {
@@ -926,78 +917,32 @@ router.all('/*', requireAuth, async (req, res) => {
                   cost: calculatedCost,
                   type: requestType
                 });
-              } else {
-                const fallbackUsage = extractUsage(responseBody);
-                let videoCost = 0;
-                let totalTokens = 0;
-                let promptTokens = 0;
-                let completionTokens = 0;
 
-                if (fallbackUsage) {
-                  videoCost = fallbackUsage.cost;
-                  totalTokens = fallbackUsage.totalTokens;
-                  promptTokens = fallbackUsage.promptTokens;
-                  completionTokens = fallbackUsage.completionTokens;
-                }
-
-                await ph8TokenService.recordUsage({
-                  userId: actualUserId,
-                  userNickname: userInfo.nickname,
-                  userEmail: userInfo.email,
-                  requestId: requestId,
-                  model: model,
-                  channelId: 'ph8-default',
-                  promptTokens: promptTokens,
-                  completionTokens: completionTokens,
-                  totalTokens: totalTokens,
-                  cost: videoCost,
-                  cachedTokens: 0,
-                  requestType: requestType,
-                  endpoint: fullPath,
-                  status: proxyRes.statusCode === 200 ? 'success' : 'error',
-                  errorMessage: videoCost > 0 ? null : 'No usage data found in PH8 response',
-                  responseTimeMs: responseTime,
-                  ipAddress: req.ip || req.connection.remoteAddress
-                });
-
-                if (videoCost > 0) {
-                  try {
-                    await ph8TokenService.deductBalance(actualUserId, videoCost, userInfo.nickname, userInfo.email);
-                    ph8Log.info('视频费用扣减成功', {
-                      requestId,
-                      maskedUserId: maskUserId(String(actualUserId)),
-                      cost: videoCost,
-                      totalTokens: totalTokens
-                    });
-                  } catch (deductErr) {
-                    ph8Log.error('视频余额扣减失败', { error: deductErr.message });
-                  }
-                } else if (proxyRes.statusCode === 200) {
-                  ph8Log.warn('视频生成成功但未找到费用数据', { 
+                if (calculatedCost === 0 && proxyRes.statusCode === 200) {
+                  ph8Log.warn('请求成功但未找到费用数据', { 
                     requestId, 
                     maskedUserId: maskUserId(String(actualUserId)),
                     responsePreview: JSON.stringify(responseBody).substring(0, 200)
                   });
                 }
-              }
 
-              try {
-                await ph8TokenService.logApiCall({
-                  userId: userId,
-                  userNickname: userInfo.nickname,
-                  userEmail: userInfo.email,
-                  endpoint: fullPath,
-                  requestBody: bodyData.substring(0, 1000),
-                  responseBody: data.substring(0, 1000),
-                  statusCode: proxyRes.statusCode
-                });
-              } catch (err) {
-                ph8Log.error('记录API日志失败', { error: err.message });
+                try {
+                  await ph8TokenService.logApiCall({
+                    userId: userId,
+                    userNickname: userInfo.nickname,
+                    userEmail: userInfo.email,
+                    endpoint: fullPath,
+                    requestBody: bodyData.substring(0, 1000),
+                    responseBody: data.substring(0, 1000),
+                    statusCode: proxyRes.statusCode
+                  });
+                } catch (err) {
+                  ph8Log.error('记录API日志失败', { error: err.message });
+                }
+              } catch (jsonErr) {
+                ph8Log.error('JSON解析失败', { error: jsonErr.message });
               }
-            } catch (jsonErr) {
-              ph8Log.error('JSON解析失败', { error: jsonErr.message });
-            }
-          } else {
+            } else {
             ph8Log.debug('非JSON响应，跳过Token记录', { requestId });
           }
         } else {
@@ -1030,12 +975,15 @@ router.all('/*', requireAuth, async (req, res) => {
 
             const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
 
+            // 从响应头中提取费用信息（如果有）
             let calculatedCost = 0;
             let totalTokens = 0;
-
-            if (usage) {
-              calculatedCost = usage.cost ? parseFloat(usage.cost) : 0;
-              totalTokens = usage.totalTokens || 0;
+            let promptTokens = 0;
+            let completionTokens = 0;
+            
+            const costHeader = proxyRes.headers['x-ph8-cost'] || proxyRes.headers['x-cost'] || proxyRes.headers['x-api-cost'] || proxyRes.headers['cost'];
+            if (costHeader) {
+              calculatedCost = parseFloat(costHeader);
             }
 
             await ph8TokenService.recordUsage({
@@ -1045,8 +993,8 @@ router.all('/*', requireAuth, async (req, res) => {
               requestId: requestId,
               model: model,
               channelId: requestType === 'image' ? 'ph8-image' : 'ph8-video',
-              promptTokens: usage?.promptTokens || 0,
-              completionTokens: usage?.completionTokens || 0,
+              promptTokens: promptTokens,
+              completionTokens: completionTokens,
               totalTokens: totalTokens,
               cost: proxyRes.statusCode === 200 ? calculatedCost : 0,
               cachedTokens: 0,

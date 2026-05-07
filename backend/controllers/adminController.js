@@ -109,41 +109,58 @@ exports.getUser = async (req, res) => {
 
     // 今日统计
     const [todayStats] = await db.query(
-      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent, COALESCE(SUM(actual_cost), 0) as total_actual_cost 
        FROM kbit_usage_logs WHERE user_id=? AND status='success' AND DATE(created_at)=CURDATE()`,
       [uid]
     );
-    const todayData = { total_requests: todayStats[0]?.total_requests || 0, total_points_spent: parseInt(todayStats[0]?.total_points_spent) || 0 };
+    const todayData = {
+      total_requests: todayStats[0]?.total_requests || 0,
+      total_points_spent: parseInt(todayStats[0]?.total_points_spent) || 0,
+      total_actual_cost: parseFloat(todayStats[0]?.total_actual_cost) || 0
+    };
 
     // 本周统计（7天）
     const [weekStats] = await db.query(
-      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent, COALESCE(SUM(actual_cost), 0) as total_actual_cost 
        FROM kbit_usage_logs WHERE user_id=? AND status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
       [uid]
     );
-    const weekData = { total_requests: weekStats[0]?.total_requests || 0, total_points_spent: parseInt(weekStats[0]?.total_points_spent) || 0 };
+    const weekData = {
+      total_requests: weekStats[0]?.total_requests || 0,
+      total_points_spent: parseInt(weekStats[0]?.total_points_spent) || 0,
+      total_actual_cost: parseFloat(weekStats[0]?.total_actual_cost) || 0
+    };
 
     // 本月统计（30天）
     const [monthStats] = await db.query(
-      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent, COALESCE(SUM(actual_cost), 0) as total_actual_cost 
        FROM kbit_usage_logs WHERE user_id=? AND status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
       [uid]
     );
-    const monthData = { total_requests: monthStats[0]?.total_requests || 0, total_points_spent: parseInt(monthStats[0]?.total_points_spent) || 0 };
+    const monthData = {
+      total_requests: monthStats[0]?.total_requests || 0,
+      total_points_spent: parseInt(monthStats[0]?.total_points_spent) || 0,
+      total_actual_cost: parseFloat(monthStats[0]?.total_actual_cost) || 0
+    };
 
     // 历史总统计
     const [totalStats] = await db.query(
-      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent 
+      `SELECT COUNT(*) as total_requests, COALESCE(SUM(points_cost), 0) as total_points_spent, COALESCE(SUM(actual_cost), 0) as total_actual_cost 
        FROM kbit_usage_logs WHERE user_id=? AND status='success'`,
       [uid]
     );
-    const totalData = { total_requests: totalStats[0]?.total_requests || 0, total_points_spent: parseInt(totalStats[0]?.total_points_spent) || 0 };
+    const totalData = {
+      total_requests: totalStats[0]?.total_requests || 0,
+      total_points_spent: parseInt(totalStats[0]?.total_points_spent) || 0,
+      total_actual_cost: parseFloat(totalStats[0]?.total_actual_cost) || 0
+    };
 
     // 近30天每日趋势
     const [daily] = await db.query(
       `SELECT DATE(created_at) as date, 
               COUNT(*) as total_requests, 
-              COALESCE(SUM(points_cost), 0) as total_points_spent 
+              COALESCE(SUM(points_cost), 0) as total_points_spent, 
+              COALESCE(SUM(actual_cost), 0) as total_actual_cost 
        FROM kbit_usage_logs 
        WHERE user_id=? AND status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
        GROUP BY DATE(created_at) ORDER BY date ASC`,
