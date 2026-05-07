@@ -141,7 +141,24 @@ router.post('/record', async (req, res) => {
     
     const cost = ((tokens.prompt || 0) * 0.3 + (tokens.completion || 0) * 0.6) / 1000000;
     if (cost > 0 && userId !== 'guest' && userId !== '0') {
-      try { await ph8TokenService.deductBalance(userId, cost); } catch(e) { console.error('[Record] deductBalance failed:', e.message); }
+      try {
+        let nickname = null;
+        let email = null;
+        if (userId && userId !== 'guest' && userId !== '0') {
+          const userIdStr = String(userId);
+          const isNumericId = !isNaN(userIdStr) && userIdStr.trim() !== '';
+          const queryValue = isNumericId ? parseInt(userIdStr) : userIdStr;
+          const whereCondition = isNumericId ? 'id = ?' : 'email = ?';
+          const [userRows] = await db.query(`SELECT nickname, email FROM kbit_users WHERE ${whereCondition}`, [queryValue]);
+          if (userRows.length > 0) {
+            nickname = userRows[0].nickname;
+            email = userRows[0].email;
+          }
+        }
+        await ph8TokenService.deductBalance(userId, cost, nickname, email);
+      } catch(e) { 
+        console.error('[Record] deductBalance failed:', e.message); 
+      }
     }
     
     res.json({ success: true });

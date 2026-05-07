@@ -5,8 +5,68 @@ const ph8TokenService = require('../services/ph8TokenService');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 
+// 引入结构化日志服务
+const { logger, LogLevel } = require('../services/loggerService');
+
+// 日志级别配置：生产环境默认 WARN，开发环境默认 DEBUG
+const isProduction = process.env.NODE_ENV === 'production';
+const PH8_LOG_LEVEL = isProduction
+  ? (LogLevel[process.env.PH8_LOG_LEVEL?.toUpperCase()] || LogLevel.WARN)
+  : LogLevel.DEBUG;
+
+// 是否记录请求体（生产环境默认关闭）
+const LOG_REQUEST_BODY = !isProduction || process.env.PH8_LOG_BODY === 'true';
+
+// 是否记录响应体（生产环境默认关闭）
+const LOG_RESPONSE_BODY = !isProduction || process.env.PH8_LOG_RESPONSE === 'true';
+
 // PH8 API Key - 从环境变量获取
 const PH8_API_KEY = process.env.PH8_API_KEY;
+
+/**
+ * 统一日志函数 - 根据日志级别和环境配置决定是否输出
+ */
+const ph8Log = {
+  debug: (message, data) => {
+    if (PH8_LOG_LEVEL <= LogLevel.DEBUG) {
+      logger.debug(`[PH8] ${message}`, data);
+    }
+  },
+  info: (message, data) => {
+    if (PH8_LOG_LEVEL <= LogLevel.INFO) {
+      logger.info(`[PH8] ${message}`, data);
+    }
+  },
+  warn: (message, data) => {
+    if (PH8_LOG_LEVEL <= LogLevel.WARN) {
+      logger.warn(`[PH8] ${message}`, data);
+    }
+  },
+  error: (message, data) => {
+    if (PH8_LOG_LEVEL <= LogLevel.ERROR) {
+      logger.error(`[PH8] ${message}`, data);
+    }
+  }
+};
+
+/**
+ * 脱敏用户标识 - 仅显示前后各2位
+ */
+const maskUserId = (userId) => {
+  if (!userId || typeof userId !== 'string') return 'unknown';
+  if (userId.length <= 4) return '***';
+  return `${userId.substring(0, 2)}***${userId.substring(userId.length - 2)}`;
+};
+
+/**
+ * 脱敏邮箱
+ */
+const maskEmail = (email) => {
+  if (!email || typeof email !== 'string' || !email.includes('@')) return email;
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) return `***@${domain}`;
+  return `${local.substring(0, 2)}***@${domain}`;
+};
 
 /**
  * [安全修复] 轻量级认证中间件（日志记录模式）
@@ -42,8 +102,9 @@ function requireAuth(req, res, next) {
   
   // 非同源且无 token 的请求：记录警告但仍然放行（不影响功能）
   if (!sessionToken) {
-    console.warn('[PH8 Auth] ⚠️ 无token的外部请求(已放行)', {
-      path: req.path, ip: req.ip,
+    ph8Log.warn('外部请求无token(已放行)', {
+      path: req.path,
+      ip: req.ip,
       referer: referer.substring(0, 80),
       ua: req.headers['user-agent']?.substring(0, 50)
     });
@@ -100,43 +161,75 @@ function extractUsage(responseBody) {
     if (typeof responseBody === 'string') {
       responseBody = JSON.parse(responseBody);
     }
+
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let totalTokens = 0;
+    let cachedTokens = 0;
+    let cost = 0;
     
-    // OpenAI 标准格式
+    // 统一收集所有可能的字段
+    // 从 usage 对象提取
     if (responseBody.usage) {
-      return {
-        promptTokens: responseBody.usage.prompt_tokens || 0,
-        completionTokens: responseBody.usage.completion_tokens || 0,
-        totalTokens: responseBody.usage.total_tokens || 0,
-        cachedTokens: responseBody.usage.cached_tokens || 0,
-        cost: responseBody.usage.cost || responseBody.usage.price || responseBody.usage.charge || 0
-      };
+      promptTokens = responseBody.usage.prompt_tokens || responseBody.usage.promptTokens || 0;
+      completionTokens = responseBody.usage.completion_tokens || responseBody.usage.completionTokens || 0;
+      totalTokens = responseBody.usage.total_tokens || responseBody.usage.totalTokens || 0;
+      cachedTokens = responseBody.usage.cached_tokens || responseBody.usage.cachedTokens || 0;
+      cost = responseBody.usage.cost || responseBody.usage.price || responseBody.usage.charge || 0;
     }
     
-    // 其他格式适配
-    if (responseBody.prompt_tokens !== undefined) {
-      return {
-        promptTokens: responseBody.prompt_tokens || 0,
-        completionTokens: responseBody.completion_tokens || 0,
-        totalTokens: responseBody.total_tokens || 0,
-        cachedTokens: responseBody.cached_tokens || 0,
-        cost: responseBody.cost || responseBody.price || responseBody.charge || 0
-      };
+    // 从根级别提取（补充）
+    if (!totalTokens) {
+      totalTokens = responseBody.total_tokens || responseBody.tokens || responseBody.totalTokens || 0;
     }
-    
-    // PH8 特定格式 - 检查根级别的费用字段
-    if (responseBody.cost !== undefined || responseBody.price !== undefined || responseBody.charge !== undefined) {
+    if (!promptTokens) {
+      promptTokens = responseBody.prompt_tokens || responseBody.promptTokens || 0;
+    }
+    if (!completionTokens) {
+      completionTokens = responseBody.completion_tokens || responseBody.completionTokens || 0;
+    }
+    if (!cachedTokens) {
+      cachedTokens = responseBody.cached_tokens || responseBody.cachedTokens || 0;
+    }
+    if (!cost) {
+      cost = responseBody.cost || responseBody.price || responseBody.charge || 
+             responseBody.total_cost || responseBody.totalPrice || 0;
+    }
+
+    // PH8视频特定格式 - 检查视频响应中的费用信息
+    if (!cost && responseBody.output && responseBody.output.usage) {
+      cost = responseBody.output.usage.cost || responseBody.output.usage.price || 0;
+      if (!totalTokens) {
+        totalTokens = responseBody.output.usage.total_tokens || responseBody.output.usage.totalTokens || 0;
+      }
+    }
+
+    // PH8视频格式 - 检查 results 数组
+    if (!cost && responseBody.results && Array.isArray(responseBody.results)) {
+      for (const result of responseBody.results) {
+        if (result.usage) {
+          cost = cost || result.usage.cost || result.usage.price || 0;
+          totalTokens = totalTokens || result.usage.total_tokens || result.usage.totalTokens || 0;
+        }
+        cost = cost || result.cost || result.price || 0;
+      }
+    }
+
+    // 如果有费用或token数据，返回usage对象
+    // 费用优先 - 如果有费用数据，即使token为0也返回
+    if (cost > 0 || totalTokens > 0 || promptTokens > 0 || completionTokens > 0) {
       return {
-        promptTokens: responseBody.prompt_tokens || 0,
-        completionTokens: responseBody.completion_tokens || 0,
-        totalTokens: responseBody.total_tokens || 0,
-        cachedTokens: responseBody.cached_tokens || 0,
-        cost: responseBody.cost || responseBody.price || responseBody.charge || 0
+        promptTokens: parseInt(promptTokens) || 0,
+        completionTokens: parseInt(completionTokens) || 0,
+        totalTokens: parseInt(totalTokens) || 0,
+        cachedTokens: parseInt(cachedTokens) || 0,
+        cost: typeof cost === 'string' ? parseFloat(cost) : (cost || 0)
       };
     }
     
     return null;
   } catch (err) {
-    console.error('[PH8 Proxy] 提取 usage 数据失败:', err);
+    ph8Log.error('提取usage数据失败', { error: err.message });
     return null;
   }
 }
@@ -148,17 +241,19 @@ function extractUsage(responseBody) {
  */
 async function getUserId(req) {
   const allHeaders = Object.keys(req.headers).filter(k => k.toLowerCase().includes('user')).reduce((acc, k) => ({ ...acc, [k]: req.headers[k] }), {});
-  console.log('[PH8 Proxy][getUserId] 所有user相关请求头:', JSON.stringify(allHeaders));
+  ph8Log.debug('解析用户ID', {
+    headers: Object.keys(allHeaders).join(', '),
+    path: req.path
+  });
 
-  // Step 0: 优先使用 requireAuth 中间件已解析的 session token (最可靠)
   if (req.authUser && req.authUser.userId && req.authUser.userId !== 'guest' && req.authUser.userId !== '0') {
     const authUserId = req.authUser.userId;
-    console.log('[PH8 Proxy][getUserId] Step0 从authUser(已解析session token)获取:', `"${authUserId}"`);
+    ph8Log.debug('从session token解析用户ID', { maskedUserId: maskUserId(authUserId) });
     if (typeof authUserId === 'string' && authUserId.includes('@')) {
       try {
         const [rows] = await db.query('SELECT id FROM kbit_users WHERE email = ? LIMIT 1', [authUserId]);
         if (rows.length > 0) {
-          console.log('[PH8 Proxy][getUserId] Step0a authUser邮箱→数字ID:', authUserId, '→', rows[0].id);
+          ph8Log.debug('邮箱转换为数字ID成功', { maskedEmail: maskEmail(authUserId), userId: rows[0].id });
           return { userId: rows[0].id, rawValue: authUserId };
         }
       } catch (e) { /* ignore */ }
@@ -169,18 +264,20 @@ async function getUserId(req) {
     return { userId: authUserId, rawValue: String(authUserId) };
   }
 
-  // Step 1: 从 x-user-id / x-user-email 请求头获取
   let rawUserId = req.headers['x-user-id'] || req.headers['x-user-email'];
-  console.log('[PH8 Proxy][getUserId] Step1 从header获取:', rawUserId !== undefined ? `"${rawUserId}" (类型:${typeof rawUserId})` : 'undefined');
+  ph8Log.debug('从请求头获取用户ID', { rawType: typeof rawUserId, hasValue: !!rawUserId });
 
-  // Step 2: 从请求体中获取（备用方案）
   if (!rawUserId && req.body && req.body.user_id) {
     rawUserId = req.body.user_id;
-    console.log('[PH8 Proxy][getUserId] Step2 从body.user_id获取:', `"${rawUserId}"`);
+    ph8Log.debug('从请求体获取用户ID', { maskedUserId: maskUserId(rawUserId) });
   }
 
   if (!rawUserId || rawUserId === 'guest' || rawUserId === '0' || rawUserId === '未识别') {
-    console.warn(`[PH8 Proxy][getUserId] ⚠️ 无法识别用户! rawUserId="${rawUserId}", 将返回null。Referer: ${req.headers['referer']}, IP: ${req.ip}`);
+    ph8Log.warn('无法识别用户', {
+      rawValue: rawUserId || '(empty)',
+      referer: (req.headers['referer'] || '').substring(0, 50),
+      ip: req.ip
+    });
     return { userId: null, rawValue: rawUserId || '(empty)' };
   }
 
@@ -191,25 +288,25 @@ async function getUserId(req) {
         [rawUserId]
       );
       if (rows.length > 0) {
-        console.log('[PH8 Proxy][getUserId] Step3 邮箱→数字ID:', rawUserId, '→', rows[0].id);
+        ph8Log.debug('邮箱转换为数字ID', { maskedEmail: maskEmail(rawUserId), userId: rows[0].id });
         return { userId: rows[0].id, rawValue: rawUserId };
       }
     } catch (err) {
-      console.error('[PH8 Proxy][getUserId] 查询用户ID失败:', err.message);
+      ph8Log.error('查询用户ID失败', { error: err.message });
     }
   }
 
   if (typeof rawUserId === 'string' && /^\d+$/.test(rawUserId)) {
-    console.log('[PH8 Proxy][getUserId] Step4 纯数字ID:', parseInt(rawUserId));
+    ph8Log.debug('解析数字ID', { userId: parseInt(rawUserId) });
     return { userId: parseInt(rawUserId), rawValue: rawUserId };
   }
 
   if (typeof rawUserId === 'number') {
-    console.log('[PH8 Proxy][getUserId] Step5 数字类型ID:', rawUserId);
+    ph8Log.debug('解析数字类型ID', { userId: rawUserId });
     return { userId: rawUserId, rawValue: String(rawUserId) };
   }
 
-  console.log('[PH8 Proxy][getUserId] Step6 返回原始值:', rawUserId);
+  ph8Log.debug('返回原始值', { rawValue: rawUserId });
   return { userId: rawUserId, rawValue: String(rawUserId) };
 }
 
@@ -220,7 +317,6 @@ async function getUserId(req) {
  */
 async function getUserInfo(userId) {
   try {
-    // 从 users 表查询用户信息（新的统一积分池结构）
     const [rows] = await db.query(
       'SELECT id, nickname, email, user_tier, total_points, daily_quota, daily_used FROM `kbit_users` WHERE id = ? OR email = ?',
       [userId, userId]
@@ -238,20 +334,19 @@ async function getUserInfo(userId) {
       };
     }
 
-    // 如果没找到，返回默认值
     return {
       id: userId,
       nickname: '未知用户',
       email: userId,
-      tier: 'free'  // 默认等级
+      tier: 'free'
     };
   } catch (err) {
-    console.error('[PH8 Proxy] 获取用户信息失败:', err);
+    ph8Log.error('获取用户信息失败', { error: err.message, userId: maskUserId(String(userId)) });
     return {
       id: userId,
       nickname: '未知用户',
       email: userId,
-      tier: 'free'  // 默认等级
+      tier: 'free'
     };
   }
 }
@@ -287,7 +382,7 @@ router.get('/user-info', async (req, res) => {
       data: userInfo
     });
   } catch (err) {
-    console.error('[PH8] 获取用户信息失败:', err);
+    ph8Log.error('获取用户信息失败', { error: err.message });
     res.json({
       success: true,
       data: {
@@ -305,16 +400,18 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
   const fullPath = '/openai/v1/images/generations';
   const requestId = uuidv4();
   const startTime = Date.now();
-  
-  console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
-  console.log('[PH8 Proxy] 请求ID: ' + requestId);
-  console.log('[PH8 Proxy] 请求路径: /openai/v1/images/generations -> ' + fullPath);
-  console.log('[PH8 Proxy] 用户ID: ' + JSON.stringify(await getUserId(req)));
-  console.log('[PH8 Proxy] PH8_API_KEY 是否已设置: ' + (PH8_API_KEY ? '是 (' + PH8_API_KEY.substring(0, 10) + '...)' : '否'));
-  
+
+  ph8Log.info('图像生成请求开始', {
+    requestId,
+    path: fullPath,
+    apiKeySet: !!PH8_API_KEY
+  });
+
   const bodyData = JSON.stringify(req.body);
-  console.log('[PH8 Proxy] 请求体(前1000字符): ' + bodyData.substring(0, 1000));
-  
+  if (LOG_REQUEST_BODY) {
+    ph8Log.debug('请求体', { body: bodyData.substring(0, 500) });
+  }
+
   const options = {
     hostname: targetHost,
     port: 443,
@@ -326,16 +423,14 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
       'Authorization': 'Bearer ' + PH8_API_KEY
     }
   };
-  
-  console.log('[PH8 Proxy] 转发到: https://' + targetHost + fullPath);
-  // [安全修复] 不再打印 Authorization 头详情
-  // console.log('[PH8 Proxy] Authorization 头: Bearer ' + (PH8_API_KEY ? '已设置 (' + PH8_API_KEY.length + ' 字符)' : '未设置'));
-  
+
+  ph8Log.debug('转发请求', { target: `https://${targetHost}${fullPath}` });
+
   const proxyReq = https.request(options, async (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || '';
     const isBinaryContent = contentType.includes('image') || contentType.includes('octet-stream');
     let data = isBinaryContent ? Buffer.alloc(0) : '';
-    
+
     proxyRes.on('data', (chunk) => {
       if (isBinaryContent) {
         data = Buffer.concat([data, chunk]);
@@ -343,68 +438,57 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
         data += chunk;
       }
     });
-    
-    // [管理后台] 记录图像生成使用
+
     const userResultImg = await getUserId(req);
     const userId = userResultImg.userId;
     let actualUserId = userId;
     let userInfo = { nickname: '未知用户', email: '' };
-    
+
     try {
       if (userId) {
         userInfo = await getUserInfo(userId);
         actualUserId = userInfo.id || userId;
       }
     } catch (err) {
-      console.error('[PH8 Image] 获取用户信息失败:', err);
+      ph8Log.error('获取用户信息失败', { error: err.message });
     }
 
-    // 解析请求体获取模型和prompt信息
     let reqModel = '';
-    let reqPrompt = '';
     try {
       const bodyObj = JSON.parse(bodyData || '{}');
       reqModel = bodyObj.model || 'unknown';
-      reqPrompt = (bodyObj.prompt || '').substring(0, 100);
     } catch(e) {}
 
-    // 计算消耗积分（从PH8响应提取真实费用，或使用默认值）
-    // PH8 图像生成费用：仅使用 PH8 API 返回的真实值，不做任何估算
-    // 如果 PH8 未返回费用，则 cost=0，不扣用户积分
-    // 之前硬编码为 5 元导致多扣用户约 357 倍积分！
-    
     proxyRes.on('end', async () => {
-      // 尝试从PH8响应中提取真实费用
       let ph8ActualCost = 0;
       try {
         if (!isBinaryContent && typeof data === 'string' && data.trim()) {
           const respBody = JSON.parse(data);
-          // PH8 可能返回的费用字段（多种格式兼容）
-          ph8ActualCost = respBody.usage?.cost 
-                       || respBody.usage?.price 
-                       || respBody.cost 
-                       || respBody.price 
-                       || respBody.charge 
+          ph8ActualCost = respBody.usage?.cost
+                       || respBody.usage?.price
+                       || respBody.cost
+                       || respBody.price
+                       || respBody.charge
                        || respBody.usage?.total_cost
                        || 0;
         }
       } catch(e) {}
-      
-      // 仅使用 PH8 返回的真实费用，不做任何估算
+
       let finalCost = ph8ActualCost > 0 ? ph8ActualCost : 0;
-      console.log(`[PH8 Image] 费用计算: PH8返回=${ph8ActualCost}, 最终使用=${finalCost}元`);
       const responseTime = Date.now() - startTime;
-      
-      console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
-      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
-      
-      if (proxyRes.statusCode !== 200) {
-        console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
-      } else {
-        console.log('[PH8 Proxy] 成功响应体(前500字符): ' + (typeof data === 'string' ? data.substring(0, 500) : '二进制数据'));
+
+      ph8Log.info('图像生成响应', {
+        requestId,
+        status: proxyRes.statusCode,
+        responseTime,
+        cost: finalCost,
+        maskedUserId: maskUserId(String(actualUserId))
+      });
+
+      if (LOG_RESPONSE_BODY && proxyRes.statusCode !== 200) {
+        ph8Log.warn('错误响应体', { body: String(data).substring(0, 500) });
       }
 
-      // [管理后台] 写入使用记录
       try {
         await ph8TokenService.recordUsage({
           userId: actualUserId,
@@ -426,39 +510,38 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
           ipAddress: req.ip || req.connection.remoteAddress
         });
 
-        // 仅当 PH8 返回了真实费用时才扣减积分（cost=0 表示PH8未返回费用，不扣）
         if (proxyRes.statusCode === 200 && finalCost > 0) {
           try {
             await ph8TokenService.deductBalance(actualUserId, finalCost, userInfo.nickname, userInfo.email);
-            console.log(`[PH8 Image] 记录成功并扣费: user=${actualUserId}(${userInfo.nickname}), cost=${finalCost}`);
+            ph8Log.info('图像生成扣费成功', {
+              requestId,
+              maskedUserId: maskUserId(String(actualUserId)),
+              cost: finalCost
+            });
           } catch (deductErr) {
-            console.error('[PH8 Image] 扣费失败:', deductErr);
+            ph8Log.error('图像生成扣费失败', { error: deductErr.message });
           }
-        } else if (proxyRes.statusCode === 200 && finalCost === 0) {
-          console.log(`[PH8 Image] PH8未返回费用，仅记录日志不扣费: user=${actualUserId}(${userInfo.nickname})`);
-        } else {
-          console.log(`[PH8 Image] 记录失败请求: user=${actualUserId}, status=${proxyRes.statusCode}`);
         }
       } catch (recordErr) {
-        console.error('[PH8 Image] 记录使用失败:', recordErr);
+        ph8Log.error('图像生成记录失败', { error: recordErr.message });
       }
-      
+
       res.setHeader('Content-Type', contentType || 'application/json');
       res.status(proxyRes.statusCode).send(data);
     });
   });
-  
+
   proxyReq.on('error', (err) => {
-    console.error('[PH8 Proxy Error] 图像生成失败:', err);
+    ph8Log.error('图像生成请求失败', { error: err.message, requestId });
     res.status(502).json({ error: 'Proxy error', message: err.message });
   });
-  
+
   proxyReq.setTimeout(300000, () => {
-    console.error('[PH8 Proxy] 图像生成超时');
+    ph8Log.error('图像生成请求超时', { requestId });
     proxyReq.destroy();
     res.status(504).json({ error: 'Gateway timeout' });
   });
-  
+
   proxyReq.write(bodyData);
   proxyReq.end();
 });
@@ -469,15 +552,14 @@ router.post('/v1/images/generations', async (req, res) => {
   const fullPath = '/v1/images/generations';
   const requestId = uuidv4();
   const startTime = Date.now();
-  
-  console.log('[PH8 Proxy] ==================== 图像生成请求 ====================');
-  console.log('[PH8 Proxy] 请求ID: ' + requestId);
-  console.log('[PH8 Proxy] 请求路径: ' + fullPath);
-  console.log('[PH8 Proxy] 用户ID: ' + JSON.stringify(await getUserId(req)));
-  
+
+  ph8Log.info('图像生成v1请求', { requestId, path: fullPath });
+
   const bodyData = JSON.stringify(req.body);
-  console.log('[PH8 Proxy] 请求体(前500字符): ' + bodyData.substring(0, 500));
-  
+  if (LOG_REQUEST_BODY) {
+    ph8Log.debug('请求体', { body: bodyData.substring(0, 500) });
+  }
+
   const options = {
     hostname: targetHost,
     port: 443,
@@ -489,15 +571,14 @@ router.post('/v1/images/generations', async (req, res) => {
       'Authorization': 'Bearer ' + PH8_API_KEY
     }
   };
-  
-  console.log('[PH8 Proxy] 转发到: https://' + targetHost + fullPath);
-  console.log('[PH8 Proxy] Authorization: Bearer ' + (PH8_API_KEY ? '已设置' : '未设置'));
-  
+
+  ph8Log.debug('转发请求', { target: `https://${targetHost}${fullPath}`, apiKeySet: !!PH8_API_KEY });
+
   const proxyReq = https.request(options, async (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || '';
     const isBinaryContent = contentType.includes('image') || contentType.includes('octet-stream');
     let data = isBinaryContent ? Buffer.alloc(0) : '';
-    
+
     proxyRes.on('data', (chunk) => {
       if (isBinaryContent) {
         data = Buffer.concat([data, chunk]);
@@ -505,23 +586,15 @@ router.post('/v1/images/generations', async (req, res) => {
         data += chunk;
       }
     });
-    
+
     proxyRes.on('end', async () => {
       const responseTime = Date.now() - startTime;
-      
-      console.log('[PH8 Proxy] 图像生成响应状态码: ' + proxyRes.statusCode);
-      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
-      
-      if (proxyRes.statusCode !== 200) {
-        console.log('[PH8 Proxy] 错误响应体: ' + (typeof data === 'string' ? data.substring(0, 1000) : '二进制数据'));
-      }
 
-      // [管理后台] 写入使用记录
       const userResult2 = await getUserId(req);
       const userId2 = userResult2.userId;
       let actualUserId2 = userId2;
       let userInfo2 = { nickname: '未知用户', email: '' };
-      
+
       try {
         if (userId2) {
           userInfo2 = await getUserInfo(userId2);
@@ -533,38 +606,32 @@ router.post('/v1/images/generations', async (req, res) => {
       try {
         reqModel2 = JSON.parse(bodyData || '{}').model || 'unknown';
       } catch(e) {}
-      
-      // 尝试从PH8响应中提取真实费用（图像生成）
+
       let ph8ActualCost2 = 0;
       try {
-        // 首先尝试从响应头中提取费用（PH8会在响应头中返回费用）
         const costHeader = proxyRes.headers['x-ph8-cost'] || proxyRes.headers['x-cost'] || proxyRes.headers['x-api-cost'] || proxyRes.headers['cost'];
         if (costHeader) {
           ph8ActualCost2 = parseFloat(costHeader);
-          console.log('[PH8 Image v1] 从响应头获取费用: ' + ph8ActualCost2 + '元');
         }
-        
-        // 如果响应头没有，尝试从JSON响应体中提取
+
         if (!ph8ActualCost2 && !isBinaryContent && typeof data === 'string' && data.trim()) {
           const respBody = JSON.parse(data);
-          ph8ActualCost2 = respBody.usage?.cost 
-                       || respBody.usage?.price 
+          ph8ActualCost2 = respBody.usage?.cost
+                       || respBody.usage?.price
                        || respBody.cost || respBody.price || respBody.charge
                        || respBody.usage?.total_cost || 0;
-          console.log('[PH8 Image v1] 从响应体获取费用: ' + ph8ActualCost2 + '元');
         }
-        
-        // 不使用请求头中的预估费用，只使用PH8返回的真实费用
-        if (!ph8ActualCost2) {
-          console.log('[PH8 Image v1] PH8未返回费用数据，cost=0');
-        }
-      } catch(e) {
-        console.log('[PH8 Image v1] 提取费用失败: ' + e.message);
-      }
-      
-      // 仅使用 PH8 返回的真实费用，不做任何估算
+      } catch(e) {}
+
       const finalCost2 = ph8ActualCost2 > 0 ? ph8ActualCost2 : 0;
-      console.log(`[PH8 Image v1] 费用计算: PH8返回=${ph8ActualCost2}, 最终使用=${finalCost2}元`);
+
+      ph8Log.info('图像生成v1响应', {
+        requestId,
+        status: proxyRes.statusCode,
+        responseTime,
+        cost: finalCost2,
+        maskedUserId: maskUserId(String(actualUserId2))
+      });
 
       try {
         await ph8TokenService.recordUsage({
@@ -584,32 +651,30 @@ router.post('/v1/images/generations', async (req, res) => {
           responseTimeMs: responseTime,
           ipAddress: req.ip || req.connection.remoteAddress
         });
-        
+
         if (proxyRes.statusCode === 200 && finalCost2 > 0) {
           try { await ph8TokenService.deductBalance(actualUserId2, finalCost2, userInfo2.nickname, userInfo2.email); } catch(e) {}
-        } else if (proxyRes.statusCode === 200) {
-          console.log(`[PH8 Image v1] PH8未返回费用，仅记录不扣费`);
         }
       } catch(e) {
-        console.error('[PH8 Image v1] 记录使用失败:', e);
+        ph8Log.error('记录使用失败', { error: e.message });
       }
-      
+
       res.setHeader('Content-Type', contentType || 'application/json');
       res.status(proxyRes.statusCode).send(data);
     });
   });
-  
+
   proxyReq.on('error', (err) => {
-    console.error('[PH8 Proxy Error] 图像生成失败:', err);
+    ph8Log.error('图像生成请求失败', { error: err.message, requestId });
     res.status(502).json({ error: 'Proxy error', message: err.message });
   });
-  
+
   proxyReq.setTimeout(300000, () => {
-    console.error('[PH8 Proxy] 图像生成超时');
+    ph8Log.error('图像生成请求超时', { requestId });
     proxyReq.destroy();
     res.status(504).json({ error: 'Gateway timeout' });
   });
-  
+
   proxyReq.write(bodyData);
   proxyReq.end();
 });
@@ -632,16 +697,18 @@ router.all('/*', requireAuth, async (req, res) => {
   
   const requestId = uuidv4();
   const startTime = Date.now();
-  
-  // 详细调试日志
-  console.log('[PH8 Proxy] ==================== 请求开始 ====================');
-  console.log('[PH8 Proxy] 请求ID: ' + requestId);
-  console.log('[PH8 Proxy] 请求方法: ' + req.method);
-  console.log('[PH8 Proxy] 请求路径: ' + fullPath);
-  console.log('[PH8 Proxy] 请求来源: ' + (req.headers['referer'] || '未知'));
-  console.log('[PH8 Proxy] 用户代理: ' + (req.headers['user-agent'] || '未知'));
-  console.log('[PH8 Proxy] 用户ID: ' + JSON.stringify(await getUserId(req)));
-  
+
+  ph8Log.info('PH8代理请求', {
+    requestId,
+    method: req.method,
+    path: fullPath,
+    referer: (req.headers['referer'] || '').substring(0, 50)
+  });
+
+  if (LOG_REQUEST_BODY) {
+    ph8Log.debug('请求头', { ua: (req.headers['user-agent'] || '').substring(0, 50) });
+  }
+
   // 解码图片数据中的 HTML 实体（修复 &#x2F; 等编码问题）
   if (req.body && req.body.messages) {
     req.body.messages.forEach((msg) => {
@@ -654,29 +721,24 @@ router.all('/*', requireAuth, async (req, res) => {
       }
     });
   }
-  
-  // 调试日志：检查请求体中是否包含图片数据
-  if (req.body && req.body.messages) {
+
+  // 检查请求体中是否包含图片数据（调试用）
+  if (LOG_REQUEST_BODY && req.body && req.body.messages) {
     const messages = req.body.messages;
     messages.forEach((msg, index) => {
       if (msg.content && Array.isArray(msg.content)) {
         const imageContents = msg.content.filter(c => c.type === 'image_url');
         if (imageContents.length > 0) {
-          console.log(`[PH8 Proxy] 消息 ${index} 包含 ${imageContents.length} 张图片`);
-          imageContents.forEach((img, imgIndex) => {
-            if (img.image_url && img.image_url.url) {
-              const url = img.image_url.url;
-              console.log(`[PH8 Proxy] 图片 ${imgIndex}: 长度=${url.length}, startsWithData=${url.startsWith('data:')}`);
-              if (url.length > 1000) {
-                console.log(`[PH8 Proxy] 图片 ${imgIndex}: 前100字符=${url.substring(0, 100)}...`);
-              }
-            }
+          ph8Log.debug('消息包含图片', {
+            msgIndex: index,
+            imageCount: imageContents.length,
+            firstImageLen: imageContents[0]?.image_url?.url?.length || 0
           });
         }
       }
     });
   }
-  
+
   const bodyData = req.body ? JSON.stringify(req.body) : '';
   const userResult = await getUserId(req);
   const userId = userResult.userId;
@@ -684,32 +746,22 @@ router.all('/*', requireAuth, async (req, res) => {
   const requestType = getRequestType(fullPath, req.body);
   const model = getModel(req.body, fullPath);
 
-  // [安全检查] 匿名用户处理与额度控制
+  // 安全检查：匿名用户处理与额度控制
   if (userId === null || userId === 'anonymous') {
-    console.warn(`[PH8 Proxy] ⚠️ 匿名请求拦截: path=${fullPath}, type=${requestType}, rawId="${rawUserIdValue}", IP=${req.ip}`);
-    
-    // 尝试通过IP关联最近用户（同一IP最近5分钟内的已知用户）
-    try {
-      const [recentUsers] = await db.query(
-        `SELECT DISTINCT user_id, user_nickname FROM kbit_usage_logs 
-         WHERE ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE) 
-           AND user_id IS NOT NULL AND user_id != 0 AND user_id != 'anonymous'
-         ORDER BY created_at DESC LIMIT 1`,
-        [req.ip || req.connection.remoteAddress]
-      );
-      if (recentUsers.length > 0) {
-        console.log(`[PH8 Proxy] ✅ IP关联成功: IP=${req.ip} → userId=${recentUsers[0].user_id} (${recentUsers[0].user_nickname})`);
-      }
-    } catch (e) { /* ignore */ }
-    
-    // 对于POST请求（生成类操作），匿名用户仍允许通过但记录警告
-    // 额度控制由前端 localStorage + 后端 consume API 双重保障
+    ph8Log.warn('匿名请求', {
+      requestId,
+      path: fullPath,
+      type: requestType,
+      rawId: rawUserIdValue,
+      ip: req.ip
+    });
+
     if (req.method === 'POST') {
-      console.warn(`[PH8 Proxy] 允许匿名POST请求继续（依赖前端额度控制）: ${fullPath}`);
+      ph8Log.warn('允许匿名POST请求', { requestId, path: fullPath });
     }
   }
-  
-  // [额度预检] 已识别用户：检查是否超出日限额
+
+  // 额度预检：已识别用户
   if (userId && userId !== 'anonymous' && typeof userId !== 'string' || (typeof userId === 'number' && userId > 0)) {
     try {
       const numericUserId = typeof userId === 'number' ? userId : parseInt(userId);
@@ -723,12 +775,17 @@ router.all('/*', requireAuth, async (req, res) => {
           const du = parseFloat(quotaCheck[0].daily_used) || 0;
           const tp = parseFloat(quotaCheck[0].total_points) || 0;
           if (du >= dq && tp <= 0) {
-            console.warn(`[PH8 Proxy] 🚫 用户${numericUserId}已达日限额(${du}/${dq})且积分为0，建议拒绝`);
+            ph8Log.warn('用户额度不足', {
+              userId: numericUserId,
+              dailyUsed: du,
+              dailyQuota: dq,
+              totalPoints: tp
+            });
           }
         }
       }
-    } catch (e) { 
-      console.error('[PH8 Proxy] 额度预检失败:', e.message); 
+    } catch (e) {
+      ph8Log.error('额度预检失败', { error: e.message });
     }
   }
   
@@ -762,227 +819,195 @@ router.all('/*', requireAuth, async (req, res) => {
     
     proxyRes.on('end', async () => {
       const responseTime = Date.now() - startTime;
-      
-      // 详细响应日志
-      console.log('[PH8 Proxy] ==================== 响应开始 ====================');
-      console.log('[PH8 Proxy] 请求ID: ' + requestId);
-      console.log('[PH8 Proxy] 响应状态码: ' + proxyRes.statusCode);
-      console.log('[PH8 Proxy] 响应时间: ' + responseTime + 'ms');
-      console.log('[PH8 Proxy] 响应内容类型: ' + contentType);
-      
-      // 如果响应状态码不是 200，记录详细信息
-      if (proxyRes.statusCode !== 200) {
-        console.log('[PH8 Proxy] ============ 错误响应详情 ============');
-        console.log('[PH8 Proxy] 请求体(前2000字符): ' + bodyData.substring(0, 2000));
-        console.log('[PH8 Proxy] 响应体(前2000字符): ' + (typeof data === 'string' ? data.substring(0, 2000) : '二进制数据'));
-        console.log('[PH8 Proxy] =====================================');
+
+      ph8Log.info('PH8响应', {
+        requestId,
+        status: proxyRes.statusCode,
+        responseTime,
+        contentType
+      });
+
+      if (LOG_RESPONSE_BODY && proxyRes.statusCode !== 200) {
+        ph8Log.warn('错误响应详情', {
+          body: String(data).substring(0, 500)
+        });
       }
-      
-      // 设置响应头
+
       res.setHeader('Content-Type', contentType || 'application/json');
       res.status(proxyRes.statusCode).send(data);
-      
-      // 异步记录 Token 使用（不阻塞响应）
+
       try {
-        // [防重复扣费] 视频的GET请求（轮询/下载）通常不记账，只有POST创建才记账
-        // 但视频完成状态的GET请求可能包含usage数据，需要处理
         const isVideoGetRequest = fullPath.includes('/videos') && req.method === 'GET';
-        
+
         if (isVideoGetRequest && !isBinaryContent) {
-          // 尝试解析响应体，检查是否为完成状态
           try {
             const responseBody = JSON.parse(data);
-            // 如果是完成状态且包含usage数据，允许记账
             if (responseBody.status === 'completed' && (responseBody.usage || responseBody.tokens || responseBody.cost)) {
-              console.log(`[PH8 Proxy] 视频完成状态GET请求，包含usage数据，允许记账`);
+              ph8Log.debug('视频完成状态，允许记账', { requestId });
             } else {
-              console.log(`[PH8 Proxy] 跳过视频GET请求记账(非完成状态或无usage): ${fullPath}`);
+              ph8Log.debug('跳过视频GET记账', { requestId, status: responseBody.status });
               return;
             }
           } catch (e) {
-            // 解析失败，可能是下载请求
-            console.log(`[PH8 Proxy] 跳过视频GET请求记账(解析失败): ${fullPath}`);
+            ph8Log.debug('跳过视频GET记账(解析失败)', { requestId });
             return;
           }
         } else if (isVideoGetRequest && isBinaryContent) {
-          // 二进制内容（实际视频文件下载），跳过记账
-          console.log(`[PH8 Proxy] 跳过视频二进制GET请求记账(下载): ${fullPath}`);
+          ph8Log.debug('跳过视频二进制下载记账', { requestId });
           return;
         }
-        
-        // 视频生成响应可能是 application/json 但包含视频URL，需要特殊处理
+
         const isVideoResponse = fullPath.includes('/videos') && !isBinaryContent;
-        
+
         if (!isBinaryContent) {
-          // 检查是否为 JSON 内容
           const isJsonContent = contentType && contentType.includes('application/json');
           if (isJsonContent || isVideoResponse) {
             try {
               const responseBody = JSON.parse(data);
-              console.log('[PH8 Proxy] API响应:', JSON.stringify(responseBody, null, 2));
               const usage = extractUsage(responseBody);
-              console.log('[PH8 Proxy] 提取的usage:', usage);
-              
-              // 获取用户信息（增强版：即使userId为null也尝试用原始值识别）
+
               let userInfo = { nickname: '未知用户', email: userId };
               if (userId === null && rawUserIdValue && rawUserIdValue !== '(empty)' && rawUserIdValue !== 'guest') {
-                console.log(`[PH8 Proxy] userId为null但存在rawUserIdValue="${rawUserIdValue}"，尝试用它查找用户`);
                 userInfo = { nickname: `用户(${rawUserIdValue.substring(0, 20)})`, email: rawUserIdValue };
                 try {
                   const fallbackInfo = await getUserInfo(rawUserIdValue);
                   if (fallbackInfo && fallbackInfo.nickname !== '未知用户') {
                     userInfo = fallbackInfo;
-                    console.log(`[PH8 Proxy] ✅ 通过rawUserIdValue成功找到用户:`, userInfo.nickname);
                   }
-                } catch (e) {
-                  console.log('[PH8 Proxy] rawUserIdValue查询失败，使用原始值作为标识');
-                }
+                } catch (e) {}
               } else if (userId !== null) {
                 try {
                   userInfo = await getUserInfo(userId);
                 } catch (err) {
-                  console.error('[PH8 Proxy] 获取用户信息失败:', err);
+                  ph8Log.error('获取用户信息失败', { error: err.message });
                 }
               } else {
-                console.warn(`[PH8 Proxy] ⚠️ 完全无法识别用户! rawUserIdValue="${rawUserIdValue}", 将记录为"未识别-IP:${req.ip?.substring(0, 12)}"`);
                 userInfo = { nickname: `未识别-${req.ip?.substring(0, 12) || 'unknown'}`, email: rawUserIdValue || null };
               }
 
-              // 使用用户的实际 ID 或邮箱
               const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
-              
+
               if (usage) {
-                // 记录到数据库
-                try {
-                  // 检查费用值，确保正确处理
-                  console.log('[PH8 Proxy] 原始费用值:', usage.cost);
-                  console.log('[PH8 Proxy] 响应体:', JSON.stringify(responseBody, null, 2));
-                  
-                  // 费用处理：严格使用PH8返回的值，不做任何估算
-                  let calculatedCost = usage.cost;
-                  let totalTokens = usage.totalTokens;
-                  // 确保费用是数字格式
-                  if (calculatedCost && typeof calculatedCost === 'string') {
-                    calculatedCost = parseFloat(calculatedCost);
-                  }
-                  console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${calculatedCost}, totalTokens=${totalTokens}`);
-                  
-                  await ph8TokenService.recordUsage({
-                    userId: actualUserId,
-                    userNickname: userInfo.nickname,
-                    userEmail: userInfo.email,
-                    requestId: responseBody.id || requestId,
-                    model: model,
-                    channelId: 'ph8-default', // 添加 channelId
-                    promptTokens: usage.promptTokens,
-                    completionTokens: usage.completionTokens,
-                    totalTokens: totalTokens,
-                    cost: calculatedCost,
-                    cachedTokens: usage.cachedTokens,
-                    requestType: requestType,
-                    endpoint: fullPath,
-                    status: proxyRes.statusCode === 200 ? 'success' : 'failed',
-                    errorMessage: responseBody.error?.message || null,
-                    responseTimeMs: responseTime,
-                    ipAddress: req.ip || req.connection.remoteAddress
-                  });
-
-                  // 更新用户余额（传递昵称和邮箱）
-                  if (calculatedCost > 0) {
-                    await ph8TokenService.deductBalance(actualUserId, calculatedCost, userInfo.nickname, userInfo.email);
-                  }
-
-                  console.log(`[PH8 Proxy] Token记录成功: user=${userId}(${userInfo.nickname}), prompt=${usage.promptTokens}, completion=${usage.completionTokens}, cost=${calculatedCost}, type=${requestType}`);
-                } catch (err) {
-                  console.error('[PH8 Proxy] 记录 Token 使用失败:', err);
+                let calculatedCost = usage.cost;
+                let totalTokens = usage.totalTokens;
+                if (calculatedCost && typeof calculatedCost === 'string') {
+                  calculatedCost = parseFloat(calculatedCost);
                 }
+
+                await ph8TokenService.recordUsage({
+                  userId: actualUserId,
+                  userNickname: userInfo.nickname,
+                  userEmail: userInfo.email,
+                  requestId: responseBody.id || requestId,
+                  model: model,
+                  channelId: 'ph8-default',
+                  promptTokens: usage.promptTokens,
+                  completionTokens: usage.completionTokens,
+                  totalTokens: totalTokens,
+                  cost: calculatedCost,
+                  cachedTokens: usage.cachedTokens,
+                  requestType: requestType,
+                  endpoint: fullPath,
+                  status: proxyRes.statusCode === 200 ? 'success' : 'failed',
+                  errorMessage: responseBody.error?.message || null,
+                  responseTimeMs: responseTime,
+                  ipAddress: req.ip || req.connection.remoteAddress
+                });
+
+                if (calculatedCost > 0) {
+                  await ph8TokenService.deductBalance(actualUserId, calculatedCost, userInfo.nickname, userInfo.email);
+                }
+
+                ph8Log.info('Token记录成功', {
+                  requestId,
+                  maskedUserId: maskUserId(String(actualUserId)),
+                  prompt: usage.promptTokens,
+                  completion: usage.completionTokens,
+                  cost: calculatedCost,
+                  type: requestType
+                });
               } else {
-                console.log('[PH8 Proxy] 响应中未找到 usage 数据');
-                
-                // 费用处理：严格使用PH8返回的值，不做任何估算
+                const fallbackUsage = extractUsage(responseBody);
                 let videoCost = 0;
                 let totalTokens = 0;
-                
-                // 尝试从响应中直接获取费用（支持多种格式）
-                const costFromResponse = responseBody.cost || responseBody.price || responseBody.charge || 
-                                      (responseBody.usage && (responseBody.usage.cost || responseBody.usage.price)) || 0;
-                totalTokens = responseBody.total_tokens || responseBody.tokens || 
-                             (responseBody.usage && responseBody.usage.total_tokens) || 0;
-                
-                if (costFromResponse && costFromResponse > 0) {
-                  videoCost = parseFloat(costFromResponse);
-                  console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${videoCost}, totalTokens=${totalTokens}`);
-                } else {
-                  console.log(`[PH8 Proxy] ⚠️ 请求: PH8未返回费用数据, cost=0。响应体预览: ${JSON.stringify(responseBody).substring(0, 200)}`);
+                let promptTokens = 0;
+                let completionTokens = 0;
+
+                if (fallbackUsage) {
+                  videoCost = fallbackUsage.cost;
+                  totalTokens = fallbackUsage.totalTokens;
+                  promptTokens = fallbackUsage.promptTokens;
+                  completionTokens = fallbackUsage.completionTokens;
                 }
-                
-                // 即使没有 usage 数据，也记录一个基本的使用记录
-                try {
-                  await ph8TokenService.recordUsage({
-                    userId: actualUserId,
-                    userNickname: userInfo.nickname,
-                    userEmail: userInfo.email,
-                    requestId: requestId,
-                    model: model,
-                    channelId: 'ph8-default',
-                    promptTokens: 0,
-                    completionTokens: 0,
-                    totalTokens: totalTokens,
-                    cost: videoCost,
-                    cachedTokens: 0,
-                    requestType: requestType,
-                    endpoint: fullPath,
-                    status: proxyRes.statusCode === 200 ? 'success' : 'error',
-                    errorMessage: videoCost > 0 ? null : 'No usage data found',
-                    responseTimeMs: responseTime,
-                    ipAddress: req.ip || req.connection.remoteAddress
-                  });
-                  
-                  // 仅当 PH8 返回了真实费用时才扣减（视频通常 cost=0，由前端从PH8账单扣费）
-                  if (videoCost > 0) {
-                    try {
-                      await ph8TokenService.deductBalance(actualUserId, videoCost, userInfo.nickname, userInfo.email);
-                      console.log(`[PH8 Proxy] 视频余额扣减成功: user=${userInfo.nickname}, cost=${videoCost}元`);
-                    } catch (deductErr) {
-                      console.error('[PH8 Proxy] 视频余额扣减失败:', deductErr.message);
-                    }
+
+                await ph8TokenService.recordUsage({
+                  userId: actualUserId,
+                  userNickname: userInfo.nickname,
+                  userEmail: userInfo.email,
+                  requestId: requestId,
+                  model: model,
+                  channelId: 'ph8-default',
+                  promptTokens: promptTokens,
+                  completionTokens: completionTokens,
+                  totalTokens: totalTokens,
+                  cost: videoCost,
+                  cachedTokens: 0,
+                  requestType: requestType,
+                  endpoint: fullPath,
+                  status: proxyRes.statusCode === 200 ? 'success' : 'error',
+                  errorMessage: videoCost > 0 ? null : 'No usage data found in PH8 response',
+                  responseTimeMs: responseTime,
+                  ipAddress: req.ip || req.connection.remoteAddress
+                });
+
+                if (videoCost > 0) {
+                  try {
+                    await ph8TokenService.deductBalance(actualUserId, videoCost, userInfo.nickname, userInfo.email);
+                    ph8Log.info('视频费用扣减成功', {
+                      requestId,
+                      maskedUserId: maskUserId(String(actualUserId)),
+                      cost: videoCost,
+                      totalTokens: totalTokens
+                    });
+                  } catch (deductErr) {
+                    ph8Log.error('视频余额扣减失败', { error: deductErr.message });
                   }
-                } catch (err) {
-                  console.error('[PH8 Proxy] 记录 Token 使用失败:', err);
+                } else if (proxyRes.statusCode === 200) {
+                  ph8Log.warn('视频生成成功但未找到费用数据', { 
+                    requestId, 
+                    maskedUserId: maskUserId(String(actualUserId)),
+                    responsePreview: JSON.stringify(responseBody).substring(0, 200)
+                  });
                 }
               }
 
-              // 记录 API 调用日志（可选，用于调试）
               try {
                 await ph8TokenService.logApiCall({
                   userId: userId,
                   userNickname: userInfo.nickname,
                   userEmail: userInfo.email,
                   endpoint: fullPath,
-                  requestBody: bodyData.substring(0, 1000), // 限制长度
+                  requestBody: bodyData.substring(0, 1000),
                   responseBody: data.substring(0, 1000),
                   statusCode: proxyRes.statusCode
                 });
               } catch (err) {
-                console.error('[PH8 Proxy] 记录 API 日志失败:', err);
+                ph8Log.error('记录API日志失败', { error: err.message });
               }
             } catch (jsonErr) {
-              console.error('[PH8 Proxy] JSON 解析失败:', jsonErr);
-              // 不影响用户请求，只记录错误
+              ph8Log.error('JSON解析失败', { error: jsonErr.message });
             }
           } else {
-            console.log('[PH8 Proxy] 非 JSON 响应，跳过 Token 记录');
+            ph8Log.debug('非JSON响应，跳过Token记录', { requestId });
           }
         } else {
-          console.log('[PH8 Proxy] 二进制响应（图片/视频），记录基本使用信息');
-          
-          // [防重复扣费] 视频二进制下载(GET)不记账
+          ph8Log.debug('二进制响应，记录基本使用信息', { requestId });
+
           if (fullPath.includes('/videos') && req.method === 'GET') {
-            console.log(`[PH8 Proxy] 跳过视频二进制GET请求记账(防重复): ${fullPath}`);
+            ph8Log.debug('跳过视频二进制GET记账', { requestId, path: fullPath });
             return;
           }
-          
-          // 对于二进制响应（图片/视频），也要记录使用日志
+
           try {
             let userInfo = { nickname: '未知用户', email: userId };
             if (userId === null && rawUserIdValue && rawUserIdValue !== '(empty)' && rawUserIdValue !== 'guest') {
@@ -992,30 +1017,27 @@ router.all('/*', requireAuth, async (req, res) => {
                 if (fallbackInfo && fallbackInfo.nickname !== '未知用户') {
                   userInfo = fallbackInfo;
                 }
-              } catch (e) { /* ignore */ }
+              } catch (e) {}
             } else if (userId !== null) {
               try {
                 userInfo = await getUserInfo(userId);
               } catch (err) {
-                console.error('[PH8 Proxy] 获取用户信息失败:', err);
+                ph8Log.error('获取用户信息失败', { error: err.message });
               }
             } else {
               userInfo = { nickname: `未识别-${req.ip?.substring(0, 12) || 'unknown'}`, email: rawUserIdValue || null };
             }
-            
+
             const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
-            
-            // 费用处理：严格使用PH8返回的值，不做任何估算
+
             let calculatedCost = 0;
             let totalTokens = 0;
-            
+
             if (usage) {
               calculatedCost = usage.cost ? parseFloat(usage.cost) : 0;
               totalTokens = usage.totalTokens || 0;
             }
-            
-            console.log(`[PH8 Proxy] 费用提取: PH8返回cost=${calculatedCost}, totalTokens=${totalTokens}`);
-            
+
             await ph8TokenService.recordUsage({
               userId: actualUserId,
               userNickname: userInfo.nickname,
@@ -1035,36 +1057,38 @@ router.all('/*', requireAuth, async (req, res) => {
               responseTimeMs: responseTime,
               ipAddress: req.ip || req.connection.remoteAddress
             });
-            
-            // 仅当计算出了真实费用时才扣减余额
+
             if (proxyRes.statusCode === 200 && calculatedCost > 0) {
               await ph8TokenService.deductBalance(actualUserId, calculatedCost, userInfo.nickname, userInfo.email);
             }
-            
-            console.log(`[PH8 Proxy] 二进制响应记录成功: user=${userId}(${userInfo.nickname}), type=${requestType}, cost=${calculatedCost}`);
+
+            ph8Log.info('二进制响应记录成功', {
+              requestId,
+              maskedUserId: maskUserId(String(actualUserId)),
+              type: requestType,
+              cost: calculatedCost
+            });
           } catch (err) {
-            console.error('[PH8 Proxy] 记录二进制响应使用日志失败:', err);
+            ph8Log.error('记录二进制响应日志失败', { error: err.message });
           }
         }
         
       } catch (err) {
-        console.error('[PH8 Proxy] 记录 Token 使用失败:', err);
-        // 不影响用户请求，只记录错误
+        ph8Log.error('记录Token使用失败', { error: err.message });
       }
     });
   });
-  
+
   proxyReq.on('error', (err) => {
-    console.error('[PH8 Proxy Error]', err);
-    
-    // 记录错误
+    ph8Log.error('PH8代理请求失败', { error: err.message, requestId });
+
     ph8TokenService.recordUsage({
       userId: userId,
       userNickname: '未知用户',
       userEmail: userId,
       requestId: requestId,
       model: model,
-      channelId: 'ph8-default', // 添加 channelId
+      channelId: 'ph8-default',
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
@@ -1075,28 +1099,25 @@ router.all('/*', requireAuth, async (req, res) => {
       errorMessage: err.message,
       responseTimeMs: Date.now() - startTime,
       ipAddress: req.ip || req.connection.remoteAddress
-    }).catch(console.error);
-    
-    res.status(502).json({ 
-      error: 'Proxy error', 
+    }).catch(() => {});
+
+    res.status(502).json({
+      error: 'Proxy error',
       message: err.message,
       requestId: requestId
     });
   });
-  
-  // 设置超时
-  proxyReq.setTimeout(300000, () => { // 5分钟超时
-    console.error('[PH8 Proxy] 请求超时');
-    proxyReq.destroy();
-    
-    // 记录超时
+
+  proxyReq.setTimeout(300000, () => {
+    ph8Log.error('PH8代理请求超时', { requestId });
+
     ph8TokenService.recordUsage({
       userId: userId,
       userNickname: '未知用户',
       userEmail: userId,
       requestId: requestId,
       model: model,
-      channelId: 'ph8-default', // 添加 channelId
+      channelId: 'ph8-default',
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
@@ -1107,10 +1128,10 @@ router.all('/*', requireAuth, async (req, res) => {
       errorMessage: 'Request timeout',
       responseTimeMs: 300000,
       ipAddress: req.ip || req.connection.remoteAddress
-    }).catch(console.error);
-    
-    res.status(504).json({ 
-      error: 'Gateway timeout', 
+    }).catch(() => {});
+
+    res.status(504).json({
+      error: 'Gateway timeout',
       message: 'The request to PH8 API timed out',
       requestId: requestId
     });

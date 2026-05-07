@@ -1,14 +1,43 @@
 const baiduSearch = require('./baiduSearchService');
 const tavilyService = require('./tavilyService');
+const { logger, LogLevel } = require('./loggerService');
+
+const isProduction = process.env.NODE_ENV === 'production';
+const SEARCH_LOG_LEVEL = isProduction
+  ? (LogLevel[process.env.SEARCH_LOG_LEVEL?.toUpperCase()] || LogLevel.WARN)
+  : LogLevel.INFO;
+
+const searchLog = {
+  debug: (message, data) => {
+    if (SEARCH_LOG_LEVEL <= LogLevel.DEBUG) {
+      logger.debug(`[Search] ${message}`, data);
+    }
+  },
+  info: (message, data) => {
+    if (SEARCH_LOG_LEVEL <= LogLevel.INFO) {
+      logger.info(`[Search] ${message}`, data);
+    }
+  },
+  warn: (message, data) => {
+    if (SEARCH_LOG_LEVEL <= LogLevel.WARN) {
+      logger.warn(`[Search] ${message}`, data);
+    }
+  },
+  error: (message, data) => {
+    if (SEARCH_LOG_LEVEL <= LogLevel.ERROR) {
+      logger.error(`[Search] ${message}`, data);
+    }
+  }
+};
 
 const PRO_TIER = ['pro', 'plus'];
 const CHINESE_CONTEXT_KEYWORDS = [
-  '中文', '国风', '中式', '中国', '国内', '本土', '传统', 
+  '中文', '国风', '中式', '中国', '国内', '本土', '传统',
   '古典', '江南', '东方', '故宫', '长城', '四合院', '园林',
   '中式建筑', '国内景观', '国产设计', '水墨画', '书法', '国画'
 ];
 const OVERSEAS_CONTEXT_KEYWORDS = [
-  '英文', '北欧', '极简', '欧式', '日式', '赛博朋克', 
+  '英文', '北欧', '极简', '欧式', '日式', '赛博朋克',
   '欧美', '国际', '海外', '西方', '现代', '抽象', '印象派',
   '欧美建筑', '国际艺术', '海外设计', '哥特', '巴洛克', '包豪斯'
 ];
@@ -55,10 +84,10 @@ class SearchDispatcher {
 
   detectContext(query) {
     const lowerQuery = query.toLowerCase();
-    
+
     const hasChinese = CHINESE_CONTEXT_KEYWORDS.some(kw => lowerQuery.includes(kw.toLowerCase()));
     const hasOverseas = OVERSEAS_CONTEXT_KEYWORDS.some(kw => lowerQuery.includes(kw.toLowerCase()));
-    
+
     if (hasChinese && hasOverseas) {
       return 'chinese';
     } else if (hasChinese) {
@@ -72,16 +101,16 @@ class SearchDispatcher {
 
   detectDomain(query) {
     const lowerQuery = query.toLowerCase();
-    
+
     if (ARCHITECTURE_KEYWORDS.some(kw => lowerQuery.includes(kw.toLowerCase()))) {
       return 'architecture';
     }
-    
+
     const artKeywords = ['艺术', 'art', 'painting', 'sculpture', 'artist', 'gallery'];
     if (artKeywords.some(kw => lowerQuery.includes(kw.toLowerCase()))) {
       return 'art';
     }
-    
+
     return 'general';
   }
 
@@ -101,7 +130,7 @@ class SearchDispatcher {
     }
 
     const context = this.detectContext(query);
-    
+
     if (context === 'chinese') {
       return { source: 'baidu', reason: 'Pro用户-中文场景-走百度' };
     } else if (context === 'overseas') {
@@ -114,11 +143,11 @@ class SearchDispatcher {
   async canUseTavily() {
     const today = new Date().toISOString().split('T')[0];
     const todayCalls = this.tavilyTodayCalls.get(today) || 0;
-    
+
     if (todayCalls >= this.maxTavilyCallsPerDay) {
       return { allowed: false, reason: '今日免费额度已用完' };
     }
-    
+
     return { allowed: true, reason: '免费额度充足' };
   }
 
@@ -131,20 +160,19 @@ class SearchDispatcher {
 
   async completeSearch(query, userTier = 'free', options = {}) {
     this.stats.totalRequests++;
-    
-    console.log(`[Search] 原始查询: ${query}`);
-    
+
+    searchLog.debug('原始查询', { query });
+
     let enhancedQuery = query;
     const domain = this.detectDomain(query);
     const architects = this.extractArchitects(query);
-    
-    console.log(`[Search] 识别领域: ${domain}`);
-    console.log(`[Search] 识别建筑师: ${architects.join(', ') || '无'}`);
-    
+
+    searchLog.debug('识别领域和建筑师', { domain, architects });
+
     if (domain === 'architecture') {
       const architectureTerms = [
         '建筑设计 实际照片',
-        '建筑外观 效果图', 
+        '建筑外观 效果图',
         '现代建筑 外观',
         '建筑摄影 实景',
         'architectural photography',
@@ -153,12 +181,12 @@ class SearchDispatcher {
         'contemporary building'
       ];
       const randomPrefix = architectureTerms[Math.floor(Math.random() * architectureTerms.length)];
-      
+
       let architectQuery = '';
       if (architects.length > 0) {
         architectQuery = ` ${architects.join(' ')}`;
       }
-      
+
       enhancedQuery = `${randomPrefix}${architectQuery} ${query} -图纸 -技术图 -CAD -平面图 -剖面图 -草图 -代码 -编程 -数据 -json -xml`;
     } else if (domain === 'art') {
       enhancedQuery = `艺术作品 绘画 实际照片 ${query} -图纸 -草图 -代码`;
@@ -167,12 +195,12 @@ class SearchDispatcher {
         enhancedQuery += ' 实际照片';
       }
     }
-    
-    console.log(`[Search] 增强查询: ${enhancedQuery}`);
-    
+
+    searchLog.debug('增强查询', { enhancedQuery });
+
     const timestamp = Date.now();
     const { source, reason } = this.determineSearchSource(userTier, enhancedQuery);
-    
+
     let primaryResult;
     let fallbackResult = null;
     let usedSource = source;
@@ -181,7 +209,7 @@ class SearchDispatcher {
     if (source === 'tavily') {
       const canUse = await this.canUseTavily();
       if (!canUse.allowed) {
-        console.log(`[Search] Tavily${canUse.reason}，降级到百度`);
+        searchLog.warn('Tavily额度不足，降级百度', { reason: canUse.reason });
         usedSource = 'baidu';
         fallbackUsed = true;
         reason = 'Tavily额度用尽，降级到百度';
@@ -191,8 +219,8 @@ class SearchDispatcher {
     if (usedSource === 'tavily') {
       try {
         this.stats.tavilyRequests++;
-        console.log(`[Search] 使用Tavily搜索`);
-        
+        searchLog.info('使用Tavily搜索');
+
         primaryResult = await tavilyService.search(enhancedQuery, {
           max_results: options.max_results || 8,
           search_depth: 'advanced',
@@ -207,7 +235,7 @@ class SearchDispatcher {
           throw new Error('Tavily返回无效结果');
         }
       } catch (error) {
-        console.error(`[Search] Tavily失败(${error.message})，降级到百度`);
+        searchLog.error('Tavily搜索失败，降级百度', { error: error.message });
         this.stats.tavilyFallbackRequests++;
         fallbackUsed = true;
         usedSource = 'baidu';
@@ -218,26 +246,26 @@ class SearchDispatcher {
       if (!fallbackUsed) {
         this.stats.baiduRequests++;
       }
-      
-      console.log(`[Search] 使用百度图片搜索`);
-      
-      const imageResult = await baiduSearch.imageSearch(enhancedQuery, { 
+
+      searchLog.info('使用百度图片搜索');
+
+      const imageResult = await baiduSearch.imageSearch(enhancedQuery, {
         max_results: options.max_results || 8
       });
 
       const images = [];
       const invalidExtensions = ['.dwg', '.dxf', '.cad', '.svg', '.pdf', '.json', '.xml', '.txt'];
-      
+
       if (imageResult.success && imageResult.data && imageResult.data.results) {
-        console.log(`[Search] 原始图片数量: ${imageResult.data.results.length}`);
-        
+        searchLog.debug('原始图片数量', { count: imageResult.data.results.length });
+
         for (const item of imageResult.data.results) {
           if (item.imageUrl && item.imageUrl.startsWith('http')) {
             const cleanUrl = item.imageUrl.trim().replace(/^[`'"]+|[`'"]+$/g, '');
-            
+
             const hasInvalidExt = invalidExtensions.some(ext => cleanUrl.toLowerCase().includes(ext));
-            
-            const isTechDoc = cleanUrl.toLowerCase().includes('cad') || 
+
+            const isTechDoc = cleanUrl.toLowerCase().includes('cad') ||
                              cleanUrl.toLowerCase().includes('technical') ||
                              cleanUrl.toLowerCase().includes('blueprint') ||
                              cleanUrl.toLowerCase().includes('drawing') ||
@@ -245,20 +273,20 @@ class SearchDispatcher {
                              cleanUrl.toLowerCase().includes('code') ||
                              cleanUrl.toLowerCase().includes('python') ||
                              cleanUrl.toLowerCase().includes('github');
-            
+
             if (!hasInvalidExt && !isTechDoc) {
               images.push(cleanUrl);
             } else {
-              console.log(`[Search] 过滤图片: ${cleanUrl.substring(0, 50)}... (原因: ${hasInvalidExt ? '无效扩展名' : '技术图纸/代码'})`);
+              searchLog.debug('过滤无效图片', { reason: hasInvalidExt ? '无效扩展名' : '技术图纸/代码' });
             }
           }
         }
       }
 
-      console.log(`[Search] 过滤后图片数量: ${images.length}`);
-      
+      searchLog.info('过滤后图片数量', { count: images.length });
+
       if (images.length === 0) {
-        console.log(`[Search] 过滤后无图片，尝试备用搜索`);
+        searchLog.warn('过滤后无图片，尝试备用搜索');
         const backupQueries = [
           '现代建筑设计 外观照片',
           '建筑效果图 实景',
@@ -266,7 +294,7 @@ class SearchDispatcher {
           'architecture building exterior photo',
           'modern architecture photography'
         ];
-        
+
         for (const backupQuery of backupQueries) {
           const backupResult = await baiduSearch.imageSearch(backupQuery, { max_results: 4 });
           if (backupResult.success && backupResult.data && backupResult.data.results) {
@@ -284,8 +312,8 @@ class SearchDispatcher {
         }
       }
 
-      console.log(`[Search] 最终图片数量: ${images.length}`);
-      
+      searchLog.info('搜索完成', { finalImageCount: images.length, source: usedSource });
+
       return {
         success: true,
         searched: true,
@@ -301,7 +329,7 @@ class SearchDispatcher {
       };
     } catch (error) {
       this.stats.errors++;
-      console.error(`[Search] 搜索失败: ${error.message}`);
+      searchLog.error('搜索失败', { error: error.message });
       return {
         success: false,
         searched: false,
@@ -357,7 +385,7 @@ class SearchDispatcher {
     const today = new Date().toISOString().split('T')[0];
     const todayTavilyCalls = this.tavilyTodayCalls.get(today) || 0;
     const remainingQuota = this.maxTavilyCallsPerDay - todayTavilyCalls;
-    
+
     return {
       ...this.stats,
       todayTavilyCalls: todayTavilyCalls,

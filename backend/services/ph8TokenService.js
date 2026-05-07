@@ -1,5 +1,34 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
+const { logger, LogLevel } = require('./loggerService');
+
+const isProduction = process.env.NODE_ENV === 'production';
+const TOKEN_LOG_LEVEL = isProduction
+  ? (LogLevel[process.env.TOKEN_LOG_LEVEL?.toUpperCase()] || LogLevel.WARN)
+  : LogLevel.INFO;
+
+const tokenLog = {
+  debug: (message, data) => {
+    if (TOKEN_LOG_LEVEL <= LogLevel.DEBUG) {
+      logger.debug(`[Token] ${message}`, data);
+    }
+  },
+  info: (message, data) => {
+    if (TOKEN_LOG_LEVEL <= LogLevel.INFO) {
+      logger.info(`[Token] ${message}`, data);
+    }
+  },
+  warn: (message, data) => {
+    if (TOKEN_LOG_LEVEL <= LogLevel.WARN) {
+      logger.warn(`[Token] ${message}`, data);
+    }
+  },
+  error: (message, data) => {
+    if (TOKEN_LOG_LEVEL <= LogLevel.ERROR) {
+      logger.error(`[Token] ${message}`, data);
+    }
+  }
+};
 
 async function recordUsage(data) {
   try {
@@ -27,10 +56,10 @@ async function recordUsage(data) {
        data.promptTokens || 0, data.completionTokens || 0, data.totalTokens, points,
        actualCost, data.status || 'success', data.ipAddress || '']
     );
-    console.log(`[PH8 Token] 记录成功: user=${data.userId}, points=${points}`);
+    tokenLog.debug('使用记录成功', { userId: data.userId, points });
     return true;
   } catch (err) {
-    console.error('[PH8 Token] 记录失败:', err);
+    tokenLog.error('使用记录失败', { error: err.message, userId: data.userId });
     return false;
   }
 }
@@ -49,7 +78,7 @@ async function deductBalance(userId, cost, nickname, email) {
     );
 
     if (userRows.length === 0) {
-      console.error('[PH8 Token] 用户不存在:', userId);
+      tokenLog.error('扣减余额失败-用户不存在', { userId });
       return false;
     }
 
@@ -76,16 +105,18 @@ async function deductBalance(userId, cost, nickname, email) {
       [deductFromTotal, newDailyUsed, queryValue]
     );
 
-    console.log('[PH8 Token] 扣减详情:', {
-      userId, nickname: nickname || '未知', email: email || '',
-      cost, points,
-      deductFromDaily, deductFromTotal,
-      remainingBalance: (total_points || 0) - deductFromTotal,
-      remainingDaily: dailyRemaining - deductFromDaily
+    tokenLog.info('余额扣减成功', {
+      userId,
+      nickname: nickname || '未知',
+      cost,
+      points,
+      deductFromDaily,
+      deductFromTotal,
+      remainingBalance: (total_points || 0) - deductFromTotal
     });
     return true;
   } catch (err) {
-    console.error('[PH8 Token] 扣除失败:', err);
+    tokenLog.error('余额扣减失败', { error: err.message, userId });
     return false;
   }
 }
@@ -103,10 +134,10 @@ async function rechargeBalance(userId, amount) {
     }
 
     await db.query(q, p);
-    console.log(`[PH8 Token] 充值成功: user=${userId}, amount=${amount}`);
+    tokenLog.info('余额充值成功', { userId, amount });
     return true;
   } catch (err) {
-    console.error('[PH8 Token] 充值失败:', err);
+    tokenLog.error('余额充值失败', { error: err.message, userId });
     return false;
   }
 }
@@ -122,7 +153,7 @@ async function getUserBalance(userId) {
     }
 
     let userRows = [];
-    try { [userRows] = await db.query(q, p); } catch (e) { console.error('[查询用户失败]', e); }
+    try { [userRows] = await db.query(q, p); } catch (e) { tokenLog.error('查询用户失败', { error: e.message }); }
 
     const totalEarned = userRows.length > 0 ? (userRows[0].total_earned || 0) : 0;
     const totalPoints = userRows.length > 0 ? (userRows[0].total_points || 0) : 0;
@@ -134,14 +165,14 @@ async function getUserBalance(userId) {
     let todayStats = { totalTokens: 0, requestCount: 0 };
     try {
       [todayStats] = await db.query(
-        `SELECT COALESCE(SUM(points_cost),0) as totalTokens, COUNT(*) as requestCount 
+        `SELECT COALESCE(SUM(points_cost),0) as totalTokens, COUNT(*) as requestCount
          FROM kbit_usage_logs WHERE user_id=? AND DATE(created_at)=CURDATE()`, [userId]);
     } catch (_) {}
 
     let monthStats = { totalTokens: 0 };
     try {
       [monthStats] = await db.query(
-        `SELECT COALESCE(SUM(points_cost),0) as totalTokens FROM kbit_usage_logs 
+        `SELECT COALESCE(SUM(points_cost),0) as totalTokens FROM kbit_usage_logs
          WHERE user_id=? AND YEAR(created_at)=YEAR(CURDATE()) AND MONTH(created_at)=MONTH(CURDATE())`, [userId]);
     } catch (_) {}
 
@@ -171,7 +202,7 @@ async function getUserBalance(userId) {
       todayRequestCount: todayStats.requestCount || 0
     };
   } catch (err) {
-    console.error('[PH8 Token] 获取余额失败:', err);
+    tokenLog.error('获取余额失败', { error: err.message, userId });
     return { userId, totalPoints: 0, balance: 0, consumedTotal: 0, dailyQuota:200, dailyRemaining:200, dailyUsed:0, usedToday:0, usedThisMonth:0, usedAllTime:0 };
   }
 }
@@ -184,7 +215,7 @@ async function getUserUsageStats(userId, startDate, endDate) {
        FROM kbit_usage_logs WHERE user_id=? AND created_at BETWEEN ? AND ?`,
       [userId, startDate, endDate]);
     return rows[0];
-  } catch (err) { console.error(err); return null; }
+  } catch (err) { tokenLog.error('获取使用统计失败', { error: err.message }); return null; }
 }
 
 async function getUserUsageHistory(userId, limit = 50, offset = 0) {
@@ -193,13 +224,13 @@ async function getUserUsageHistory(userId, limit = 50, offset = 0) {
       `SELECT * FROM kbit_usage_logs WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [userId, limit, offset]);
     return rows;
-  } catch (err) { console.error(err); return []; }
+  } catch (err) { tokenLog.error('获取使用历史失败', { error: err.message }); return []; }
 }
 
 async function checkTierExpiry() {
   try {
     const [expiredUsers] = await db.query(
-      `SELECT id,email,nickname,user_tier,tier_expires_at FROM kbit_users 
+      `SELECT id,email,nickname,user_tier,tier_expires_at FROM kbit_users
        WHERE tier_expires_at IS NOT NULL AND tier_expires_at < NOW() AND user_tier!='free' AND status=1`);
     if (!expiredUsers.length) return { downgraded:0, skipped:0 };
 
@@ -208,8 +239,9 @@ async function checkTierExpiry() {
       await db.query(`UPDATE kbit_users SET user_tier='free',tier_expires_at=NULL,daily_quota=200,updated_at=NOW() WHERE id=?`, [u.id]);
       n++;
     }
+    tokenLog.info('等级过期检查完成', { downgraded: n, skipped: expiredUsers.length - n });
     return { downgraded:n, skipped: expiredUsers.length-n };
-  } catch (err) { console.error(err); return { downgraded:0, skipped:0 }; }
+  } catch (err) { tokenLog.error('等级过期检查失败', { error: err.message }); return { downgraded:0, skipped:0 }; }
 }
 
 async function checkUserTierExpiry(userId) {
@@ -220,18 +252,20 @@ async function checkUserTierExpiry(userId) {
     if (u.user_tier==='free' || !u.tier_expires_at) return { expired:false, previousTier:u.user_tier, currentTier:u.user_tier };
     if (new Date(u.tier_expires_at) <= new Date()) {
       await db.query(`UPDATE kbit_users SET user_tier='free',tier_expires_at=NULL,daily_quota=200,updated_at=NOW() WHERE id=?`, [userId]);
+      tokenLog.info('用户等级已过期', { userId, previousTier: u.user_tier, currentTier: 'free' });
       return { expired:true, previousTier:u.user_tier, currentTier:'free' };
     }
     return { expired:false, previousTier:u.user_tier, currentTier:u.user_tier };
-  } catch (err) { console.error(err); return null; }
+  } catch (err) { tokenLog.error('检查用户等级过期失败', { error: err.message }); return null; }
 }
 
 async function resetDailyUsage() {
   try {
     await checkTierExpiry();
     await db.query(`UPDATE kbit_users SET daily_used=0, daily_reset_at=CURDATE(), updated_at=NOW()`);
+    tokenLog.info('每日使用量已重置');
     return true;
-  } catch (err) { console.error(err); return false; }
+  } catch (err) { tokenLog.error('重置每日使用量失败', { error: err.message }); return false; }
 }
 
 async function resetMonthlyUsage() { return true; }
@@ -242,7 +276,7 @@ async function logApiCall(data) {
       `INSERT INTO ph8_api_logs (log_id,user_id,user_nickname,user_email,endpoint,request_body,response_body,status_code) VALUES (?,?,?,?,?,?,?,?)`,
       [uuidv4(), data.userId, data.userNickname||null, data.userEmail||null, data.endpoint, data.requestBody||null, data.responseBody||null, data.statusCode||null]);
     return true;
-  } catch (err) { console.error(err); return false; }
+  } catch (err) { tokenLog.error('记录API日志失败', { error: err.message }); return false; }
 }
 
 module.exports = {
