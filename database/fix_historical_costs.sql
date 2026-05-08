@@ -1,11 +1,18 @@
 USE kbitai0302;
 
+-- 精确修复610、609记录（使用604/605确认的PH8真实值：0.012000元/12积分）
+UPDATE kbit_usage_logs
+SET actual_cost = 0.012000, points_cost = 12
+WHERE id IN (610, 609);
+
+-- 批量修复其他图像生成记录
 UPDATE kbit_usage_logs
 SET actual_cost = 0.0120, points_cost = 12
 WHERE feature = 'image_gen'
   AND model_id = 'gemini-3.1-flash-image-preview'
   AND status = 'success'
-  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL);
+  AND (actual_cost = 0 OR points_cost = 0 OR actual_cost IS NULL OR points_cost IS NULL)
+  AND id NOT IN (610, 609);
 
 UPDATE kbit_usage_logs
 SET actual_cost = 0.0120, points_cost = 12

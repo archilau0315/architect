@@ -454,8 +454,20 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
     proxyRes.on('end', async () => {
       let ph8ActualCost = 0;
       try {
+        // [重要] 打印完整响应头和响应体用于调试（使用 warn 确保生产环境可见）
+        ph8Log.warn('[PH8-COST-DEBUG] PH8图像生成完整响应', {
+          requestId,
+          contentType: proxyRes.headers['content-type'],
+          allHeaders: JSON.stringify(proxyRes.headers),
+          isBinaryContent,
+          dataLength: isBinaryContent ? (Buffer.isBuffer(data) ? data.length : String(data).length) : String(data).length,
+          dataPreview: isBinaryContent ? `[Buffer ${Buffer.isBuffer(data) ? data.length : 'unknown'} bytes]` : String(data).substring(0, 500)
+        });
+
         if (!isBinaryContent && typeof data === 'string' && data.trim()) {
           const respBody = JSON.parse(data);
+          ph8Log.warn('[PH8-COST-DEBUG] PH8 JSON响应体', { requestId, responseBody: respBody });
+
           ph8ActualCost = respBody.usage?.cost
                        || respBody.usage?.price
                        || respBody.cost
@@ -463,8 +475,32 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
                        || respBody.charge
                        || respBody.usage?.total_cost
                        || 0;
+          if (!ph8ActualCost && respBody.usage?.cost_details?.upstream_inference_cost) {
+            ph8ActualCost = respBody.usage.cost_details.upstream_inference_cost;
+            ph8Log.warn('[PH8-COST-DEBUG] 从upstream_inference_cost获取到费用', { requestId, cost: ph8ActualCost });
+          }
         }
-      } catch(e) {}
+        
+        // [重要] 图像生成返回二进制数据时，尝试从响应头获取费用
+        if (!ph8ActualCost && isBinaryContent) {
+          const costHeader = proxyRes.headers['x-ph8-cost']
+                          || proxyRes.headers['x-cost']
+                          || proxyRes.headers['x-api-cost']
+                          || proxyRes.headers['x-inference-cost']
+                          || proxyRes.headers['x-usage-cost'];
+          ph8Log.warn('[PH8-COST-DEBUG] 二进制响应头中的费用字段', {
+            requestId,
+            costHeader: costHeader || '未找到',
+            allHeaders: Object.keys(proxyRes.headers).filter(k => k.toLowerCase().includes('cost') || k.toLowerCase().includes('x-'))
+          });
+          if (costHeader) {
+            ph8ActualCost = parseFloat(costHeader) || 0;
+            ph8Log.warn('[PH8-COST-DEBUG] 从响应头获取到费用', { requestId, cost: ph8ActualCost, headerName: 'cost-header' });
+          }
+        }
+      } catch(e) {
+        ph8Log.error('[PH8-COST-DEBUG] 解析PH8响应失败', { requestId, error: e.message });
+      }
 
       let finalCost = ph8ActualCost > 0 ? ph8ActualCost : 0;
       const responseTime = Date.now() - startTime;
@@ -612,6 +648,9 @@ router.post('/v1/images/generations', async (req, res) => {
                        || respBody.usage?.price
                        || respBody.cost || respBody.price || respBody.charge
                        || respBody.usage?.total_cost || 0;
+          if (!ph8ActualCost2 && respBody.usage?.cost_details?.upstream_inference_cost) {
+            ph8ActualCost2 = respBody.usage.cost_details.upstream_inference_cost;
+          }
         }
       } catch(e) {}
 
@@ -975,15 +1014,35 @@ router.all('/*', requireAuth, async (req, res) => {
 
             const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
 
-            // 从响应头中提取费用信息（如果有）
+            // 从响应头或响应体中提取费用信息
             let calculatedCost = 0;
             let totalTokens = 0;
             let promptTokens = 0;
             let completionTokens = 0;
-            
+
+            // 先尝试从响应头提取
             const costHeader = proxyRes.headers['x-ph8-cost'] || proxyRes.headers['x-cost'] || proxyRes.headers['x-api-cost'] || proxyRes.headers['cost'];
             if (costHeader) {
               calculatedCost = parseFloat(costHeader);
+            }
+
+            // 尝试从响应体解析 JSON 提取费用（PH8 费用在 usage.cost_details.upstream_inference_cost）
+            if (!calculatedCost && data) {
+              try {
+                const jsonBody = JSON.parse(data);
+                if (jsonBody.usage && jsonBody.usage.cost_details && jsonBody.usage.cost_details.upstream_inference_cost) {
+                  calculatedCost = jsonBody.usage.cost_details.upstream_inference_cost;
+                  totalTokens = jsonBody.usage.total_tokens || jsonBody.usage.totalTokens || 0;
+                  promptTokens = jsonBody.usage.prompt_tokens || jsonBody.usage.promptTokens || 0;
+                  completionTokens = jsonBody.usage.completion_tokens || jsonBody.usage.completionTokens || 0;
+                } else if (jsonBody.usage && jsonBody.usage.cost) {
+                  calculatedCost = jsonBody.usage.cost;
+                } else if (jsonBody.cost) {
+                  calculatedCost = jsonBody.cost;
+                }
+              } catch (e) {
+                // 响应体不是 JSON，忽略
+              }
             }
 
             await ph8TokenService.recordUsage({
