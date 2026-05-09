@@ -14,6 +14,8 @@ interface VideoPlayerProps {
   isDeveloper: boolean;
   userTier?: string;
   onRerun?: () => void;
+  videoRef?: string;  // PH8 视频 ID，用于 blob URL 失效后的自动恢复
+  onVideoRestored?: (newUrl: string) => void;  // 回调：视频恢复成功后更新父组件
   t: {
     buttons: {
       stdDownload: string;
@@ -43,7 +45,9 @@ export const VideoPlayer = ({
   watermarkedVideoUrl, 
   isDeveloper, 
   userTier,
-  onRerun, 
+  onRerun,
+  videoRef,
+  onVideoRestored,
   t
 }: VideoPlayerProps) => {
   const hasOriginalAccess = canDownloadOriginal(userTier, isDeveloper);
@@ -113,9 +117,60 @@ export const VideoPlayer = ({
     const handleLeavePictureInPicture = () => setIsPictureInPicture(false);
     const handleCanPlay = () => setIsVideoLoaded(true);
     const handleError = (e: Event) => {
-      console.error('[VideoPlayer] Video loading error:', e);
+      console.error('[VideoPlayer] Video loading error:', e, { videoUrl: videoUrl?.substring(0, 50), hasVideoRef: !!videoRef });
+
+      // Blob URL 失效自动恢复机制
+      if (videoUrl?.startsWith('blob:') && videoRef && !hasError) {
+        console.log('[VideoPlayer] 检测到 blob URL 失效，尝试通过 videoRef 恢复...');
+        setErrorMessage('视频连接已断开，正在恢复...');
+        setIsBuffering(true);
+
+        // 异步恢复视频
+        (async () => {
+          try {
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const apiBase = isDev ? '/architect' : `${window.location.origin}`;
+            const restoreUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}`;
+            console.log('[VideoPlayer] 恢复请求:', restoreUrl);
+
+            const response = await fetch(restoreUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const statusData = await response.json();
+            let recoveredUrl = statusData.url ||
+              statusData.video_url ||
+              statusData.content_url ||
+              statusData.output?.url ||
+              statusData.data?.url;
+
+            // 如果返回的不是直接 URL，尝试下载内容
+            if (!recoveredUrl) {
+              const contentRes = await fetch(`${apiBase}/api/ph8/openai/v1/videos/${videoRef}/content`);
+              if (contentRes.ok) {
+                const arrayBuffer = await contentRes.arrayBuffer();
+                const contentType = contentRes.headers.get('content-type') || 'video/mp4';
+                const blob = new Blob([arrayBuffer], { type: contentType });
+                recoveredUrl = URL.createObjectURL(blob);
+                console.log('[VideoPlayer] 视频内容下载成功，新 blob:', recoveredUrl.substring(0, 30));
+              }
+            }
+
+            if (recoveredUrl) {
+              console.log('[VideoPlayer] 视频恢复成功！');
+              onVideoRestored?.(recoveredUrl);
+              return; // 不设置错误状态，让父组件更新 URL 后重新渲染
+            }
+            throw new Error('恢复响应中无视频URL');
+          } catch (recoverErr) {
+            console.error('[VideoPlayer] 视频恢复失败:', recoverErr);
+          }
+        })();
+      }
+
       setHasError(true);
-      setErrorMessage('视频加载失败，请稍后重试');
+      setErrorMessage(videoUrl?.startsWith('blob:')
+        ? '视频已过期，请回到动态漫游导演重新生成'
+        : '视频加载失败，请稍后重试');
       setIsBuffering(false);
     };
 

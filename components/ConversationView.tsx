@@ -37,6 +37,7 @@ interface Message {
   watermarkedImages?: string[];  // 带水印版本
   seeds?: number[];    // 每张图对应的seed值
   videoUrl?: string;
+  videoRef?: string;  // PH8 视频 ID，用于 blob URL 失效后的恢复
   watermarkedVideoUrl?: string;  // 带水印的视频版本
   timestamp: number;
   rerunPayload?: UnifiedPayload;
@@ -49,7 +50,7 @@ interface ConversationViewProps {
   instructions: any;
   points: { daily: number; purchased: number; bonus?: number };
   onConsumePoints: (opts: { amount: number; feature?: string; modelId?: string }) => Promise<boolean>;
-  pendingVideoMessage?: { url: string; prompt: string } | null;
+  pendingVideoMessage?: { url: string; prompt: string; videoRef?: string } | null;
   onClearPendingVideo?: () => void;
   useThirdPartyGateway?: boolean;
   isDeveloperMode?: boolean;
@@ -584,7 +585,14 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               watermarkedVideoUrl={msg.watermarkedVideoUrl}
               isDeveloper={isDeveloper}
               userTier={userTier}
+              videoRef={msg.videoRef}
               onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload!) : undefined}
+              onVideoRestored={(newUrl) => {
+                updateLast({ videoUrl: newUrl });
+                if (newUrl.startsWith('blob:')) {
+                  videoBlobService.markAsPersistent(newUrl);
+                }
+              }}
               t={{
                 buttons: {
                   stdDownload: t.buttons.stdDownload,
@@ -688,6 +696,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
       role: 'assistant',
       type: 'video',
       videoUrl: pendingVideoMessage.url,
+      videoRef: pendingVideoMessage.videoRef,  // 携带 videoRef 用于 blob 失效后的恢复
       text: `🎬 已在动态漫游导演中生成视频\n${pendingVideoMessage.prompt ? `> ${pendingVideoMessage.prompt.slice(0, 120)}${pendingVideoMessage.prompt.length > 120 ? '...' : ''}` : ''}`
     });
     onClearPendingVideo?.();

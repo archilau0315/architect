@@ -43,15 +43,16 @@ const FLUSH_INTERVAL = 5000; // 5秒刷新一次
 const formatLogMessage = (level, message, meta = {}) => {
   const timestamp = new Date().toISOString();
   const levelName = LogLevelNames[level];
-  
-  const logEntry = {
-    timestamp,
-    level: levelName,
-    message,
-    ...meta,
-  };
-  
-  return JSON.stringify(logEntry);
+
+  // 手动构建 JSON 字符串，保留中文字符不被转义为 \uXXXX
+  let result = '{"timestamp":"' + timestamp + '","level":"' + levelName + '","message":';
+  result += JSON.stringify(message);
+  for (const [key, value] of Object.entries(meta)) {
+    result += ',"' + key + '":' + JSON.stringify(value);
+  }
+  result += '}';
+
+  return result;
 };
 
 // 写入日志到文件

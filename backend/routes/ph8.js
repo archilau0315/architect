@@ -24,6 +24,89 @@ const LOG_RESPONSE_BODY = !isProduction || process.env.PH8_LOG_RESPONSE === 'tru
 const PH8_API_KEY = process.env.PH8_API_KEY;
 
 /**
+ * PH8 模型官方定价表（来源: https://ph8.co/models）
+ * 当 PH8 API 响应中不包含费用字段时，使用此表按 token 计算实际费用
+ * 价格单位：元/百万tokens (CNY/M tokens)
+ * 更新日期：2026-05-09
+ *
+ * 注意：这是 PH8 平台公开发布的官方价格，非自行设定。
+ * 若 PH8 调整价格，请同步更新此表。
+ */
+const PH8_MODEL_PRICING = {
+  // ===== Google 图像生成模型（来源: ph8.co/models） =====
+  'gemini-3.1-flash-image-preview':     { inputPrice: 1.7,  outputPrice: 10.6  },
+  'gemini-3.1-flash-image-preview@latest': { inputPrice: 1.7,  outputPrice: 10.6  },
+  'gemini-3.1-flash-image-preview@001': { inputPrice: 1.7,  outputPrice: 10.6  },
+  'Nano-Banana-Pro2':                  { inputPrice: 1.7,  outputPrice: 10.6  },
+
+  'gemini-3-pro-image-preview':        { inputPrice: 14.2, outputPrice: 85.3  },
+  'gemini-3-pro-image-preview@latest': { inputPrice: 14.2, outputPrice: 85.3  },
+  'Nano-Banana-Pro':                   { inputPrice: 14.2, outputPrice: 85.3  },
+  'Nano-Banana':                       { inputPrice: 2.1,  outputPrice: 17.7  },
+  'gemini-2.5-flash-image':            { inputPrice: 2.1,  outputPrice: 17.7  },
+
+  // ===== Google 多模态大语言模型（来源: ph8.co/models） =====
+  'gemini-3.1-flash-lite-preview':    { inputPrice: 1.7,  outputPrice: 10.6  },
+  'gemini-3.1-pro-preview':            { inputPrice: 14.2, outputPrice: 85.3  },
+  'gemini-3-flash-preview':            { inputPrice: 3.5,  outputPrice: 21.3  },
+  'gemini-3-pro-preview':              { inputPrice: 14.2, outputPrice: 85.3  },
+  'gemini-2.5-flash':                  { inputPrice: 2.1,  outputPrice: 17.7  },
+  'gemini-2.5-pro':                    { inputPrice: 8.8,  outputPrice: 71.1  },
+
+  // ===== 豆包视频生成模型 doubao-seedance（来源: ph8.co/models） =====
+  'doubao-seedance-2-fast':            { inputPrice: 0.1,  outputPrice: 37.0  },
+  'doubao-seedance-2-0':               { inputPrice: 0.1,  outputPrice: 46.0  },
+  'doubao-seedance-1-5-pro':           { inputPrice: 0.1,  outputPrice: 15.0  },
+  'doubao-seedance-1-0-lite-i2v':      { inputPrice: 0.1,  outputPrice: 10.0  },
+  'doubao-seedance-1-0-lite-t2v':      { inputPrice: 0.1,  outputPrice: 10.0  },
+  'doubao-seedance-1-0-pro':           { inputPrice: 0.1,  outputPrice: 16.0  },
+  'doubao-seedance-1-0-pro-fast':      { inputPrice: 0.1,  outputPrice: 4.2   },
+
+  // ===== DeepSeek 模型（Chat）=====
+  'deepseek-chat':      { inputPrice: 0.5,   outputPrice: 2.0  },
+  'deepseek-reasoner':  { inputPrice: 0.5,   outputPrice: 2.0  },
+  'deepseek-v3':       { inputPrice: 0.5,   outputPrice: 2.0  },
+  'deepseek-v3.2':     { inputPrice: 0.5,   outputPrice: 2.0  },
+
+  // ===== 其他常见模型（Chat，PH8 返回 cost 时不会用到此处数据）=====
+  'gpt-4o':            { inputPrice: 15.0,  outputPrice: 60.0 },
+  'gpt-4o-mini':       { inputPrice: 0.9,   outputPrice: 3.6  },
+};
+
+/**
+ * 根据 PH8 官方定价计算费用（fallback）
+ * 仅当 PH8 API 响应不包含费用字段时使用
+ * @param {string} model - 模型名称
+ * @param {number} promptTokens - 输入 token 数
+ * @param {number} completionTokens - 输出 token 数
+ * @returns {{cost: number, source: string}} 计算结果和来源说明
+ */
+function calculateCostFromTokens(model, promptTokens, completionTokens) {
+  // 精确匹配模型名
+  let pricing = PH8_MODEL_PRICING[model];
+
+  // 前缀模糊匹配（处理带版本后缀的变体）
+  if (!pricing) {
+    for (const [key, value] of Object.entries(PH8_MODEL_PRICING)) {
+      if (model.startsWith(key.split('@')[0]) || key.includes(model) || model.includes(key.replace(/@.*$/, ''))) {
+        pricing = value;
+        break;
+      }
+    }
+  }
+
+  if (!pricing || (!promptTokens && !completionTokens)) {
+    return { cost: 0, source: 'no-pricing' };
+  }
+
+  const cost = ((promptTokens || 0) * pricing.inputPrice + (completionTokens || 0) * pricing.outputPrice) / 1000000;
+  return {
+    cost: Math.round(cost * 10000000) / 10000000, // 保留足够精度
+    source: `ph8-pricing:${model}`
+  };
+}
+
+/**
  * 统一日志函数 - 根据日志级别和环境配置决定是否输出
  */
 const ph8Log = {
@@ -352,6 +435,32 @@ function decodeHtmlEntities(str) {
   });
 }
 
+/**
+ * 清理日志对象 - 移除或截断大数据字段（如 base64 图片、长文本）
+ * 防止日志文件膨胀和终端显示混乱
+ */
+function sanitizeForLog(obj, maxStrLen = 200) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = Array.isArray(obj) ? [] : {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'b64_json' || key === 'data' && typeof value === 'string' && value.length > 100) {
+      result[key] = `[base64 ${value.length} bytes]`;
+    } else if (typeof value === 'string' && value.length > maxStrLen) {
+      // 检测是否为 base64 数据（data URI 或纯 base64 长串）
+      if (/^[A-Za-z0-9+/=]{200,}$/.test(value) || value.startsWith('data:')) {
+        result[key] = `[truncated ${value.length} bytes]`;
+      } else {
+        result[key] = value.substring(0, maxStrLen) + `...[+${value.length - maxStrLen}]`;
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      result[key] = sanitizeForLog(value, maxStrLen);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // 获取当前用户信息（包含等级）- 必须在通配符路由之前
 router.get('/user-info', async (req, res) => {
   try {
@@ -401,7 +510,7 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
 
   const bodyData = JSON.stringify(req.body);
   if (LOG_REQUEST_BODY) {
-    ph8Log.debug('请求体', { body: bodyData.substring(0, 500) });
+    ph8Log.debug('请求体', { body: sanitizeForLog(req.body, 100) });
   }
 
   const options = {
@@ -453,21 +562,12 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
 
     proxyRes.on('end', async () => {
       let ph8ActualCost = 0;
+      let imgPromptTokens = 0;
+      let imgCompletionTokens = 0;
       try {
-        // [重要] 打印完整响应头和响应体用于调试（使用 warn 确保生产环境可见）
-        ph8Log.warn('[PH8-COST-DEBUG] PH8图像生成完整响应', {
-          requestId,
-          contentType: proxyRes.headers['content-type'],
-          allHeaders: JSON.stringify(proxyRes.headers),
-          isBinaryContent,
-          dataLength: isBinaryContent ? (Buffer.isBuffer(data) ? data.length : String(data).length) : String(data).length,
-          dataPreview: isBinaryContent ? `[Buffer ${Buffer.isBuffer(data) ? data.length : 'unknown'} bytes]` : String(data).substring(0, 500)
-        });
-
         if (!isBinaryContent && typeof data === 'string' && data.trim()) {
           const respBody = JSON.parse(data);
-          ph8Log.warn('[PH8-COST-DEBUG] PH8 JSON响应体', { requestId, responseBody: respBody });
-
+          // 优先从 PH8 响应中提取费用（Chat 等类型会返回）
           ph8ActualCost = respBody.usage?.cost
                        || respBody.usage?.price
                        || respBody.cost
@@ -477,32 +577,47 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
                        || 0;
           if (!ph8ActualCost && respBody.usage?.cost_details?.upstream_inference_cost) {
             ph8ActualCost = respBody.usage.cost_details.upstream_inference_cost;
-            ph8Log.warn('[PH8-COST-DEBUG] 从upstream_inference_cost获取到费用', { requestId, cost: ph8ActualCost });
+          }
+          // 提取 token 数（用于 fallback 计费）
+          if (respBody.usage) {
+            imgPromptTokens = respBody.usage.prompt_tokens || respBody.usage.promptTokens || 0;
+            imgCompletionTokens = respBody.usage.completion_tokens || respBody.usage.completionTokens || 0;
           }
         }
-        
-        // [重要] 图像生成返回二进制数据时，尝试从响应头获取费用
-        if (!ph8ActualCost && isBinaryContent) {
+
+        // 尝试从响应头提取费用
+        if (!ph8ActualCost) {
           const costHeader = proxyRes.headers['x-ph8-cost']
                           || proxyRes.headers['x-cost']
                           || proxyRes.headers['x-api-cost']
                           || proxyRes.headers['x-inference-cost']
                           || proxyRes.headers['x-usage-cost'];
-          ph8Log.warn('[PH8-COST-DEBUG] 二进制响应头中的费用字段', {
-            requestId,
-            costHeader: costHeader || '未找到',
-            allHeaders: Object.keys(proxyRes.headers).filter(k => k.toLowerCase().includes('cost') || k.toLowerCase().includes('x-'))
-          });
           if (costHeader) {
             ph8ActualCost = parseFloat(costHeader) || 0;
-            ph8Log.warn('[PH8-COST-DEBUG] 从响应头获取到费用', { requestId, cost: ph8ActualCost, headerName: 'cost-header' });
           }
         }
       } catch(e) {
-        ph8Log.error('[PH8-COST-DEBUG] 解析PH8响应失败', { requestId, error: e.message });
+        ph8Log.error('解析PH8响应失败', { requestId, error: e.message });
       }
 
+      // 最终费用：PH8 返回的优先，否则用 PH8 官方定价按 token 计算
       let finalCost = ph8ActualCost > 0 ? ph8ActualCost : 0;
+      let costSource = 'ph8-response';
+      if (finalCost === 0 && (imgPromptTokens > 0 || imgCompletionTokens > 0)) {
+        const calcResult = calculateCostFromTokens(reqModel, imgPromptTokens, imgCompletionTokens);
+        finalCost = calcResult.cost;
+        costSource = calcResult.source;
+        if (finalCost > 0) {
+          ph8Log.info('图像费用-PH8未返回,使用token计算', {
+            requestId,
+            model: reqModel,
+            promptTokens: imgPromptTokens,
+            completionTokens: imgCompletionTokens,
+            calculatedCost: finalCost,
+            source: costSource
+          });
+        }
+      }
       const responseTime = Date.now() - startTime;
 
       ph8Log.info('图像生成响应', {
@@ -525,9 +640,9 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
           requestId: requestId,
           model: reqModel,
           channelId: 'ph8-image',
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
+          promptTokens: imgPromptTokens || 0,
+          completionTokens: imgCompletionTokens || 0,
+          totalTokens: (imgPromptTokens || 0) + (imgCompletionTokens || 0),
           cost: proxyRes.statusCode === 200 ? finalCost : 0,
           cachedTokens: 0,
           requestType: 'image',
@@ -585,7 +700,7 @@ router.post('/v1/images/generations', async (req, res) => {
 
   const bodyData = JSON.stringify(req.body);
   if (LOG_REQUEST_BODY) {
-    ph8Log.debug('请求体', { body: bodyData.substring(0, 500) });
+    ph8Log.debug('请求体', { body: sanitizeForLog(req.body, 100) });
   }
 
   const options = {
@@ -636,6 +751,8 @@ router.post('/v1/images/generations', async (req, res) => {
       } catch(e) {}
 
       let ph8ActualCost2 = 0;
+      let imgPromptTokens2 = 0;
+      let imgCompletionTokens2 = 0;
       try {
         const costHeader = proxyRes.headers['x-ph8-cost'] || proxyRes.headers['x-cost'] || proxyRes.headers['x-api-cost'] || proxyRes.headers['cost'];
         if (costHeader) {
@@ -651,10 +768,20 @@ router.post('/v1/images/generations', async (req, res) => {
           if (!ph8ActualCost2 && respBody.usage?.cost_details?.upstream_inference_cost) {
             ph8ActualCost2 = respBody.usage.cost_details.upstream_inference_cost;
           }
+          // 提取 token 数
+          if (respBody.usage) {
+            imgPromptTokens2 = respBody.usage.prompt_tokens || respBody.usage.promptTokens || 0;
+            imgCompletionTokens2 = respBody.usage.completion_tokens || respBody.usage.completionTokens || 0;
+          }
         }
       } catch(e) {}
 
-      const finalCost2 = ph8ActualCost2 > 0 ? ph8ActualCost2 : 0;
+      // fallback：PH8 未返回费用时，用 token × 官方定价计算
+      let finalCost2 = ph8ActualCost2 > 0 ? ph8ActualCost2 : 0;
+      if (finalCost2 === 0 && (imgPromptTokens2 > 0 || imgCompletionTokens2 > 0)) {
+        const calcResult2 = calculateCostFromTokens(reqModel2, imgPromptTokens2, imgCompletionTokens2);
+        finalCost2 = calcResult2.cost;
+      }
 
       ph8Log.info('图像生成v1响应', {
         requestId,
@@ -672,7 +799,7 @@ router.post('/v1/images/generations', async (req, res) => {
           requestId: requestId,
           model: reqModel2,
           channelId: 'ph8-image',
-          promptTokens: 0, completionTokens: 0, totalTokens: 0,
+          promptTokens: imgPromptTokens2 || 0, completionTokens: imgCompletionTokens2 || 0, totalTokens: (imgPromptTokens2||0)+(imgCompletionTokens2||0),
           cost: proxyRes.statusCode === 200 ? finalCost2 : 0,
           cachedTokens: 0,
           requestType: 'image',
@@ -869,14 +996,82 @@ router.all('/*', requireAuth, async (req, res) => {
 
       try {
         const isVideoGetRequest = fullPath.includes('/videos') && req.method === 'GET';
+        const isVideoPostRequest = fullPath.includes('/videos') && req.method === 'POST';
 
-        if (isVideoGetRequest && !isBinaryContent) {
+        // ========== 视频生成专用计费逻辑 ==========
+        // 视频 POST（任务创建）：成功创建任务时立即计费
+        if (isVideoPostRequest && !isBinaryContent && proxyRes.statusCode === 200) {
+          try {
+            const videoResp = JSON.parse(data);
+            if (videoResp.id && (videoResp.status === 'queued' || videoResp.status === 'in_progress' || videoResp.status === 'completed')) {
+              ph8Log.info('视频任务创建成功，执行计费', { requestId, videoId: videoResp.id, model });
+
+              // 从请求体获取模型名（视频模型按固定单价计费）
+              let videoModel = model;
+              try { videoModel = JSON.parse(bodyData || '{}').model || model; } catch(e) {}
+
+              // 使用 PH8 官方定价计算视频费用（按 outputPrice 作为单次生成基准价）
+              let videoCost = 0;
+              const videoPricing = PH8_MODEL_PRICING[videoModel];
+              if (videoPricing) {
+                // 视频模型定价单位是 元/百万tokens，但视频不按token算
+                // 这里用 outputPrice/1000 作为每次视频生成的近似成本（约等于一次中等输出量）
+                videoCost = Math.round(videoPricing.outputPrice * 100) / 10000000; // 保留足够精度
+                // 如果结果太小（<0.01），至少收0.01元
+                if (videoCost < 0.01) videoCost = videoPricing.outputPrice >= 10 ? 0.05 : 0.02;
+              }
+              ph8Log.info('视频费用计算', { requestId, model: videoModel, cost: videoCost, source: videoPricing ? 'ph8-pricing-table' : 'no-pricing' });
+
+              let vUserId = userId;
+              let vUserInfo = { nickname: '未知用户', email: '' };
+              try {
+                if (userId) { vUserInfo = await getUserInfo(userId); vUserId = vUserInfo.id || userId; }
+              } catch(e) {}
+
+              await ph8TokenService.recordUsage({
+                userId: vUserId,
+                userNickname: vUserInfo.nickname,
+                userEmail: vUserInfo.email,
+                requestId: requestId,
+                model: videoModel,
+                channelId: 'ph8-video',
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 1,  // 用1表示"1次视频生成"
+                cost: videoCost,
+                cachedTokens: 0,
+                requestType: 'video',
+                endpoint: fullPath,
+                status: 'success',
+                errorMessage: null,
+                responseTimeMs: responseTime,
+                ipAddress: req.ip || req.connection.remoteAddress
+              });
+
+              if (videoCost > 0) {
+                try {
+                  await ph8TokenService.deductBalance(vUserId, videoCost, vUserInfo.nickname, vUserInfo.email);
+                  ph8Log.info('视频扣费成功', { requestId, maskedUserId: maskUserId(String(vUserId)), cost: videoCost });
+                } catch(deductErr) {
+                  ph8Log.error('视频扣费失败', { error: deductErr.message });
+                }
+              }
+
+              // 不再走下面的通用JSON处理，避免重复记账
+              ph8Log.info('视频POST计费完成', { requestId, cost: videoCost });
+            }
+          } catch(e) {
+            ph8Log.error('视频POST计费异常', { error: e.message, requestId });
+          }
+          // 视频POST处理完毕，跳到响应发送后的清理
+        } else if (isVideoGetRequest && !isBinaryContent) {
+          // 视频 GET（轮询）：仅在完成且有费用数据时补充记录（通常已在POST时计费）
           try {
             const responseBody = JSON.parse(data);
             if (responseBody.status === 'completed' && (responseBody.usage || responseBody.tokens || responseBody.cost)) {
-              ph8Log.debug('视频完成状态，允许记账', { requestId });
+              ph8Log.debug('视频完成状态有额外费用信息，允许记账', { requestId });
             } else {
-              ph8Log.debug('跳过视频GET记账', { requestId, status: responseBody.status });
+              ph8Log.debug('跳过视频GET记账', { requestId, status: responseBody?.status, reason: 'no-cost-info-or-already-billed' });
               return;
             }
           } catch (e) {
@@ -895,6 +1090,7 @@ router.all('/*', requireAuth, async (req, res) => {
           if (isJsonContent || isVideoResponse) {
               try {
                 const responseBody = JSON.parse(data);
+
                 const usage = extractUsage(responseBody);
 
                 let userInfo = { nickname: '未知用户', email: userId };
@@ -919,9 +1115,16 @@ router.all('/*', requireAuth, async (req, res) => {
                 const actualUserId = (userInfo.id || userId || rawUserIdValue || 'anonymous');
 
                 let calculatedCost = usage.cost;
-                let totalTokens = usage.totalTokens;
                 if (calculatedCost && typeof calculatedCost === 'string') {
                   calculatedCost = parseFloat(calculatedCost);
+                }
+                // Fallback：PH8 未返回费用时（图像/视频），用 token × 官方定价计算
+                if (!calculatedCost && fullPath.includes('/images') && (usage.promptTokens > 0 || usage.completionTokens > 0)) {
+                  const imgCalc = calculateCostFromTokens(model, usage.promptTokens, usage.completionTokens);
+                  calculatedCost = imgCalc.cost;
+                  if (calculatedCost > 0) {
+                    ph8Log.info('通配路由-图像费用token计算', { requestId, model, calculatedCost, source: imgCalc.source });
+                  }
                 }
 
                 await ph8TokenService.recordUsage({
@@ -971,8 +1174,8 @@ router.all('/*', requireAuth, async (req, res) => {
                     userNickname: userInfo.nickname,
                     userEmail: userInfo.email,
                     endpoint: fullPath,
-                    requestBody: bodyData.substring(0, 1000),
-                    responseBody: data.substring(0, 1000),
+                    requestBody: sanitizeForLog(JSON.parse(bodyData || '{}'), 200),
+                    responseBody: sanitizeForLog(responseBody || {}, 200),
                     statusCode: proxyRes.statusCode
                   });
                 } catch (err) {
@@ -1040,9 +1243,20 @@ router.all('/*', requireAuth, async (req, res) => {
                 } else if (jsonBody.cost) {
                   calculatedCost = jsonBody.cost;
                 }
+                // 提取 token 数（即使没有费用）
+                if (!promptTokens && jsonBody.usage) {
+                  promptTokens = jsonBody.usage.prompt_tokens || jsonBody.usage.promptTokens || 0;
+                  completionTokens = jsonBody.usage.completion_tokens || jsonBody.usage.completionTokens || 0;
+                  totalTokens = promptTokens + completionTokens;
+                }
               } catch (e) {
                 // 响应体不是 JSON，忽略
               }
+            }
+            // Fallback：图像请求无费用时，用 token 计算
+            if (!calculatedCost && fullPath.includes('/images') && (promptTokens > 0 || completionTokens > 0)) {
+              const binCalc = calculateCostFromTokens(model, promptTokens, completionTokens);
+              calculatedCost = binCalc.cost;
             }
 
             await ph8TokenService.recordUsage({

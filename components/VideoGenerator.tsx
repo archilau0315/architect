@@ -253,9 +253,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
     try {
       console.log('[VideoGenerator] 开始重新获取视频:', videoRef);
       
-      // 使用 PH8 网关获取视频
-      const proxiedUrl = `${window.location.origin}/api/ph8-openai/videos/${videoRef}`;
-      console.log('[VideoGenerator] 请求URL:', proxiedUrl);
+      // 使用 PH8 网关获取视频（与 geminiService.getProxiedUrl 保持一致的路径格式）
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isDev ? '/architect' : `${window.location.origin}`;
+      const proxiedUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}`;
+      console.log('[VideoGenerator] 请求URL:', proxiedUrl, `(环境: ${isDev ? '开发' : '生产'})`);
       
       const response = await fetch(proxiedUrl);
       if (!response.ok) {
@@ -280,9 +282,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           videoBlobService.markAsPersistent(videoUrl);
         }
       } else {
-        // 尝试下载内容
+        // 尝试下载内容（使用统一路径格式）
         console.log('[VideoGenerator] 尝试下载视频内容...');
-        const contentUrl = `${window.location.origin}/api/ph8/videos/${videoRef}/content`;
+        const contentUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}/content`;
         const contentResponse = await fetch(contentUrl);
         if (contentResponse.ok) {
           const arrayBuffer = await contentResponse.arrayBuffer();
@@ -508,7 +510,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       
       // 通知父组件写入聊天气泡（必须在setVideoUrl之后）
       if (onVideoGenerated) {
-        try { onVideoGenerated({ url: result.url, prompt: finalPrompt }); } catch(e) { console.warn('[VideoGenerator] onVideoGenerated回调失败(非致命):', e); }
+        try { onVideoGenerated({ url: result.url, prompt: finalPrompt, videoRef: result.videoRef }); } catch(e) { console.warn('[VideoGenerator] onVideoGenerated回调失败(非致命):', e); }
       }
       
       console.log('[VideoGenerator] ✅ 视频生成成功，已显示给用户');

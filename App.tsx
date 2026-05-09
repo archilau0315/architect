@@ -59,7 +59,7 @@ const App: React.FC = () => {
   const [architectKey, setArchitectKey] = useState(0);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [currentDomain, setCurrentDomain] = useState<CreativeDomain>('architecture');
-  const [userTier, setUserTier] = useState<UserTier>('pro');
+  const [userTier, setUserTier] = useState<UserTier>('free');
   const [needsInviteVerify, setNeedsInviteVerify] = useState<boolean | null>(null);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -111,8 +111,8 @@ const App: React.FC = () => {
   const [analyzeKey, setAnalyzeKey] = useState(0); // kept for compatibility
   const [videoKey, setVideoKey] = useState(0);
   // 视频回写：工作台生成后回写到聊天气泡
-  const [pendingVideoMessage, setPendingVideoMessage] = useState<{ url: string; prompt: string } | null>(null);
-  const handleVideoGenerated = (result: { url: string; prompt: string }) => {
+  const [pendingVideoMessage, setPendingVideoMessage] = useState<{ url: string; prompt: string; videoRef?: string } | null>(null);
+  const handleVideoGenerated = (result: { url: string; prompt: string; videoRef?: string }) => {
     setPendingVideoMessage(result);
   };
   const [isSystemVisible, setIsSystemVisible] = useState(false);
@@ -182,6 +182,15 @@ const App: React.FC = () => {
           if (data.success && data.data?.tier) {
               savedTier = data.data.tier as UserTier;
               localStorage.setItem(USER_TIER_KEY, savedTier);
+              // 同步更新 session 对象中的 tier，确保 SettingsPanel 等组件读取到最新等级
+              try {
+                const session = localStorage.getItem('architect-invite-session');
+                if (session) {
+                  const sessionData = JSON.parse(session);
+                  sessionData.tier = savedTier;
+                  localStorage.setItem('architect-invite-session', JSON.stringify(sessionData));
+                }
+              } catch (e) { /* session 解析失败时忽略 */ }
               // 新积分系统：从user-info接口不再设置积分，后面统一从quota接口获取
               // 避免数据冲突和覆盖问题
             // 检测等级是否已过期降级
@@ -246,6 +255,15 @@ const App: React.FC = () => {
                 const tierLabels: Record<string, string> = { beta: '内测用户', basic: '基础级', pro: 'PRO级', plus: 'PLUS级' };
                 setUserTier('free');
                 localStorage.setItem(USER_TIER_KEY, 'free');
+                // 同步更新 session 对象中的 tier
+                try {
+                  const sess = localStorage.getItem('architect-invite-session');
+                  if (sess) {
+                    const sd = JSON.parse(sess);
+                    sd.tier = 'free';
+                    localStorage.setItem('architect-invite-session', JSON.stringify(sd));
+                  }
+                } catch (e) { /* ignore */ }
                 if (!showTierExpiredModal) {
                   setTierExpiryInfo({
                     previous: previousTier,
