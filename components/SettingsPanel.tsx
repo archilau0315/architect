@@ -559,7 +559,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <div className="space-y-1">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">可用积分余额 / Points Balance</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-theme">{Math.max(0, (points.bonus || 0) + (points.purchased || 0) - (points.totalConsumed || 0))}</span>
+                  <span className="text-3xl font-black text-theme">{points.total_balance ?? Math.max(0, (points.bonus || 0) + (points.purchased || 0) - (points.totalConsumed || 0))}</span>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Points</span>
                 </div>
               </div>

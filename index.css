@@ -790,6 +790,48 @@ html {
   background-color: var(--bg-secondary) !important;
 }
 
+/* Light Mode - VideoGenerator engine dropdown selected item */
+.light-mode .engine-selected {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+.light-mode .engine-selected-text {
+  color: #1e293b !important;
+}
+.light-mode .engine-selected-desc {
+  color: #64748b !important;
+}
+.light-mode .engine-selected-icon {
+  color: #2563eb !important;
+}
+
+/* Light Mode - VideoGenerator waiting placeholder */
+.light-mode .waiting-placeholder {
+  opacity: 0.5;
+}
+.light-mode .waiting-placeholder .border-dashed {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+.light-mode .waiting-placeholder svg {
+  color: rgba(0, 0, 0, 0.25) !important;
+}
+.light-mode .waiting-placeholder p:first-of-type {
+  color: #64748b !important;
+}
+.light-mode .waiting-placeholder p:last-of-type {
+  color: #94a3b8 !important;
+}
+
+/* Light Mode - VideoGenerator generating card */
+.light-mode .bg-black\/40 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+.light-mode .border-white\/\[0\.06\] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+.light-mode .bg-\[\#1a1a2e\] {
+  background-color: var(--bg-tertiary) !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    全局主题色映射 — 让 Tailwind 活跃色类跟随 --theme-primary
    覆盖组件内 text-indigo-* / text-blue-* / bg-indigo-* / bg-blue-* 等

@@ -676,8 +676,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           link.click();
         }
       } catch (error) {
-        console.error('水印处理失败:', error);
-        window.alert('水印处理失败，将下载原视频');
+        console.warn('[Video Download] 水印处理失败，降级为原始视频下载:', error);
         const link = document.createElement('a');
         link.href = videoUrl;
         link.download = `Architect_Motion_STD_${Date.now()}.mp4`;
@@ -852,11 +851,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                         type="button"
                         disabled={eng.isFrozen}
                         onClick={() => { setSelectedEngine(eng.id); setShowEngineDropdown(false); }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${eng.isFrozen ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/[0.06] cursor-pointer'} ${selectedEngine === eng.id ? 'bg-blue-500/10' : ''}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${eng.isFrozen ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/[0.06] cursor-pointer'} ${selectedEngine === eng.id ? 'bg-blue-600/20 engine-selected' : ''}`}
                       >
-                        <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                        <span className="text-sm font-medium text-white/80">{eng.label}</span>
-                        <span className="text-[11px] text-white/30">{eng.desc}</span>
+                        <svg className={`w-3.5 h-3.5 shrink-0 ${selectedEngine === eng.id ? 'text-blue-300 engine-selected-icon' : 'text-blue-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        <span className={`text-sm font-medium ${selectedEngine === eng.id ? 'text-white/90 engine-selected-text' : 'text-white/80'}`}>{eng.label}</span>
+                        <span className={`text-[11px] ${selectedEngine === eng.id ? 'text-white/60 engine-selected-desc' : 'text-white/30'}`}>{eng.desc}</span>
                         {eng.isFrozen && <span className="ml-auto text-[10px] text-white/30">开发中</span>}
                       </button>
                     ))}
@@ -1008,21 +1007,29 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
             {/* 生成中状态 */}
             {isGenerating && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-20 animate-in fade-in">
-                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6" />
-                <p className="text-white/80 text-sm font-medium mb-2">{statusText}</p>
-                <div className="w-48 h-2 bg-white/20 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-white/50 text-xs mt-2">{progress}%</p>
-                <button
-                  onClick={handleGenerate}
-                  className="mt-4 px-6 py-2 bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-all active:scale-95 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <div className="flex flex-col items-center gap-4 px-8 py-6 rounded-2xl bg-black/40 border border-white/[0.06]">
+                  <svg className="w-10 h-10 text-blue-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  取消生成
-                </button>
+                  <div className="w-full space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-white/70 text-xs font-medium truncate">{statusText}</p>
+                      <p className="text-blue-400 text-xs font-mono tabular-nums shrink-0">{progress}%</p>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleGenerate}
+                    className="mt-1 px-5 py-1.5 bg-white/[0.08] hover:bg-red-500/30 hover:text-red-300 text-white/50 hover:text-red-300 text-xs font-medium rounded-lg transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    取消生成
+                  </button>
+                </div>
               </div>
             )}
             
@@ -1110,15 +1117,14 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                 )}
              </div>
            ) : (
-             <div className="flex flex-col items-center text-center opacity-30 select-none">
-                <div className="relative mb-6">
-                  <svg className="w-24 h-24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-12 h-12 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+             <div className="flex flex-col items-center text-center opacity-30 select-none waiting-placeholder">
+                <div className="mb-5">
+                  <div className="w-20 h-20 border-2 border-dashed border-white/15 rounded-2xl flex items-center justify-center">
+                    <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   </div>
                 </div>
-                <p className="text-sm font-medium text-white/50">等待生成</p>
-                <p className="text-xs text-white/30 mt-2">上传底图后点击"执行分镜动态解算"</p>
+                <p className="text-sm font-medium text-white/40">等待生成</p>
+                <p className="text-xs text-white/25 mt-1.5">上传底图后点击「执行分镜动态解算」</p>
              </div>
            )}
         </div>

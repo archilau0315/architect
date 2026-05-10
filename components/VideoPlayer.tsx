@@ -51,7 +51,6 @@ export const VideoPlayer = ({
   t
 }: VideoPlayerProps) => {
   const hasOriginalAccess = canDownloadOriginal(userTier, isDeveloper);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
