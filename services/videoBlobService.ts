@@ -56,6 +56,13 @@ class VideoBlobService {
   }
   
   /**
+   * 检查 URL 是否被标记为持久保持
+   */
+  isPersistent(url: string): boolean {
+    return this.persistentUrls.has(url);
+  }
+
+  /**
    * 标记 URL 为持久保持（用于聊天消息）
    */
   markAsPersistent(url: string): void {

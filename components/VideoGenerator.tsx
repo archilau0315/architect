@@ -103,11 +103,16 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
   const blobUrlRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // 组件卸载时释放 Blob URL
+  // 组件卸载时释放 Blob URL（仅释放非持久的临时 URL）
   useEffect(() => {
     return () => {
       if (blobUrlRef.current?.startsWith('blob:')) {
-        URL.revokeObjectURL(blobUrlRef.current);
+        // 如果该 URL 已被标记为持久化（用于聊天气泡等跨组件共享），则不释放
+        if (!videoBlobService.isPersistent(blobUrlRef.current)) {
+          URL.revokeObjectURL(blobUrlRef.current);
+        } else {
+          console.log('[VideoGenerator] 保留持久化 Blob URL，跳过释放:', blobUrlRef.current.substring(0, 40));
+        }
       }
     };
   }, []);

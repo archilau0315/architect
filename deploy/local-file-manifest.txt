@@ -1,10 +1,10 @@
 TYPE | PATH | SIZE_KB | MODIFIED | HASH
 -----|------|---------|----------|-----
-frontend | assets/index-BHWgc3S-.css                               |     235 | 20260509140643.     | 41a94f3b6e26a741
-frontend | assets/index-ChCy-FqB.js                                |     889 | 20260509140643.     | 7c10c429a9bdaf67
-frontend | assets/videoWatermarkService-lbEzhywa.js                |       8 | 20260509140643.     | 816d35364a66430c
-frontend | assets/worker-BU9fmUEi.js                               |       2 | 20260509140643.     | f8bdccdd6a2355f1
-frontend | index.html                                              |       4 | 20260509140643.     | 55c1c7a5a06a49e9
+frontend | assets/index-BHWgc3S-.css                               |     235 | 20260510131415.     | 41a94f3b6e26a741
+frontend | assets/index-CNiuvtcu.js                                |     889 | 20260510131415.     | 70c49494fda67c0a
+frontend | assets/videoWatermarkService-DU_YYiDM.js                |       8 | 20260510131415.     | f67afb10e774c9a1
+frontend | assets/worker-BU9fmUEi.js                               |       2 | 20260510131415.     | f8bdccdd6a2355f1
+frontend | index.html                                              |       4 | 20260510131415.     | f6f9201989113f1e
 backend  | admin/beta.html                                         |      14 | 20260501065518.     | 050992472ada5190
 backend  | admin/dashboard.html                                    |      31 | 20260501104539.     | 7c24197c65dd386d
 backend  | admin/index.html                                        |      13 | 20260501065518.     | e5a115d093ecab5f

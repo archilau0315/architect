@@ -51,6 +51,7 @@ export const VideoPlayer = ({
   t
 }: VideoPlayerProps) => {
   const hasOriginalAccess = canDownloadOriginal(userTier, isDeveloper);
+  const videoDomRef = useRef<HTMLVideoElement>(null);  // DOM 元素引用（区别于 props.videoRef 字符串）
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -93,7 +94,7 @@ export const VideoPlayer = ({
   }, [videoUrl]);
 
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (!video) return;
 
     const handleTimeUpdate = () => {
@@ -199,7 +200,7 @@ export const VideoPlayer = ({
   }, [videoUrl, playbackPosition]);
 
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (video) {
       video.playbackRate = playbackSpeed;
     }
@@ -239,7 +240,7 @@ export const VideoPlayer = ({
   }, []);
 
   const togglePlay = useCallback(() => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (video) {
       if (isPlaying) {
         video.pause();
@@ -250,7 +251,7 @@ export const VideoPlayer = ({
   }, [isPlaying]);
 
   const toggleMute = useCallback(() => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (video) {
       video.muted = !video.muted;
       setIsMuted(video.muted);
@@ -271,7 +272,7 @@ export const VideoPlayer = ({
   }, []);
 
   const togglePictureInPicture = useCallback(async () => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (!video) return;
 
     if (!document.pictureInPictureElement) {
@@ -282,7 +283,7 @@ export const VideoPlayer = ({
   }, []);
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const video = videoRef.current;
+    const video = videoDomRef.current;
     if (!video) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -330,7 +331,7 @@ export const VideoPlayer = ({
   return (
     <div className="video-container relative rounded-xl overflow-hidden border border-white/10 shadow-lg bg-black">
       <video
-        ref={videoRef}
+        ref={videoDomRef}
         className="w-full h-full object-cover"
         poster=""
         disablePictureInPicture={false}
@@ -384,8 +385,8 @@ export const VideoPlayer = ({
               onClick={() => {
                 setHasError(false);
                 setErrorMessage('');
-                if (videoRef.current) {
-                  videoRef.current.load();
+                if (videoDomRef.current) {
+                  videoDomRef.current.load();
                 }
               }}
               className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-400 text-sm font-medium transition-all"
