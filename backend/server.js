@@ -128,6 +128,12 @@ app.use('/api/plan', planRoutes);
 // PH8 余额路由必须在 ph8Routes 之前加载，避免被通配符路由捕获
 app.use('/api/ph8', ph8BalanceRoutes);
 app.use('/api/ph8', ph8Routes);
+// [修复] 前端视频轮询请求可能使用两种路径格式：
+// 格式1: /api/ph8/openai/v1/* (getProxiedUrl 函数 + VideoGenerator/VideoPlayer 硬编码)
+// 格式2: /api/ph8-openai/* (旧版前端代码或 vite.config.ts 代理配置)
+// 两种都需要挂载到 ph8Routes，否则视频 GET 返回 404
+app.use('/api/ph8/openai/v1', ph8Routes);
+app.use('/api/ph8-openai', ph8Routes);
 
 // 通用网关路由（支持多网关）
 // 新格式: /api/gateway/:gatewayKey/*

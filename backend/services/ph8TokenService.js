@@ -50,13 +50,36 @@ async function recordUsage(data) {
     let actualCost = parseFloat(data.cost) || 0;
     const points = Math.round(actualCost * 1000);
 
+    // 自动查询用户昵称和邮箱（当调用方未提供或为空时）
+    let userNickname = data.userNickname || null;
+    let userEmail = data.userEmail || null;
+    if ((!userNickname || !userEmail) && dbUserId && dbUserId > 0) {
+      try {
+        const [userRows] = await db.query(
+          'SELECT nickname, email FROM kbit_users WHERE id = ? LIMIT 1',
+          [dbUserId]
+        );
+        if (userRows.length > 0) {
+          if (!userNickname) userNickname = userRows[0].nickname || null;
+          if (!userEmail) userEmail = userRows[0].email || null;
+        }
+      } catch (queryErr) {
+        tokenLog.warn('查询用户昵称邮箱失败，使用默认值', { error: queryErr.message, userId: dbUserId });
+        if (!userNickname) userNickname = '未知用户';
+        if (!userEmail) userEmail = String(dbUserId);
+      }
+    } else if (!userNickname) {
+      userNickname = '未知用户';
+    }
+    if (!userEmail) userEmail = String(dbUserId || 'unknown');
+
     await db.query(
-      'INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
-      [dbUserId, data.requestId || uuidv4(), feature, dbModel, data.channelId || 'default',
+      'INSERT INTO kbit_usage_logs (user_id, user_nickname, user_email, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+      [dbUserId, userNickname, userEmail, data.requestId || uuidv4(), feature, dbModel, data.channelId || 'default',
        data.promptTokens || 0, data.completionTokens || 0, data.totalTokens, points,
        actualCost, data.status || 'success', data.ipAddress || '']
     );
-    tokenLog.debug('使用记录成功', { userId: data.userId, points });
+    tokenLog.debug('使用记录成功', { userId: data.userId, points, nickname: userNickname });
     return true;
   } catch (err) {
     tokenLog.error('使用记录失败', { error: err.message, userId: data.userId });

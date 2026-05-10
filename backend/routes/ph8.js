@@ -250,6 +250,7 @@ function extractUsage(responseBody) {
     let totalTokens = 0;
     let cachedTokens = 0;
     let cost = 0;
+    let modelName = null;
     
     if (responseBody.usage) {
       promptTokens = responseBody.usage.prompt_tokens || responseBody.usage.promptTokens || 0;
@@ -296,16 +297,28 @@ function extractUsage(responseBody) {
       }
     }
 
+    // 提取 PH8 返回的真实模型名（优先级从高到低）
+    modelName = responseBody.model || responseBody.model_id || null;
+    // output 中也可能有模型信息
+    if (!modelName && responseBody.output) {
+      modelName = responseBody.output.model || responseBody.output.model_id || null;
+    }
+    // results[] 中提取
+    if (!modelName && Array.isArray(responseBody.results) && responseBody.results.length > 0) {
+      modelName = responseBody.results[0].model || responseBody.results[0].model_id || null;
+    }
+
     return {
       promptTokens: parseInt(promptTokens) || 0,
       completionTokens: parseInt(completionTokens) || 0,
       totalTokens: parseInt(totalTokens) || 0,
       cachedTokens: parseInt(cachedTokens) || 0,
-      cost: typeof cost === 'string' ? parseFloat(cost) : (cost || 0)
+      cost: typeof cost === 'string' ? parseFloat(cost) : (cost || 0),
+      modelName: modelName || null
     };
   } catch (err) {
     ph8Log.error('提取usage数据失败', { error: err.message });
-    return { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cost: 0 };
+    return { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, cost: 0, modelName: null };
   }
 }
 
@@ -1006,19 +1019,34 @@ router.all('/*', requireAuth, async (req, res) => {
             if (videoResp.id && (videoResp.status === 'queued' || videoResp.status === 'in_progress' || videoResp.status === 'completed')) {
               ph8Log.info('视频任务创建成功，执行计费', { requestId, videoId: videoResp.id, model });
 
+              // 【关键修复】将 PH8 task ID 附加到 model_id 中，以便后续 GET 轮询能精确匹配 DB 记录
+              // 原因: request_id 字段 VARCHAR(50)，UUID(36) + ::(2) + taskId(~25) = 63 超限！
+              // 方案: 改存到 model_id 字段，格式 "modelName::ph8-task-id"（GET 端用 model_id LIKE 匹配）
+              const videoModelWithTaskId = `${videoModel}::${videoResp.id}`;
+
               // 从请求体获取模型名（视频模型按固定单价计费）
               let videoModel = model;
               try { videoModel = JSON.parse(bodyData || '{}').model || model; } catch(e) {}
 
-              // 使用 PH8 官方定价计算视频费用（按 outputPrice 作为单次生成基准价）
+              // 使用 PH8 官方定价计算视频费用（基于完整 Token 计算）
+              // 根据 PH8 调用明细，视频模型的实际计费方式：
+              //   - 输入 Token ≈ 0（当前固定，但可能变化）
+              //   - 输出 Token = 50,000 ~ 100,000（根据视频复杂度）
+              //   - 费用 = (inputPrice × inputTokens + outputPrice × outputTokens) / 1,000,000
+              //
+              // 示例（doubao-seedance-1-0-pro-fast, input=0.1, output=4.2）:
+              //   - input=0, output=50000 → (0.1×0 + 4.2×50000)/1M = 0.21元 = 210积分
+              //   - input=0, output=100000 → (0.1×0 + 4.2×100000)/1M = 0.42元 = 420积分
+              //
+              // POST 时无法知道实际 tokens，先用估算值（默认 input=0, output=50000）
+              // GET 完成后用 PH8 返回的真实 token 数据更新并补扣差额
               let videoCost = 0;
               const videoPricing = PH8_MODEL_PRICING[videoModel];
               if (videoPricing) {
-                // 视频模型定价单位是 元/百万tokens，但视频不按token算
-                // 这里用 outputPrice/1000 作为每次视频生成的近似成本（约等于一次中等输出量）
-                videoCost = Math.round(videoPricing.outputPrice * 100) / 10000000; // 保留足够精度
-                // 如果结果太小（<0.01），至少收0.01元
-                if (videoCost < 0.01) videoCost = videoPricing.outputPrice >= 10 ? 0.05 : 0.02;
+                const estimatedInputTokens = 0;      // 当前视频模型输入token为0
+                const estimatedOutputTokens = 50000; // 默认估算值（约5万输出tokens）
+                videoCost = (videoPricing.inputPrice * estimatedInputTokens + videoPricing.outputPrice * estimatedOutputTokens) / 1000000;
+                if (videoCost < 0.01) videoCost = 0.01;
               }
               ph8Log.info('视频费用计算', { requestId, model: videoModel, cost: videoCost, source: videoPricing ? 'ph8-pricing-table' : 'no-pricing' });
 
@@ -1032,8 +1060,8 @@ router.all('/*', requireAuth, async (req, res) => {
                 userId: vUserId,
                 userNickname: vUserInfo.nickname,
                 userEmail: vUserInfo.email,
-                requestId: requestId,
-                model: videoModel,
+                requestId: requestId,  // 保持原始 UUID，不超长
+                model: videoModelWithTaskId,  // 【关键】model_id 存 "modelName::taskId"，用于 GET 端匹配
                 channelId: 'ph8-video',
                 promptTokens: 0,
                 completionTokens: 0,
@@ -1065,17 +1093,184 @@ router.all('/*', requireAuth, async (req, res) => {
           }
           // 视频POST处理完毕，跳到响应发送后的清理
         } else if (isVideoGetRequest && !isBinaryContent) {
-          // 视频 GET（轮询）：仅在完成且有费用数据时补充记录（通常已在POST时计费）
+          // 视频 GET（轮询完成）：从 completed 响应中提取真实 usage 数据并更新 POST 时创建的日志
           try {
-            const responseBody = JSON.parse(data);
-            if (responseBody.status === 'completed' && (responseBody.usage || responseBody.tokens || responseBody.cost)) {
-              ph8Log.debug('视频完成状态有额外费用信息，允许记账', { requestId });
-            } else {
-              ph8Log.debug('跳过视频GET记账', { requestId, status: responseBody?.status, reason: 'no-cost-info-or-already-billed' });
-              return;
+            const videoStatusResp = JSON.parse(data);
+            
+            // 【关键修复】从请求路径中提取 PH8 task ID，用于匹配 POST 时创建的 DB 记录
+            // 请求路径格式: /openai/v1/videos/{taskId} 或 /v1/videos/{taskId}
+            const pathParts = fullPath.split('/videos/');
+            const ph8TaskId = pathParts.length > 1 ? pathParts[1].split('/')[0].split('?')[0] : null;
+            
+            ph8Log.info('视频GET响应详情', { requestId, ph8TaskId, status: videoStatusResp?.status, hasUsage: !!videoStatusResp?.usage, keys: Object.keys(videoStatusResp).join(',') });
+            
+            // 【诊断】打印 completed 响应的关键字段，用于确认 PH8 返回的实际数据结构
+            if (videoStatusResp.status === 'completed') {
+              ph8Log.info('视频completed响应原始数据(诊断)', {
+                requestId,
+                ph8TaskId,
+                usage: JSON.stringify(videoStatusResp.usage || null),
+                cost: videoStatusResp.cost,
+                tokens: videoStatusResp.tokens || videoStatusResp.total_tokens,
+                output: videoStatusResp.output ? { keys: Object.keys(videoStatusResp.output).join(','), usage: JSON.stringify(videoStatusResp.output.usage || null) } : null,
+                results_count: Array.isArray(videoStatusResp.results) ? videoStatusResp.results.length : 0,
+              });
             }
+            
+            if (videoStatusResp.status === 'completed') {
+              // 提取 PH8 返回的真实 usage/token 数据
+              const videoUsage = extractUsage(videoStatusResp);
+              ph8Log.info('视频生成完成，extractUsage结果', { requestId, ph8TaskId,
+                pTokens: videoUsage.promptTokens, cTokens: videoUsage.completionTokens, 
+                tTokens: videoUsage.totalTokens, cost: videoUsage.cost,
+                ph8ModelName: videoUsage.modelName
+              });
+
+              // 放宽条件：只要响应是 completed 就尝试更新
+              const shouldUpdate = videoUsage.totalTokens > 0 || videoUsage.cost > 0;
+              
+              // 如果 extractUsage 没提取到标准字段，尝试直接从响应体中获取非标准位置的数据
+              let fallbackCost = videoUsage.cost;
+              let fallbackTotalTokens = videoUsage.totalTokens;
+              let fallbackPromptTokens = videoUsage.promptTokens;
+              let fallbackCompletionTokens = videoUsage.completionTokens;
+              
+              if (!shouldUpdate) {
+                // 尝试更多可能的字段路径
+                fallbackCost = videoStatusResp.cost || videoStatusResp.price || videoStatusResp.charge ||
+                  videoStatusResp.total_cost || videoStatusResp.totalPrice || 0;
+                fallbackTotalTokens = videoStatusResp.total_tokens || videoStatusResp.tokens || 0;
+                fallbackPromptTokens = videoStatusResp.prompt_tokens || 0;
+                fallbackCompletionTokens = videoStatusResp.completion_tokens || 0;
+                
+                // 尝试 output.usage
+                if (!fallbackCost && videoStatusResp.output?.usage) {
+                  fallbackCost = videoStatusResp.output.usage.cost || videoStatusResp.output.usage.price || 0;
+                  fallbackTotalTokens = fallbackTotalTokens || videoStatusResp.output.usage.total_tokens || 0;
+                }
+                
+                // 尝试 results[].usage
+                if (!fallbackCost && Array.isArray(videoStatusResp.results)) {
+                  for (const r of videoStatusResp.results) {
+                    if (r.usage) { fallbackCost = r.usage.cost || fallbackCost; break; }
+                    if (r.cost) { fallbackCost = r.cost; break; }
+                  }
+                }
+                
+                ph8Log.info('视频usage兜底提取', { requestId, ph8TaskId, fallbackCost, fallbackTotalTokens, 
+                  fallbackPrompt: fallbackPromptTokens, fallbackCompletion: fallbackCompletionTokens });
+              }
+              
+              // 【关键修复】用 ph8TaskId 或 videoStatusResp.id 匹配数据库记录（而非当前请求的 requestId）
+              // 同时也尝试用 endpoint 路径匹配作为兜底
+              const matchTaskId = ph8TaskId || videoStatusResp.id || null;
+              
+              if ((fallbackTotalTokens > 1) || (fallbackCost > 0) || matchTaskId) {
+                try {
+                  let vUserId = userId;
+                  try { if (userId) { const vInfo = await getUserInfo(userId); vUserId = vInfo.id || userId; } } catch(e) {}
+
+                  // 计算实际费用：优先使用兜底cost，再是 PH8 返回的 cost，最后用 token × 定价表
+                  let actualCost = fallbackCost || videoUsage.cost;
+                  if (!actualCost && (fallbackPromptTokens > 0 || fallbackCompletionTokens > 0)) {
+                    const tokenCalc = calculateCostFromTokens(model, fallbackPromptTokens, fallbackCompletionTokens);
+                    actualCost = tokenCalc.cost;
+                    ph8Log.info('视频费用token补充计算', { requestId, model, calculatedCost: actualCost, source: tokenCalc.source });
+                  }
+
+                  const points = Math.round((actualCost || 0) * 1000);
+                  const finalTotalTokens = fallbackTotalTokens || videoUsage.totalTokens || 1;
+
+                  // 提取 PH8 返回的真实模型名，用于更新 model_id
+                  const ph8RealModel = videoUsage.modelName || null;
+
+                  // 【核心修复】多策略匹配数据库中的视频 POST 记录
+                  // POST 时将 taskId 存入 model_id 字段（格式 "modelName::taskId"）
+                  // GET 端通过 model_id LIKE '%taskId%' 精确匹配
+                  let updateResult;
+                  
+                  // 先尝试用 model_id LIKE taskId 匹配（最可靠）
+                  if (matchTaskId) {
+                    updateResult = await db.query(
+                      `UPDATE kbit_usage_logs SET
+                        prompt_tokens = ?, completion_tokens = ?, total_tokens = ?,
+                        actual_cost = ?, points_cost = ?, model_id = ?
+                      WHERE feature = 'video_gen' AND model_id LIKE ?
+                      ORDER BY created_at DESC LIMIT 1`,
+                      [fallbackPromptTokens, fallbackCompletionTokens,
+                       finalTotalTokens, actualCost || 0, points,
+                       ph8RealModel || model,
+                       `%${matchTaskId}%`]
+                    );
+                    
+                    // 如果 LIKE 没匹配到，改用 userId + 最近记录策略匹配
+                    const likeAffected = updateResult?.affectedRows || 0;
+                    if (likeAffected === 0 && vUserId) {
+                      ph8Log.info('视频usage LIKE未命中，改用userId+时间匹配', { requestId, matchTaskId, vUserId });
+                      updateResult = await db.query(
+                        `UPDATE kbit_usage_logs SET
+                          prompt_tokens = ?, completion_tokens = ?, total_tokens = ?,
+                          actual_cost = ?, points_cost = ?, model_id = ?
+                        WHERE user_id = ? AND feature = 'video_gen'
+                        AND (prompt_tokens = 0 OR total_tokens <= 1)
+                        ORDER BY created_at DESC LIMIT 1`,
+                        [fallbackPromptTokens, fallbackCompletionTokens,
+                         finalTotalTokens, actualCost || 0, points,
+                         ph8RealModel || model,
+                         vUserId]
+                      );
+                    }
+                  } else {
+                    // 无 taskId 时回退到原逻辑（可能匹配不到）
+                    updateResult = await db.query(
+                      `UPDATE kbit_usage_logs SET
+                        prompt_tokens = ?, completion_tokens = ?, total_tokens = ?,
+                        actual_cost = ?, points_cost = ?, model_id = ?
+                      WHERE request_id = ? AND feature = 'video_gen'`,
+                      [fallbackPromptTokens, fallbackCompletionTokens,
+                       finalTotalTokens, actualCost || 0, points,
+                       ph8RealModel || model,
+                       requestId]
+                    );
+                  }
+
+                  const affectedRows = updateResult?.affectedRows || 0;
+                  
+                  if (affectedRows === 0 && matchTaskId) {
+                    ph8Log.warn('视频usage未找到匹配记录(可能POST时未写入)', { 
+                      requestId, matchTaskId, endpoint: fullPath 
+                    });
+                  }
+
+                  // 如果有新的费用需要扣款（POST 时估算为0或过低）
+                  if (actualCost > 0.01 && affectedRows > 0) {
+                    try {
+                      let deductUserInfo = { nickname: '未知用户', email: '' };
+                      try { if (vUserId) deductUserInfo = await getUserInfo(vUserId); } catch(e) {}
+                      await ph8TokenService.deductBalance(vUserId, actualCost, deductUserInfo.nickname, deductUserInfo.email);
+                      ph8Log.info('视频费用补扣成功', { requestId, cost: actualCost });
+                    } catch(deductErr) {
+                      ph8Log.error('视频费用补扣失败', { error: deductErr.message });
+                    }
+                  }
+
+                  ph8Log.info('视频usage数据已更新到日志', {
+                    requestId, matchTaskId, affectedRows, prompt: fallbackPromptTokens,
+                    completion: fallbackCompletionTokens, total: finalTotalTokens,
+                    cost: actualCost
+                  });
+                } catch(updateErr) {
+                  ph8Log.error('视频日志更新失败', { error: updateErr.message, requestId });
+                }
+              } else {
+                ph8Log.info('视频completed响应无usage/cost数据，保持POST时估算值', { requestId });
+              }
+            } else {
+              ph8Log.debug('跳过视频GET记账(未完成)', { requestId, status: videoStatusResp?.status });
+            }
+            return; // 视频 GET 处理完毕，不进入通用 JSON 处理
           } catch (e) {
-            ph8Log.debug('跳过视频GET记账(解析失败)', { requestId });
+            ph8Log.debug('跳过视频GET记账(解析失败)', { requestId, error: e.message });
             return;
           }
         } else if (isVideoGetRequest && isBinaryContent) {

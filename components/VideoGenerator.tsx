@@ -547,6 +547,32 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       }, 1000);
 
       // [扣费已由后端PH8代理 deductBalance 统一处理]
+      // 前端查询并展示本次生成的真实 Token/费用信息
+      setTimeout(async () => {
+        try {
+          let userId = 'guest';
+          try {
+            const sessionData = localStorage.getItem('architect-invite-session');
+            if (sessionData) {
+              const parsed = JSON.parse(sessionData);
+              userId = parsed.userId || parsed.email || 'guest';
+            }
+          } catch (e) { /* 获取用户ID失败不影响主流程 */ }
+
+          const result = await Ph8UsageService.getLatestUsage(userId);
+          if (result.success && result.data) {
+            console.log('[VideoGenerator] 🎬 PH8视频费用(后端已扣)', {
+              requestId: result.data.request_id,
+              actualCost: result.data.actual_cost,
+              pointsCost: result.data.points_cost,
+              tokens: { prompt: result.data.prompt_tokens, completion: result.data.completion_tokens, total: result.data.total_tokens },
+              model: result.data.model_id
+            });
+          }
+        } catch (err) {
+          console.warn('[VideoGenerator] 获取视频费用日志失败(非致命):', err);
+        }
+      }, 800);
     } catch (err: any) {
       console.error('[VideoGenerator] ❌ 视频生成失败:', err?.message || err);
       console.error('[VideoGenerator] 错误详情:', JSON.stringify(err, Object.getOwnPropertyNames(err)));

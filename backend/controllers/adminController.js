@@ -489,14 +489,19 @@ exports.getLogs = async (req, res) => {
       [...params, limit, offset]
     );
     
-    // 补充用户信息
+    // 补充用户信息 - 优先使用表内冗余字段，为空时再查 kbit_users
     for (let i = 0; i < logs.length; i++) {
       const log = logs[i];
-      let user_email = null;
-      let user_nickname = null;
+      let user_email = log.user_email || null;
+      let user_nickname = log.user_nickname || null;
       let display_name = '未识别';
       
-      if (log.user_id && log.user_id !== 0 && log.user_id !== '0' && log.user_id !== 'guest' && log.user_id !== '未识别') {
+      // 如果表内已有昵称/邮箱数据，直接使用
+      if (user_nickname || user_email) {
+        display_name = user_nickname || user_email || '未知用户';
+      }
+      // 否则通过 user_id 查询 kbit_users 补充
+      else if (log.user_id && log.user_id !== 0 && log.user_id !== '0' && log.user_id !== 'guest' && log.user_id !== '未识别') {
         try {
           const [users] = await db.query(
             'SELECT id, nickname, email FROM kbit_users WHERE id = ? OR email = ? LIMIT 1',
@@ -508,7 +513,6 @@ exports.getLogs = async (req, res) => {
             user_nickname = users[0].nickname;
             display_name = user_nickname || user_email || '未知用户';
           } else if (typeof log.user_id === 'string' && log.user_id.includes('@')) {
-            // 如果 user_id 本身是邮箱且没找到用户，直接显示
             display_name = log.user_id;
             user_email = log.user_id;
           } else {

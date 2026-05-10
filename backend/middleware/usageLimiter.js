@@ -179,11 +179,14 @@ async function recordTokenUsage(userId, tokens, model, requestType, requestId = 
   // 确保model永远有值
   const dbModel = model || 'unknown';
 
+  // 获取用户昵称和邮箱
+  const userInfo = await getUserInfo(dbUserId);
+
   // 写入 kbit_usage_logs 表
   await db.query(
-    `INSERT INTO kbit_usage_logs (user_id, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [dbUserId, requestId || `req_${Date.now()}`, feature, dbModel, 'default', tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, 0, 0, 'success', '']
+    `INSERT INTO kbit_usage_logs (user_id, user_nickname, user_email, request_id, feature, model_id, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+    [dbUserId, userInfo.nickname || null, userInfo.email || null, requestId || `req_${Date.now()}`, feature, dbModel, 'default', tokens.prompt || 0, tokens.completion || 0, tokens.total || 0, 0, 0, 'success', '']
   );
 }
 

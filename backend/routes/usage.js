@@ -326,9 +326,9 @@ router.post('/video-download/check', async (req, res) => {
     const requestId = `vdl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await db.query(
       `INSERT INTO kbit_usage_logs
-       (user_id, request_id, model_id, feature, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
-       VALUES (?, ?, 'video-pro', 'video_gen', 'video-download', 0, 0, 1, 1, 0, 'success', '', NOW())`,
-      [userId, requestId]
+       (user_id, user_nickname, user_email, request_id, model_id, feature, channel_id, prompt_tokens, completion_tokens, total_tokens, points_cost, actual_cost, status, ip_address, created_at)
+       VALUES (?, ?, ?, ?, 'video-pro', 'video_gen', 'video-download', 0, 0, 1, 1, 0, 'success', '', NOW())`,
+      [userId, user.nickname || null, user.email || null, requestId]
     );
     
     console.log(`[Video Download] 用户 ${userId}(${tier}) 无水印下载授权成功, 今日第 ${usedToday + 1} 次`);

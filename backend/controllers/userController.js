@@ -244,10 +244,10 @@ exports.consumePoints = async (req, res) => {
 
       const actualCost = amount / 1000;
       await connection.query(
-        `INSERT INTO kbit_usage_logs (user_id, user_nickname, model_id, feature, actual_cost, points_cost, request_type, endpoint, status, created_at)
-         VALUES (?, (SELECT nickname FROM kbit_users WHERE id = ?), ?, ?, ?, ?, 'frontend-consume', '/api/user/consume', 'success', NOW())
+        `INSERT INTO kbit_usage_logs (user_id, user_nickname, user_email, model_id, feature, actual_cost, points_cost, request_type, endpoint, status, created_at)
+         VALUES (?, (SELECT nickname FROM kbit_users WHERE id = ?), (SELECT email FROM kbit_users WHERE id = ?), ?, ?, ?, ?, 'frontend-consume', '/api/user/consume', 'success', NOW())
          ON DUPLICATE KEY UPDATE actual_cost = VALUES(actual_cost), points_cost = VALUES(points_cost), status = VALUES(status)`,
-        [userId, userId, model_id || (feature || 'unknown'), feature || 'unknown', actualCost, amount]
+        [userId, userId, userId, model_id || (feature || 'unknown'), feature || 'unknown', actualCost, amount]
       );
 
       await connection.commit();
