@@ -982,7 +982,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                      {generatedImages.map((img, idx) => (
                        <div key={idx} onClick={() => setHoveredImageIndex(idx)}
                          className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-400 scale-110 shadow-lg` : 'ring-1 ring-white/20 opacity-60 hover:opacity-100 hover:ring-white/40'}`}>
-                         <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} />
+                         <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
                          <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[9px] font-bold ${activeIdx === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/70'}`}>
                            {activeIdx === idx ? `▶ ${idx + 1}` : idx + 1}
                          </div>
