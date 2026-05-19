@@ -1232,32 +1232,32 @@ The attached image IS the source material for this upscale operation.`;
           return mapping;
         };
         
-        // 获取用户自定义颜色-材质映射（无默认配置）
+        // 获取用户自定义颜色-材质映射（可选）
         const userMapping = parseColorMapping(prompt);
         
-        // 验证：必须至少定义一种颜色映射
-        if (Object.keys(userMapping).length === 0) {
-          throw new Error('建筑渲染模式要求在提示词中显式定义颜色-材质映射。请使用格式：红色=材质名称, 绿色=材质名称...\n支持的颜色：红色、蓝色、绿色、黄色、紫色、白色、黑色、粉色、橙色、青色、灰色');
-        }
-        
-        // 构建颜色映射描述
-        const colorMappingDescription = Object.entries(userMapping)
-          .map(([color, material]) => `• ${color}区域 = ${material}`)
-          .join('\n');
-        
-        // 构建建筑渲染提示词
-        const architecturalPrompt = `${prompt}
+        // 构建建筑渲染提示词（颜色映射为可选功能，不强制要求）
+        let architecturalPrompt = `${prompt}
 
 【建筑渲染工作流 - 必须严格遵循底图】
 
 【重要说明】
 - 第一张图片是线稿/草图，必须严格遵循其轮廓、位置、形状
-- 第二张图片是语义分割图，按以下用户定义的颜色区域分配材质：
-${colorMappingDescription}
+- 第二张图片是语义分割图，请根据图中各区域的颜色分配合理的材质和风格`;
 
-【颜色映射规则】
-- 仅使用用户在提示词中明确定义的颜色-材质映射
-- 未定义的颜色区域将保持原样或使用AI默认处理
+        // 如果用户提供了颜色-材质映射，则附加说明；否则让 AI 自由处理
+        if (Object.keys(userMapping).length > 0) {
+          const colorMappingDescription = Object.entries(userMapping)
+            .map(([color, material]) => `• ${color}区域 = ${material}`)
+            .join('\n');
+          architecturalPrompt += `
+\n- 用户指定了以下颜色区域的材质：
+${colorMappingDescription}
+- 请优先按上述映射处理对应区域`;
+        } else {
+          architecturalPrompt += `\n- 请根据提示词中的材质和风格描述，灵活处理图中各区域的渲染效果`;
+        }
+
+        architecturalPrompt += `
 
 【绝对约束】
 - 输出必须与底图完全一致
