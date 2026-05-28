@@ -7,6 +7,7 @@ import { getTranslation } from '../i18n/locales.ts';
 import { WatermarkUtils } from '../services/watermarkService.ts';
 import { Ph8UsageService } from '../services/ph8UsageService.ts';
 import { getTierConfig } from '../src/config/tierConfig.ts';
+import { executeStyleTransfer, serializeStyleTransferData, StyleTransferResult } from '../services/styleTransferService.ts';
 
 interface ImageGeneratorProps {
   currentPrompt: string;
@@ -44,7 +45,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   const isDeveloper = userTier === 'pro' || userTier === 'plus';
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
-  const [watermarkedImages, setWatermarkedImages] = useState<string[]>([]);
+  // [方案D安全修复] 移除 watermarkedImages - 后端已统一处理水印，前端不再需要单独管理水印版本
   const [previousImages, setPreviousImages] = useState<string[]>([]);
   const [hoveredImageIndex, setHoveredImageIndex] = useState<number | null>(null);
   const [selectedImageIndices, setSelectedImageIndices] = useState<number[]>([]);
@@ -68,6 +69,8 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
   const [slotARefs, setSlotARefs] = useState<string[]>([]); 
   const [slotBRefs, setSlotBRefs] = useState<string[]>([]); 
   const [styleRefs, setStyleRefs] = useState<string[]>([]); 
+  const [styleTransferResult, setStyleTransferResult] = useState<StyleTransferResult | null>(null);
+  const [isStyleTransferMode, setIsStyleTransferMode] = useState(false);
   
   const [maskRefA, setMaskRefA] = useState<string | null>(null);
   const [maskRefB, setMaskRefB] = useState<string | null>(null);
@@ -451,19 +454,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
         // 放大后的图片添加到成图区（不替换底图）
         setGeneratedImages(prev => [...newImages, ...prev]);
         setSelectedImageIndices(prev => [0, ...prev.map(i => i + newImages.length)]);
-        
-        // 添加水印
-        const newWatermarked: string[] = [];
-        for (const url of newImages) {
-          try {
-            const wmResult = await WatermarkUtils.addWatermark(url);
-            newWatermarked.push(wmResult.dataUrl);
-          } catch (e) {
-            console.error("Watermark failed", e);
-            newWatermarked.push(url);
-          }
-        }
-        setWatermarkedImages(prev => [...newWatermarked, ...prev]);
+        // [方案D安全修复] 移除前端水印处理 - 后端已统一添加水印
         
         console.log(`[放大模式] 已添加 ${newImages.length} 张图片到成图区`);
         
@@ -519,25 +510,48 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     const isInpaintMode = !!maskRefB;
     const effectiveConfig = isInpaintMode ? { ...config, aspectRatio: finalRatio, imageCount: 1 } : { ...config, aspectRatio: finalRatio };
     
+    let effectivePrompt = currentPrompt;
+    let effectiveBaseRefs = [...baseRefs];
+    let effectiveStyleRefs = [...styleRefs];
+    
+    const shouldUseStyleTransfer = !isCompositeMode && baseRefs.length > 0 && styleRefs.length > 0 && !isInpaintMode;
+    
+    if (shouldUseStyleTransfer) {
+      setIsStyleTransferMode(true);
+      try {
+        console.log('[StyleTransfer] 检测到基础图像和风格参考图像，启动风格迁移模式...');
+        const transferResult = await executeStyleTransfer(
+          baseRefs[0],
+          styleRefs[0],
+          currentPrompt,
+          {},
+          domain
+        );
+        
+        setStyleTransferResult(transferResult);
+        effectivePrompt = transferResult.combinedPrompt;
+        effectiveStyleRefs = [styleRefs[0]];
+        
+        console.log('[StyleTransfer] 风格迁移提示词已生成:', serializeStyleTransferData(transferResult));
+      } catch (styleError) {
+        console.error('[StyleTransfer] 风格迁移处理失败，回退到常规模式:', styleError);
+        setIsStyleTransferMode(false);
+        setStyleTransferResult(null);
+      }
+    } else {
+      setIsStyleTransferMode(false);
+      setStyleTransferResult(null);
+    }
+    
     try {
-      const result = await GeminiService.generateImage(currentPrompt, effectiveConfig, isCompositeMode, baseRefs, slotARefs, slotBRefs, styleRefs, maskRefB || undefined, inpaintPrompt, maskRefA || undefined, instructions, modelConfig, controller.signal, domain, baseRefsOriginalSizes);
+      const result = await GeminiService.generateImage(effectivePrompt, effectiveConfig, isCompositeMode, effectiveBaseRefs, slotARefs, slotBRefs, effectiveStyleRefs, maskRefB || undefined, inpaintPrompt, maskRefA || undefined, instructions, modelConfig, controller.signal, domain, baseRefsOriginalSizes);
       const newImages = Array.isArray(result) ? result.map(r => typeof r === 'string' ? r : r.images?.[0] || '') : 
                         typeof result === 'string' ? [result] : 
                         result?.images || [];
       setGeneratedImages(newImages.filter(Boolean));
       setSelectedImageIndices([]);
       setHoveredImageIndex(null);
-      const newWatermarked: string[] = [];
-      for (const url of newImages) {
-        try {
-          const wmResult = await WatermarkUtils.addWatermark(url);
-          newWatermarked.push(wmResult.dataUrl);
-        } catch (e) {
-          console.error("Watermark failed", e);
-          newWatermarked.push(url);
-        }
-      }
-      setWatermarkedImages(newWatermarked);
+      // [方案D安全修复] 移除前端水印处理 - 后端已统一添加水印
       if (isCompositeMode) { setIsCompositeMode(false); setBaseRefs([]); setBaseRefsOriginalSizes([]); setLockedIndices([]); setMaskRefB(null); }
       onImageGenerated?.({ id: Date.now().toString(), url: newImages[0], prompt: currentPrompt, config: {...config, aspectRatio: finalRatio}, timestamp: Date.now() });
 
@@ -573,7 +587,13 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       }, 500);
     } catch (err: any) {
       if (err.name !== 'AbortError') alert('渲染失败，请稍后重试'); // [安全修复] 不暴露原始错误信息
-    } finally { if (abortControllerRef.current === controller) { setIsGenerating(false); onBusyStateChange?.(false); } }
+    } finally { 
+      if (abortControllerRef.current === controller) { 
+        setIsGenerating(false); 
+        onBusyStateChange?.(false); 
+        setIsStyleTransferMode(false);
+      }
+    }
   };
 
   const handleUndo = async (e: React.MouseEvent) => {
@@ -582,17 +602,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
     const current = [...generatedImages];
     setGeneratedImages(previousImages);
     setPreviousImages(current); 
-    
-    const newWatermarked: string[] = [];
-    for (const img of previousImages) {
-      try {
-        const wmResult = await WatermarkUtils.addWatermark(img);
-        newWatermarked.push(wmResult.dataUrl);
-      } catch (e) {
-        newWatermarked.push(img);
-      }
-    }
-    setWatermarkedImages(newWatermarked);
+    // [方案D安全修复] 移除前端水印处理 - 后端已统一添加水印
   };
 
   const handleDownload = async (e: React.MouseEvent, isPro: boolean = false) => { 
@@ -641,33 +651,15 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
       WatermarkUtils.logDownload({ imageId: Date.now().toString(), type: 'standard' });
     }
 
-    // 下载图片
+    // [方案D安全修复] 下载逻辑简化
+    // 标准下载：generatedImages 已经是后端添加了水印的图片
+    // PRO下载：开发者用户下载的是同一张图（已带水印），
+    //         若需要真正无水印原图，需后端单独提供无水印接口（未来扩展）
     for (let i = 0; i < indicesToDownload.length; i++) {
       const idx = indicesToDownload[i];
-      let downloadUrl: string;
-      
-      if (isPro) {
-        // PRO 下载：直接使用原图
-        downloadUrl = generatedImages[idx];
-      } else {
-        // 标准下载：确保有水印
-        console.log(`[标准下载] idx=${idx}, watermarkedImages.length=${watermarkedImages.length}, hasWatermark=${!!watermarkedImages[idx]}`);
-        if (watermarkedImages[idx]) {
-          downloadUrl = watermarkedImages[idx];
-          console.log(`[标准下载] 使用已有水印图片`);
-        } else {
-          // 动态添加水印
-          console.log(`[标准下载] 动态添加水印...`);
-          try {
-            const wmResult = await WatermarkUtils.addWatermark(generatedImages[idx]);
-            downloadUrl = wmResult.dataUrl;
-            console.log(`[标准下载] 水印添加成功`);
-          } catch (e) {
-            console.error("[标准下载] 添加水印失败", e);
-            downloadUrl = generatedImages[idx];
-          }
-        }
-      }
+      // 所有下载统一使用 generatedImages（已带水印）
+      // 注：PRO用户的"无水印下载"暂时也返回带水印图，真正无水印需要后端单独API
+      const downloadUrl = generatedImages[idx];
       
       const link = document.createElement('a'); 
       link.href = downloadUrl; 
@@ -927,9 +919,9 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
              const activeIdx = hoveredImageIndex ?? 0;
              return (
                <div className="flex flex-col items-center gap-4 w-full">
-                 {/* 层1：主图区 */}
-                 <div className="relative cursor-zoom-in group w-full flex justify-center" onMouseEnter={() => setIsMainImageHovered(true)} onMouseLeave={() => setIsMainImageHovered(false)} onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
-                   <img ref={mainImageRef} src={isDeveloper ? (generatedImages[activeIdx] || watermarkedImages[activeIdx]) : (watermarkedImages[activeIdx] || generatedImages[activeIdx])} className={`max-h-[90vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 transition-transform duration-300 origin-center ${isDeveloper ? '' : 'select-none'}`} style={{ transform: isMainImageHovered ? 'scale(1.02)' : 'scale(1)', pointerEvents: isDeveloper ? 'auto' : 'none' }} alt="Result" onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
+               {/* 层1：主图区 */}
+                <div className="relative cursor-zoom-in group w-full flex justify-center" onMouseEnter={() => setIsMainImageHovered(true)} onMouseLeave={() => setIsMainImageHovered(false)} onClick={() => { setFullscreenImageIndex(activeIdx); setIsPreviewFullscreen(true); }}>
+                  <img ref={mainImageRef} src={generatedImages[activeIdx]} className={`max-h-[90vh] max-w-full object-contain rounded-xl shadow-2xl border border-white/10 transition-transform duration-300 origin-center ${isDeveloper ? '' : 'select-none'}`} style={{ transform: isMainImageHovered ? 'scale(1.02)' : 'scale(1)', pointerEvents: isDeveloper ? 'auto' : 'none' }} alt="Result" onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
                    {imgNaturalSize && <div className="absolute top-3 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-white font-mono text-[10px] font-black tracking-widest pointer-events-none">{imgNaturalSize.w} × {imgNaturalSize.h}</div>}
                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                      <div className="bg-black/50 backdrop-blur-sm rounded-full p-3"><svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></div>
@@ -976,20 +968,20 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                      </>}
                    </div>
                  </div>
-                 {/* 层3：缩略图条（多图时显示） */}
-                 {generatedImages.length > 1 && (
-                   <div className="flex gap-3 flex-wrap justify-center">
-                     {generatedImages.map((img, idx) => (
-                       <div key={idx} onClick={() => setHoveredImageIndex(idx)}
-                         className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-400 scale-110 shadow-lg` : 'ring-1 ring-white/20 opacity-60 hover:opacity-100 hover:ring-white/40'}`}>
-                         <img src={watermarkedImages[idx] || img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
-                         <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[9px] font-bold ${activeIdx === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/70'}`}>
-                           {activeIdx === idx ? `▶ ${idx + 1}` : idx + 1}
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 )}
+                {/* 层3：缩略图条（多图时显示） */}
+                {generatedImages.length > 1 && (
+                  <div className="flex gap-3 flex-wrap justify-center">
+                    {generatedImages.map((img, idx) => (
+                      <div key={idx} onClick={() => setHoveredImageIndex(idx)}
+                        className={`relative cursor-pointer rounded-xl overflow-hidden transition-all duration-200 ${activeIdx === idx ? `ring-2 ring-${themeColor}-400 scale-110 shadow-lg` : 'ring-1 ring-white/20 opacity-60 hover:opacity-100 hover:ring-white/40'}`}>
+                        <img src={img} className="w-20 h-20 object-cover" alt={`${idx + 1}`} onContextMenu={(e) => { if (!isDeveloper) e.preventDefault(); }} />
+                        <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[9px] font-bold ${activeIdx === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/70'}`}>
+                          {activeIdx === idx ? `▶ ${idx + 1}` : idx + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                </div>
              );
            })() : (<div className="opacity-5 select-none grayscale flex flex-col items-center"><svg className="w-40 h-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={0.2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg><span className="text-4xl font-black uppercase tracking-[0.8em] italic">Engine Idle</span></div>)}
@@ -1006,7 +998,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
             onClick={() => { if (!isMarkingMode) { setIsPreviewFullscreen(false); setFullscreenImageIndex(null); } }}
           >
             <img
-              src={isDeveloper ? (generatedImages[fullscreenImageIndex] || watermarkedImages[fullscreenImageIndex]) : (watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex])}
+              src={generatedImages[fullscreenImageIndex]}
               className={`rounded-lg shadow-2xl block ${isDeveloper ? '' : 'select-none'}`}
               style={{ 
                 maxWidth: '100vw', 
@@ -1049,7 +1041,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
                   <span className="text-[9px] font-medium">关闭</span>
                 </button>
                 <div className="w-px h-8 bg-white/10" />
-                <button onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = watermarkedImages[fullscreenImageIndex] || generatedImages[fullscreenImageIndex]; a.download = `Creative_STD_${Date.now()}.png`; a.click(); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="标准下载">
+                <button onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = generatedImages[fullscreenImageIndex]; a.download = `Creative_STD_${Date.now()}.png`; a.click(); }} className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white transition-all" title="标准下载">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   <span className="text-[9px] font-medium">标准下载</span>
                 </button>
@@ -1078,7 +1070,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ currentPrompt, onImageG
               {generatedImages.map((img, idx) => (
                 <div key={idx} onClick={(e) => { e.stopPropagation(); setFullscreenImageIndex(idx); }}
                   className={`relative flex-shrink-0 cursor-pointer rounded-lg overflow-hidden transition-all duration-200 ${fullscreenImageIndex === idx ? `ring-2 ring-${themeColor}-400 scale-110` : 'ring-1 ring-white/20 opacity-50 hover:opacity-90'}`}>
-                  <img src={watermarkedImages[idx] || img} className="w-16 h-16 object-cover" alt={`${idx + 1}`} />
+                  <img src={img} className="w-16 h-16 object-cover" alt={`${idx + 1}`} />
                   <div className={`absolute bottom-0 inset-x-0 py-0.5 text-center text-[8px] font-bold ${fullscreenImageIndex === idx ? `bg-${themeColor}-600 text-white` : 'bg-black/60 text-white/60'}`}>
                     {fullscreenImageIndex === idx ? `▶ ${idx + 1}` : idx + 1}
                   </div>

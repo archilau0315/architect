@@ -369,7 +369,14 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
       mCtx.closePath();
       mCtx.fill();
+      saveToUndoStack();
       lassoPoints.current = [];
+      setIsDrawing(false);
+      snapshotRef.current = null;
+    } else if (tool === 'lasso') {
+      lassoPoints.current = [];
+      setIsDrawing(false);
+      snapshotRef.current = null;
     }
   }, [isDrawing, tool, color]);
 
@@ -559,7 +566,14 @@ const InpaintEditor: React.FC<InpaintEditorProps> = ({ imageUrl, onSaveMask, onS
       lassoPoints.current.forEach((p, i) => i === 0 ? mCtx.moveTo(p.x, p.y) : mCtx.lineTo(p.x, p.y));
       mCtx.closePath();
       mCtx.fill();
+      saveToUndoStack();
       lassoPoints.current = [];
+      setIsDrawing(false);
+      snapshotRef.current = null;
+    } else if (tool === 'lasso') {
+      lassoPoints.current = [];
+      setIsDrawing(false);
+      snapshotRef.current = null;
     }
   }, [isPanning, isDrawing, tool, color]);
 

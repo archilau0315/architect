@@ -4,6 +4,7 @@ const https = require('https');
 const ph8TokenService = require('../services/ph8TokenService');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
+const imageWatermarkService = require('../services/imageWatermarkService');
 
 // 引入结构化日志服务
 const { logger, LogLevel } = require('../services/loggerService');
@@ -683,6 +684,28 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
       }
 
       res.setHeader('Content-Type', contentType || 'application/json');
+      
+      // [方案D安全修复] 后端统一处理水印
+      // 只有在图片生成成功时才处理水印
+      if (proxyRes.statusCode === 200 && userInfo && !isBinaryContent) {
+        try {
+          const responseJson = JSON.parse(data);
+          // 检查是否是图片生成响应（包含 images 或 data 字段）
+          if (responseJson.images || responseJson.data) {
+            const processedResponse = await imageWatermarkService.processImage(responseJson, userInfo.tier);
+            ph8Log.debug('openai/v1/images 水印处理完成', { 
+              requestId, 
+              userTier: userInfo.tier, 
+              isDeveloper: imageWatermarkService.isDeveloper(userInfo.tier) 
+            });
+            res.status(proxyRes.statusCode).send(JSON.stringify(processedResponse));
+            return; // 已发送响应，避免重复 send
+          }
+        } catch (e) {
+          ph8Log.warn('图片水印处理失败，继续返回原图', { requestId, error: e.message });
+        }
+      }
+      
       res.status(proxyRes.statusCode).send(data);
     });
   });
@@ -831,6 +854,26 @@ router.post('/v1/images/generations', async (req, res) => {
       }
 
       res.setHeader('Content-Type', contentType || 'application/json');
+      
+      // [方案D安全修复] 后端统一处理水印
+      if (proxyRes.statusCode === 200 && userInfo2 && !isBinaryContent) {
+        try {
+          const responseJson = JSON.parse(data);
+          if (responseJson.images || responseJson.data) {
+            const processedResponse = await imageWatermarkService.processImage(responseJson, userInfo2.tier);
+            ph8Log.debug('v1/images 水印处理完成', { 
+              requestId, 
+              userTier: userInfo2.tier, 
+              isDeveloper: imageWatermarkService.isDeveloper(userInfo2.tier) 
+            });
+            res.status(proxyRes.statusCode).send(JSON.stringify(processedResponse));
+            return;
+          }
+        } catch (e) {
+          ph8Log.warn('v1/images 水印处理失败', { requestId, error: e.message });
+        }
+      }
+      
       res.status(proxyRes.statusCode).send(data);
     });
   });
@@ -845,7 +888,7 @@ router.post('/v1/images/generations', async (req, res) => {
     proxyReq.destroy();
     res.status(504).json({ error: 'Gateway timeout' });
   });
-
+  
   proxyReq.write(bodyData);
   proxyReq.end();
 });
@@ -1005,7 +1048,47 @@ router.all('/*', requireAuth, async (req, res) => {
       }
 
       res.setHeader('Content-Type', contentType || 'application/json');
-      res.status(proxyRes.statusCode).send(data);
+      
+      // [方案D安全修复] 后端统一处理图片水印
+      // 只有在图片生成成功时才处理水印（非二进制内容）
+      let processedData = data;
+      let shouldProcessWatermark = false;
+      let processedUserTier = 'free';
+      
+      if (proxyRes.statusCode === 200 && !isBinaryContent) {
+        try {
+          const isImageRequest = fullPath.includes('/images') && req.method === 'POST';
+          if (isImageRequest) {
+            const responseJson = JSON.parse(data);
+            if (responseJson.images || responseJson.data) {
+              // 获取用户等级
+              processedUserTier = userInfo?.tier || 'free';
+              shouldProcessWatermark = true;
+            }
+          }
+        } catch (e) {
+          // JSON解析失败，跳过水印处理
+        }
+      }
+      
+      if (shouldProcessWatermark) {
+        try {
+          const responseJson = JSON.parse(data);
+          const processedResponse = await imageWatermarkService.processImage(responseJson, processedUserTier);
+          processedData = JSON.stringify(processedResponse);
+          res.setHeader('Content-Type', 'application/json');
+          ph8Log.debug('通配符路由图片水印处理完成', { 
+            requestId, 
+            userTier: processedUserTier, 
+            isDeveloper: imageWatermarkService.isDeveloper(processedUserTier) 
+          });
+        } catch (e) {
+          ph8Log.warn('通配符路由图片水印处理失败', { requestId, error: e.message });
+          processedData = data;
+        }
+      }
+      
+      res.status(proxyRes.statusCode).send(processedData);
 
       try {
         const isVideoGetRequest = fullPath.includes('/videos') && req.method === 'GET';
