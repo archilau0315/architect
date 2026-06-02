@@ -167,10 +167,12 @@ const ImageBubble: React.FC<{
   const [fsIdx, setFsIdx] = useState(0);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   // Seed 锁定状态：锁定时重跑复用当前图的seed，解锁时随机
-  const [seedLocked, setSeedLocked] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('architect-seed-lock-v120') || 'false'); }
-    catch { return false; }
-  });
+  const [seedLocked, setSeedLocked] = useState(false);
+
+  useEffect(() => {
+    try { setSeedLocked(JSON.parse(localStorage.getItem('architect-seed-lock-v120') || 'false')); }
+    catch { setSeedLocked(false); }
+  }, []);
 
   // 监听 ESC 键关闭全屏
   useEffect(() => {
@@ -455,17 +457,17 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
   const t = getTranslation(language);
 
-  // 获取用户头像
-  const getUserAvatar = () => {
-    try {
-      const avatarUrl = localStorage.getItem('user-architect-avatar-v120-locked');
-      return avatarUrl;
-    } catch {
-      return null;
-    }
-  };
+  const [userAvatarState, setUserAvatarState] = useState<string | null>(null);
 
-  const userAvatar = getUserAvatar();
+  useEffect(() => {
+    try {
+      setUserAvatarState(localStorage.getItem('user-architect-avatar-v120-locked'));
+    } catch {
+      setUserAvatarState(null);
+    }
+  }, []);
+
+  const userAvatar = userAvatarState;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

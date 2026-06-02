@@ -95,7 +95,15 @@ app.use('/api/admin/login', (req, res, next) => {
   next();
 });
 
-// 本地开发环境处理 CORS
+// 处理 OPTIONS 预检请求
+app.options('*', cors({
+  origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-user-id']
+}));
+
+// CORS 配置
 app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000', 'https://api.kbitai.com.cn'];
@@ -105,7 +113,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-user-id']
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -117,10 +127,19 @@ app.use(validateRequest);         // 清理和验证输入
 app.use(monitoringMiddleware);    // 添加监控
 
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
+app.get('/api/settings', (req, res) => {
+  res.json({ success: true, data: {} });
+});
+app.get('/api/v1/settings', (req, res) => {
+  res.json({ success: true, data: {} });
+});
+
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/admin/favicon.ico', (req, res) => res.status(204).end());
 
 app.use('/api/invite', inviteRoutes);
+const paymentRoutes = require('./routes/payment');
+app.use('/api/payment', paymentRoutes);
 app.use('/api/watermark', watermarkRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/beta', betaRoutes);
@@ -220,6 +239,100 @@ adminRoutes.post('/beta-requests/:id/approve', adminController.approveBetaReques
 adminRoutes.post('/beta-requests/:id/reject', adminController.rejectBetaRequest);
 adminRoutes.post('/change-password', adminController.changePassword);
 adminRoutes.post('/manual-send-invite', adminController.manualSendInvite);
+
+adminRoutes.get('/payment-orders', async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    let whereClause = '1=1';
+    const params = [];
+    if (status !== 'all') {
+      whereClause += ' AND status = ?';
+      params.push(status);
+    }
+
+    const [orders] = await db.query(
+      `SELECT * FROM kbit_payment_orders WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+    const [countResult] = await db.query(
+      `SELECT COUNT(*) AS total FROM kbit_payment_orders WHERE ${whereClause}`,
+      params
+    );
+
+    res.json({ success: true, data: { orders, total: countResult[0].total, page, limit } });
+  } catch (err) {
+    console.error('[Admin] 查询支付订单失败:', err.message);
+    res.status(500).json({ success: false, error: '查询失败' });
+  }
+});
+
+adminRoutes.post('/payment-orders/:id/verify', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNote } = req.body;
+    const adminId = req.admin.id;
+
+    const [orders] = await db.query(
+      `SELECT * FROM kbit_payment_orders WHERE id = ? AND status = 'pending'`,
+      [id]
+    );
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: '订单不存在或已处理' });
+    }
+
+    const order = orders[0];
+
+    await db.query(
+      `UPDATE kbit_payment_orders SET status = 'verified', verified_by = ?, verified_at = NOW(), admin_note = ? WHERE id = ?`,
+      [adminId, adminNote || null, id]
+    );
+
+    const rechargeResult = await ph8TokenService.rechargeBalance(order.user_id, order.points);
+
+    if (!rechargeResult) {
+      await db.query(
+        `UPDATE kbit_payment_orders SET admin_note = ? WHERE id = ?`,
+        [`[警告] 积分充值失败，需手动处理。原备注: ${adminNote || ''}`, id]
+      );
+      return res.json({ success: false, error: '订单已审核但积分充值失败，请手动处理' });
+    }
+
+    res.json({ success: true, message: `已审核通过，${order.points} 积分已到账` });
+  } catch (err) {
+    console.error('[Admin] 审核支付订单失败:', err.message);
+    res.status(500).json({ success: false, error: '审核失败' });
+  }
+});
+
+adminRoutes.post('/payment-orders/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminNote } = req.body;
+    const adminId = req.admin.id;
+
+    const [orders] = await db.query(
+      `SELECT * FROM kbit_payment_orders WHERE id = ? AND status = 'pending'`,
+      [id]
+    );
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: '订单不存在或已处理' });
+    }
+
+    await db.query(
+      `UPDATE kbit_payment_orders SET status = 'rejected', verified_by = ?, verified_at = NOW(), admin_note = ? WHERE id = ?`,
+      [adminId, adminNote || '审核未通过', id]
+    );
+
+    res.json({ success: true, message: '已拒绝该订单' });
+  } catch (err) {
+    console.error('[Admin] 拒绝支付订单失败:', err.message);
+    res.status(500).json({ success: false, error: '操作失败' });
+  }
+});
 
 app.use('/api/admin', adminRoutes);
 

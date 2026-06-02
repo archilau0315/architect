@@ -1,0 +1,25 @@
+-- 支付订单表（手动转账+管理员审核模式）
+CREATE TABLE IF NOT EXISTS `kbit_payment_orders` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `order_no` VARCHAR(32) NOT NULL COMMENT '订单号',
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+  `user_email` VARCHAR(255) DEFAULT NULL COMMENT '用户邮箱',
+  `type` ENUM('topup', 'subscription') NOT NULL DEFAULT 'topup' COMMENT '订单类型',
+  `amount_cny` DECIMAL(10,2) UNSIGNED NOT NULL COMMENT '支付金额(元)',
+  `points` INT UNSIGNED NOT NULL COMMENT '获得积分',
+  `tier_code` ENUM('free', 'basic', 'pro', 'plus') DEFAULT NULL COMMENT '订阅等级(仅订阅订单)',
+  `billing_cycle` ENUM('monthly', 'quarterly', 'yearly') DEFAULT NULL COMMENT '计费周期(仅订阅订单)',
+  `payment_method` VARCHAR(20) DEFAULT NULL COMMENT '支付方式: wechat/alipay',
+  `status` ENUM('pending', 'verified', 'rejected', 'expired') NOT NULL DEFAULT 'pending' COMMENT '订单状态',
+  `user_note` VARCHAR(500) DEFAULT NULL COMMENT '用户备注',
+  `verified_by` BIGINT UNSIGNED DEFAULT NULL COMMENT '审核管理员ID',
+  `verified_at` DATETIME DEFAULT NULL COMMENT '审核时间',
+  `admin_note` VARCHAR(500) DEFAULT NULL COMMENT '管理员备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付订单表';

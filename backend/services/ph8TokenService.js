@@ -115,6 +115,21 @@ async function deductBalance(userId, cost, nickname, email) {
     }
 
     const dailyRemaining = Math.max(0, daily_quota - daily_used);
+    const totalAvailable = (total_points || 0) + dailyRemaining;
+
+    if (totalAvailable < points) {
+      tokenLog.warn('余额不足-拒绝扣减', {
+        userId,
+        nickname: nickname || '未知',
+        cost,
+        points,
+        dailyRemaining,
+        totalPoints: total_points || 0,
+        totalAvailable
+      });
+      return false;
+    }
+
     let deductFromDaily = Math.min(points, dailyRemaining);
     let deductFromTotal = Math.max(0, points - deductFromDaily);
     const newDailyUsed = daily_used + deductFromDaily;

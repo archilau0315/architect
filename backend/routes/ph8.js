@@ -975,25 +975,55 @@ router.all('/*', requireAuth, async (req, res) => {
     }
   }
 
-  // 额度预检：已识别用户
-  if (userId && userId !== 'anonymous' && typeof userId !== 'string' || (typeof userId === 'number' && userId > 0)) {
+  // 额度预检：已识别用户 - 积分不足时拦截请求
+  if (userId && userId !== 'anonymous') {
     try {
       const numericUserId = typeof userId === 'number' ? userId : parseInt(userId);
       if (!isNaN(numericUserId) && numericUserId > 0) {
         const [quotaCheck] = await db.query(
-          `SELECT daily_quota, daily_used, total_points FROM kbit_users WHERE id = ?`,
+          `SELECT daily_quota, daily_used, total_points, daily_reset_at, tier FROM kbit_users WHERE id = ?`,
           [numericUserId]
         );
         if (quotaCheck.length > 0) {
-          const dq = parseFloat(quotaCheck[0].daily_quota) || 200;
-          const du = parseFloat(quotaCheck[0].daily_used) || 0;
-          const tp = parseFloat(quotaCheck[0].total_points) || 0;
-          if (du >= dq && tp <= 0) {
-            ph8Log.warn('用户额度不足', {
+          let dq = parseFloat(quotaCheck[0].daily_quota) || 200;
+          let du = parseFloat(quotaCheck[0].daily_used) || 0;
+          let tp = parseFloat(quotaCheck[0].total_points) || 0;
+          const tier = quotaCheck[0].tier || 'free';
+          const dailyResetAt = quotaCheck[0].daily_reset_at;
+
+          const today = new Date().toISOString().split('T')[0];
+          if (dailyResetAt !== today || dailyResetAt === null) {
+            du = 0;
+          }
+
+          const { getDailyPoints } = require('../config/tierConfig');
+          const configQuota = getDailyPoints(tier);
+          if (configQuota > dq) {
+            dq = configQuota;
+          }
+
+          const dailyRemaining = Math.max(0, dq - du);
+          const totalAvailable = tp + dailyRemaining;
+
+          if (totalAvailable <= 0) {
+            ph8Log.warn('用户额度不足-请求已拦截', {
               userId: numericUserId,
               dailyUsed: du,
               dailyQuota: dq,
-              totalPoints: tp
+              dailyRemaining,
+              totalPoints: tp,
+              tier
+            });
+            return res.status(429).json({
+              error: '配额不足',
+              message: '今日积分已用完，请明天再来或充值积分',
+              code: 'QUOTA_EXCEEDED',
+              data: {
+                dailyUsed: du,
+                dailyQuota: dq,
+                dailyRemaining,
+                totalPoints: tp
+              }
             });
           }
         }

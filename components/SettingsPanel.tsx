@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { UserPreferences, CustomModel, VersionRecord, UserTier, AppTheme, Language } from '../types.ts';
 import SystemSpec from './SystemSpec.tsx';
 import { TERMS_OF_SERVICE } from '../legal/termsOfService.ts';
@@ -80,19 +80,28 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [inputPassword, setInputPassword] = useState('');
   const [isPassVisible, setIsPassVisible] = useState(false);
 
-  const getLoggedInUser = () => {
+  // 支付相关状态
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
+  const [paymentOrderNo, setPaymentOrderNo] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<'wechat' | 'alipay'>('wechat');
+  const [paymentQrCode, setPaymentQrCode] = useState<string>('');
+  const [paymentVerified, setPaymentVerified] = useState(false);
+  const [paymentPolling, setPaymentPolling] = useState(false);
+  const [paymentSimulated, setPaymentSimulated] = useState(false);
+  const [paymentUserConfirmed, setPaymentUserConfirmed] = useState(false);
+
+  const [loggedInUserState, setLoggedInUserState] = useState<any>(null);
+  const loggedInUser = loggedInUserState;
+
+  useEffect(() => {
     try {
       const session = localStorage.getItem('architect-invite-session');
-      if (session) {
-        return JSON.parse(session);
-      }
+      setLoggedInUserState(session ? JSON.parse(session) : null);
     } catch (e) {
-      return null;
+      setLoggedInUserState(null);
     }
-    return null;
-  };
-
-  const loggedInUser = useMemo(() => getLoggedInUser(), []);
+  }, []);
   const isLoggedIn = !!loggedInUser;
 
   // 获取当前语言的翻译
@@ -394,32 +403,103 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   );
   };
 
+  const startPollingPaymentStatus = (orderNo: string) => {
+    setPaymentPolling(true);
+    const apiBase = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+    let attempts = 0;
+    const maxAttempts = 120;
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        setPaymentPolling(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${apiBase}/api/payment/order-status/${orderNo}`);
+        const data = await res.json();
+        if (data.success && data.data.status === 'verified') {
+          clearInterval(interval);
+          setPaymentPolling(false);
+          setPaymentVerified(true);
+          if (onBuyPoints) {
+            onBuyPoints(data.data.points);
+          }
+        }
+      } catch (e) {}
+    }, 3000);
+  };
+
   const renderCheckout = () => {
     const isTopup = !!selectedTopup;
     const itemName = isTopup ? `积分加油包 (+${selectedTopup.amount} Points)` : selectedPlan?.name;
     const itemPrice = isTopup ? selectedTopup.price : selectedPlan?.prices[billingCycle];
+    const amountCny = isTopup ? parseFloat(selectedTopup.price.replace('¥', '')) : parseFloat((selectedPlan?.prices[billingCycle] || '¥0').replace('¥', ''));
+    const pointsAmount = isTopup ? selectedTopup.amount : 0;
 
-    const handleConfirmPayment = () => {
-      if (isTopup) {
-        onBuyPoints(selectedTopup.amount);
-        window.alert(`支付成功：已充值 ${selectedTopup.amount} 永久积分`);
-      } else {
-        // 模拟订阅逻辑 - 实际应用中应调用后端
-        const passMap: any = { basic: 'KBIT-BASIC-2025', pro: 'KBIT-PRO-2025', plus: 'KBIT-PLUS-2025' };
-        if (selectedPlan.id !== 'free') {
-          onToggleDeveloper(passMap[selectedPlan.id]);
-        }
-        window.alert(`支付成功：您已成功订阅 ${selectedPlan.name}`);
+    const handleSubmitPayment = async () => {
+      if (paymentSubmitting || paymentSubmitted) return;
+
+      const user = getLoggedInUser();
+      if (!user || !user.userId) {
+        window.alert('请先登录后再充值');
+        return;
       }
+
+      setPaymentSubmitting(true);
+      try {
+        const apiBase = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+        const res = await fetch(`${apiBase}/api/payment/create-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.userId,
+            userEmail: user.email || '',
+            type: isTopup ? 'topup' : 'subscription',
+            amountCny,
+            points: pointsAmount,
+            tierCode: !isTopup ? selectedPlan?.id : null,
+            billingCycle: !isTopup ? billingCycle : null,
+            paymentMethod,
+            userNote: '',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setPaymentOrderNo(data.data.orderNo);
+          setPaymentQrCode(data.data.qrCode || '');
+          setPaymentSimulated(data.data.simulatedMode || false);
+          setPaymentSubmitted(true);
+          if (!data.data.simulatedMode) {
+            startPollingPaymentStatus(data.data.orderNo);
+          }
+        } else {
+          window.alert(data.error || '创建订单失败，请重试');
+        }
+      } catch (err) {
+        window.alert('网络错误，请检查网络后重试');
+      } finally {
+        setPaymentSubmitting(false);
+      }
+    };
+
+    const handleBackFromCheckout = () => {
       setIsCheckout(false);
       setSelectedPlan(null);
       setSelectedTopup(null);
+      setPaymentSubmitted(false);
+      setPaymentOrderNo('');
+      setPaymentQrCode('');
+      setPaymentVerified(false);
+      setPaymentPolling(false);
+      setPaymentSimulated(false);
+      setPaymentUserConfirmed(false);
     };
 
     return (
       <div className="max-w-4xl mx-auto space-y-10 py-4 animate-in zoom-in-95 duration-500">
         <div className="flex items-center gap-4 border-b border-white/[0.06] pb-6">
-          <button onClick={() => { setIsCheckout(false); setSelectedPlan(null); setSelectedTopup(null); }} className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-white/40 hover:text-white/70 transition-all">
+          <button onClick={handleBackFromCheckout} className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-white/40 hover:text-white/70 transition-all">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </button>
           <div>
@@ -457,25 +537,125 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
               </div>
             </div>
+
+            {paymentVerified && (
+              <div className="bg-green-500/[0.06] border border-green-500/20 p-5 rounded-xl space-y-2">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium text-green-400">支付成功！积分已到账</span>
+                </div>
+                <p className="text-[11px] text-white/40">订单号: {paymentOrderNo}</p>
+                <button
+                  onClick={handleBackFromCheckout}
+                  className="mt-2 w-full px-4 py-2 bg-green-500/20 text-green-400 rounded-lg text-xs font-medium hover:bg-green-500/30 transition-all"
+                >
+                  完成
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-center justify-center space-y-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl p-8">
-            <div className="w-48 h-48 bg-white/[0.04] p-3 rounded-2xl border border-white/[0.08]">
-               <div className="w-full h-full bg-white/[0.06] rounded-xl flex items-center justify-center overflow-hidden">
-                 <svg className="w-full h-full text-white/10" fill="currentColor" viewBox="0 0 24 24">
-                   <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-3 0h2v2h-2v-2zm3 3h3v2h-3v-2zm-3 3h2v2h-2v-2zm3-3h3v2h-3v-2zm-3 3h2v2h-2v-2zm3 0h3v2h-3v-2z" />
-                 </svg>
-               </div>
-            </div>
-            <div className="text-center space-y-3">
-              <p className="text-[11px] font-medium uppercase tracking-widest text-white/30">使用 微信/支付宝 扫描支付</p>
-              <button
-                onClick={handleConfirmPayment}
-                className="w-full px-8 py-3 bg-blue-500/80 text-white rounded-xl font-medium text-sm hover:bg-blue-500 transition-all active:scale-[0.99]"
-              >
-                确认支付并完成
-              </button>
-            </div>
+            {paymentVerified ? (
+              <div className="text-center space-y-4">
+                <div className="w-20 h-20 mx-auto rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                  <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="text-lg font-semibold text-green-400">支付成功</p>
+                <p className="text-sm text-white/40">积分已自动到账</p>
+              </div>
+            ) : paymentSubmitted ? (
+              <>
+                <div className="w-52 h-52 bg-white rounded-xl overflow-hidden flex items-center justify-center p-2">
+                  {paymentSimulated ? (
+                    <img
+                      src={`/public/payment_${paymentMethod}_qrcode.png`}
+                      alt={`${paymentMethod === 'wechat' ? '微信' : '支付宝'}收款码`}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).parentElement!.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:12px;">收款码加载失败<br/>请联系客服获取</div>';
+                      }}
+                    />
+                  ) : paymentQrCode ? (
+                    <img src={paymentQrCode} alt="支付二维码" className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="text-center text-gray-400 text-xs">二维码加载中...</div>
+                  )}
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-white/30">
+                    使用{paymentMethod === 'wechat' ? '微信' : '支付宝'}扫码支付
+                  </p>
+                  <p className="text-[10px] text-white/20">请支付 <span className="text-blue-400 font-semibold">{itemPrice}</span></p>
+                </div>
+                {paymentSimulated ? (
+                  !paymentUserConfirmed ? (
+                    <button
+                      onClick={() => {
+                        setPaymentUserConfirmed(true);
+                        startPollingPaymentStatus(paymentOrderNo);
+                      }}
+                      className="w-full px-8 py-3 bg-blue-500/80 text-white rounded-xl font-medium text-sm hover:bg-blue-500 transition-all active:scale-[0.99]"
+                    >
+                      我已完成支付
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-center gap-2 text-amber-400">
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span className="text-[11px]">等待管理员确认收款...</span>
+                      </div>
+                      <p className="text-[9px] text-white/15 text-center">管理员确认收款后积分将自动到账</p>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex items-center gap-2 text-white/30">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span className="text-[11px]">等待支付确认中...</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => setPaymentMethod('wechat')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${paymentMethod === 'wechat' ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-white/[0.04] text-white/40 border border-white/[0.06] hover:bg-white/[0.06]'}`}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 01.213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 00.167-.054l1.903-1.114a.864.864 0 01.717-.098 10.16 10.16 0 002.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178A1.17 1.17 0 014.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178 1.17 1.17 0 01-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 01.598.082l1.584.926a.272.272 0 00.14.045c.134 0 .24-.11.24-.245 0-.06-.024-.12-.04-.178l-.325-1.233a.492.492 0 01.177-.554C23.025 18.265 24 16.573 24 14.71c0-3.382-3.126-5.852-7.062-5.852zm-2.89 2.76c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.983.97-.983zm4.844 0c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.983.97-.983z"/></svg>
+                    微信支付
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('alipay')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${paymentMethod === 'alipay' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-white/40 border border-white/[0.06] hover:bg-white/[0.06]'}`}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21.422 15.358c-3.32-1.326-6.092-2.786-6.092-2.786s1.348-3.284 1.348-5.688c0-1.642-1.282-2.884-2.806-2.884-1.524 0-2.806 1.242-2.806 2.884 0 1.524.744 3.296 1.534 4.692-1.264 2.416-3.476 5.574-5.866 7.398C4.834 20.4 2.906 20.824 2 20.824v2.176h20v-2.176c-1.524 0-3.796-.614-5.958-1.876 1.364-1.752 2.636-3.868 3.496-5.964 1.578.722 3.634 1.546 5.884 2.374v2.076c0 .556-.448 1.004-1.004 1.004h-.42v2.186h.42c1.764 0 3.19-1.428 3.19-3.19v-2.522l.398-.146v-2.528z"/></svg>
+                    支付宝
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleSubmitPayment}
+                  disabled={paymentSubmitting}
+                  className="w-full px-8 py-3 bg-blue-500/80 text-white rounded-xl font-medium text-sm hover:bg-blue-500 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {paymentSubmitting ? '创建订单中...' : `确认支付 ${itemPrice}`}
+                </button>
+
+                <p className="text-[9px] text-white/15 text-center">点击后将生成支付二维码，扫码完成支付后积分自动到账</p>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -483,28 +663,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   };
 
   const renderSubscription = () => {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-6 animate-in fade-in duration-500">
-        <div className="w-20 h-20 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
-          <svg className="w-10 h-10 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div className="text-center space-y-3">
-          <h3 className="text-lg font-semibold text-white/80">功能灰度测试中</h3>
-          <p className="text-sm text-white/40 max-w-md">
-            订阅计费功能即将上线。敬请期待！
-          </p>
-          <div className="pt-3">
-            <span className="px-5 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg text-xs font-medium text-white/30 uppercase tracking-widest">
-              Coming Soon
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-
-    // 以下原有代码保留（灰度测试结束后可删除上方 return 语句恢复）
     if (isCheckout) return renderCheckout();
 
     const tierInfo: Record<UserTier, { name: string; color: string; icon: string }> = {

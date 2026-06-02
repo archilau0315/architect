@@ -208,18 +208,18 @@ const Layout: React.FC<LayoutProps> = ({
 
   // ── conversation tree state ──────────────────────────────────────────────
   const [tree, setTree] = useState<ConversationNode[]>(() => {
-    try {
-      const s = localStorage.getItem(TREE_KEY);
-      if (s) return JSON.parse(s);
-    } catch {}
-    const firstId = genId();
-    const lang = preferences?.language || 'zh-CN';
-    const tInit = getTranslation(lang);
     return [{
-      id: genId(), type: 'group', name: tInit.sidebar.todayConversations, isExpanded: true, timestamp: Date.now(),
-      children: [{ id: firstId, type: 'session', name: tInit.main.newChat, mode: 'chat', timestamp: Date.now() }]
+      id: 'init-group', type: 'group', name: '今日会话', isExpanded: true, timestamp: 0,
+      children: [{ id: 'init-session', type: 'session', name: '新对话', mode: 'chat', timestamp: 0 }]
     }];
   });
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(TREE_KEY);
+      if (s) setTree(JSON.parse(s));
+    } catch {}
+  }, []);
 
   const saveTree = useCallback((next: ConversationNode[]) => {
     setTree(next);

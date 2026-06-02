@@ -17,8 +17,6 @@ const poolConfig = {
   queueLimit: 0,
   // 连接超时设置
   connectTimeout: 10000,
-  acquireTimeout: 10000,
-  timeout: 60000,
   // 启用keepAlive
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,

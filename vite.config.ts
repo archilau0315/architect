@@ -112,12 +112,13 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
-        }
+        },
+        dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'use-sync-external-store']
       },
       build: {
         outDir: 'dist',
         assetsDir: 'assets',
-        sourcemap: false,
+        sourcemap: true,
         minify: 'terser',
         terserOptions: {
           compress: {

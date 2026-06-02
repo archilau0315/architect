@@ -354,9 +354,12 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     return true;
   };
 
-  // 检测当前主题
-  const savedTheme = localStorage.getItem('architect-theme-mode');
-  const isDark = savedTheme !== 'light';
+  const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('architect-theme-mode');
+    setIsDark(savedTheme !== 'light');
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
