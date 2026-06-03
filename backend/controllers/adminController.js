@@ -86,7 +86,9 @@ exports.getUsers = async (req, res) => {
     if (status !== '') { where += ' AND status = ?'; params.push(parseInt(status)); }
 
     const [rows] = await db.query(
-      `SELECT id, email, nickname, user_tier, total_earned, total_points, daily_quota, daily_used, tier_expires_at, status, last_login_at, created_at FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT id, email, nickname, user_tier, total_earned, total_points, daily_quota, daily_used, tier_expires_at, status, last_login_at, created_at,
+              (SELECT COALESCE(SUM(points_cost), 0) FROM kbit_usage_logs WHERE user_id = kbit_users.id AND status='success') as consumed_points
+       FROM kbit_users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
     const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM kbit_users ${where}`, params);
