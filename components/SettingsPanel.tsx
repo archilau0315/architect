@@ -677,10 +677,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const currentTier = tierInfo[userTier];
 
     const individualPlans = [
-      { id: 'free', name: '免费用户 (Free)', prices: { monthly: '¥0', quarterly: '¥0', yearly: '¥0' }, features: ['100 赠送积分/日', '视频生成：禁止', '仅限带水印下载', '历史保留 1 天'], badge: 'Trial' },
-      { id: 'basic', name: '基础级 (Basic)', prices: { monthly: '¥39', quarterly: '¥99', yearly: '¥399' }, features: ['350 赠送积分/日', '视频：5 次/日 (快速)', '图像 10 次/日无水印', '保留 7 天'], badge: 'Stable' },
-      { id: 'pro', name: 'PRO 级 (PRO)', prices: { monthly: '¥89', quarterly: '¥229', yearly: '¥899' }, features: ['800 赠送积分/日', '视频：16 次/日 (全引擎)', '图像无限/视频 5 次无水印', '保留 30 天'], badge: 'Pro' },
-      { id: 'plus', name: 'PLUS 级 (PLUS)', prices: { monthly: '¥199', quarterly: '¥499', yearly: '¥1999' }, features: ['1800 赠送积分/日', '视频：50 次/日 (全引擎)', '全功能无限无水印', '永久云端存储'], badge: 'Elite' }
+      { id: 'free', name: '免费用户 (Free)', prices: { monthly: '¥0', quarterly: '¥0', yearly: '¥0' }, features: ['200 赠送积分/日', '视频生成：禁止', '仅限带水印下载', '历史保留 1 天'], badge: 'Trial' },
+      { id: 'basic', name: '基础级 (Basic)', prices: { monthly: '¥39', quarterly: '¥99', yearly: '¥399' }, features: ['400 赠送积分/日', '视频：5 次/日 (快速)', '图像 10 次/日无水印', '保留 7 天'], badge: 'Stable' },
+      { id: 'pro', name: 'PRO 级 (PRO)', prices: { monthly: '¥89', quarterly: '¥229', yearly: '¥899' }, features: ['1500 赠送积分/日', '视频：16 次/日 (全引擎)', '图像无限/视频 5 次无水印', '保留 30 天'], badge: 'Pro' },
+      { id: 'plus', name: 'PLUS 级 (PLUS)', prices: { monthly: '¥199', quarterly: '¥499', yearly: '¥1999' }, features: ['2000 赠送积分/日', '视频：50 次/日 (全引擎)', '全功能无限无水印', '永久云端存储'], badge: 'Elite' }
     ];
 
     const topupOptions = [
