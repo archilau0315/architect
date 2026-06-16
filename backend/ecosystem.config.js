@@ -18,7 +18,7 @@ module.exports = {
       JWT_SECRET: 'kbitai-architect-2026-secret-key-change-this',
       GEMINI_API_KEY: '你的Gemini密钥',
       PH8_API_KEY: 'sk-2f6ff8aba4d541d591d17e8eae60e75c',
-      PH8_GATEWAY_URL: 'https://ph8.co',
+      PH8_GATEWAY_URL: 'https://wellai.cc',
       PH8_ENABLED: 'true',
       SMTP_HOST: 'smtp.126.com',
       SMTP_PORT: '465',

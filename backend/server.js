@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
@@ -95,28 +94,7 @@ app.use('/api/admin/login', (req, res, next) => {
   next();
 });
 
-// 处理 OPTIONS 预检请求
-app.options('*', cors({
-  origin: ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-user-id']
-}));
-
-// CORS 配置
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = ['https://www.kbitai.com.cn', 'https://kbitai.com.cn', 'http://localhost:3000', 'https://api.kbitai.com.cn'];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, origin);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'x-user-id']
-}));
+// [CORS] 由Nginx反向代理层统一处理，后端不再添加CORS头（避免重复）
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -146,12 +124,12 @@ app.use('/api/beta', betaRoutes);
 app.use('/api/plan', planRoutes);
 // PH8 余额路由必须在 ph8Routes 之前加载，避免被通配符路由捕获
 app.use('/api/ph8', ph8BalanceRoutes);
-app.use('/api/ph8', ph8Routes);
-// [修复] 前端视频轮询请求可能使用两种路径格式：
-// 格式1: /api/ph8/openai/v1/* (getProxiedUrl 函数 + VideoGenerator/VideoPlayer 硬编码)
-// 格式2: /api/ph8-openai/* (旧版前端代码或 vite.config.ts 代理配置)
-// 两种都需要挂载到 ph8Routes，否则视频 GET 返回 404
+// [修复] /api/ph8/openai/v1 专用挂载必须在通用 /api/ph8 之前，
+// 确保 images/generations 等专用路由优先命中，而不是被通配符 /* 拦截
 app.use('/api/ph8/openai/v1', ph8Routes);
+app.use('/api/ph8', ph8Routes);
+// [修复] 前端视频轮询请求可能使用以下路径格式：
+// 格式: /api/ph8-openai/* (旧版前端代码或 vite.config.ts 代理配置)
 app.use('/api/ph8-openai', ph8Routes);
 
 // 通用网关路由（支持多网关）

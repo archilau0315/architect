@@ -25,7 +25,7 @@ const LOG_RESPONSE_BODY = !isProduction || process.env.PH8_LOG_RESPONSE === 'tru
 const PH8_API_KEY = process.env.PH8_API_KEY;
 
 /**
- * PH8 模型官方定价表（来源: https://ph8.co/models）
+ * WellAI 模型官方定价表（来源: https://wellai.cc/models）
  * 当 PH8 API 响应中不包含费用字段时，使用此表按 token 计算实际费用
  * 价格单位：元/百万tokens (CNY/M tokens)
  * 更新日期：2026-05-09
@@ -34,7 +34,7 @@ const PH8_API_KEY = process.env.PH8_API_KEY;
  * 若 PH8 调整价格，请同步更新此表。
  */
 const PH8_MODEL_PRICING = {
-  // ===== Google 图像生成模型（来源: ph8.co/models） =====
+  // ===== Google 图像生成模型（来源: https://wellai.cc/models） =====
   'gemini-3.1-flash-image-preview':     { inputPrice: 1.7,  outputPrice: 10.6  },
   'gemini-3.1-flash-image-preview@latest': { inputPrice: 1.7,  outputPrice: 10.6  },
   'gemini-3.1-flash-image-preview@001': { inputPrice: 1.7,  outputPrice: 10.6  },
@@ -46,7 +46,7 @@ const PH8_MODEL_PRICING = {
   'Nano-Banana':                       { inputPrice: 2.1,  outputPrice: 17.7  },
   'gemini-2.5-flash-image':            { inputPrice: 2.1,  outputPrice: 17.7  },
 
-  // ===== Google 多模态大语言模型（来源: ph8.co/models） =====
+  // ===== Google 多模态大语言模型（来源: https://wellai.cc/models） =====
   'gemini-3.1-flash-lite-preview':    { inputPrice: 1.7,  outputPrice: 10.6  },
   'gemini-3.1-pro-preview':            { inputPrice: 14.2, outputPrice: 85.3  },
   'gemini-3-flash-preview':            { inputPrice: 3.5,  outputPrice: 21.3  },
@@ -54,7 +54,7 @@ const PH8_MODEL_PRICING = {
   'gemini-2.5-flash':                  { inputPrice: 2.1,  outputPrice: 17.7  },
   'gemini-2.5-pro':                    { inputPrice: 8.8,  outputPrice: 71.1  },
 
-  // ===== 豆包视频生成模型 doubao-seedance（来源: ph8.co/models） =====
+  // ===== 豆包视频生成模型 doubao-seedance（来源: https://wellai.cc/models） =====
   'doubao-seedance-2-fast':            { inputPrice: 0.1,  outputPrice: 37.0  },
   'doubao-seedance-2-0':               { inputPrice: 0.1,  outputPrice: 46.0  },
   'doubao-seedance-1-5-pro':           { inputPrice: 0.1,  outputPrice: 15.0  },
@@ -509,10 +509,11 @@ router.get('/user-info', async (req, res) => {
   }
 });
 
-// 图像生成专用端点 - 支持 openai/v1/images/generations 路径
-router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
-  const targetHost = 'ph8.co';
-  const fullPath = '/openai/v1/images/generations';
+// 图像生成专用端点 - 支持 /images/generations 路径（用于 /api/ph8/openai/v1 挂载）
+// [修复] ph8.co 只支持标准 /v1/images/generations 路径，不支持 /openai/v1/ 前缀
+router.post('/images/generations', requireAuth, async (req, res) => {
+  const targetHost = 'wellai.cc';
+  const fullPath = '/v1/images/generations';
   const requestId = uuidv4();
   const startTime = Date.now();
 
@@ -522,7 +523,7 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
     apiKeySet: !!PH8_API_KEY
   });
 
-  const bodyData = JSON.stringify(req.body);
+  let bodyData = JSON.stringify(req.body);
   if (LOG_REQUEST_BODY) {
     ph8Log.debug('请求体', { body: sanitizeForLog(req.body, 100) });
   }
@@ -544,14 +545,19 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
   const proxyReq = https.request(options, async (proxyRes) => {
     const contentType = proxyRes.headers['content-type'] || '';
     const isBinaryContent = contentType.includes('image') || contentType.includes('octet-stream');
-    let data = isBinaryContent ? Buffer.alloc(0) : '';
 
-    proxyRes.on('data', (chunk) => {
-      if (isBinaryContent) {
-        data = Buffer.concat([data, chunk]);
-      } else {
-        data += chunk;
-      }
+    // [修复] 用 Promise 包裹数据收集，确保 'end' 事件绝不因 async await 延迟丢失
+    const data = await new Promise((resolve, reject) => {
+      let body = isBinaryContent ? Buffer.alloc(0) : '';
+      proxyRes.on('data', (chunk) => {
+        if (isBinaryContent) {
+          body = Buffer.concat([body, chunk]);
+        } else {
+          body += chunk;
+        }
+      });
+      proxyRes.on('end', () => resolve(body));
+      proxyRes.on('error', (err) => reject(err));
     });
 
     const userResultImg = await getUserId(req);
@@ -574,7 +580,8 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
       reqModel = bodyObj.model || 'unknown';
     } catch(e) {}
 
-    proxyRes.on('end', async () => {
+    // 以下为原来的 end 回调逻辑，现在直接执行（已拿到完整 data）
+    {
       let ph8ActualCost = 0;
       let imgPromptTokens = 0;
       let imgCompletionTokens = 0;
@@ -707,7 +714,7 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
       }
       
       res.status(proxyRes.statusCode).send(data);
-    });
+    }
   });
 
   proxyReq.on('error', (err) => {
@@ -727,7 +734,7 @@ router.post('/openai/v1/images/generations', requireAuth, async (req, res) => {
 
 // 图像生成专用端点 - 支持 v1/images/generations 路径
 router.post('/v1/images/generations', async (req, res) => {
-  const targetHost = 'ph8.co';
+  const targetHost = 'wellai.cc';
   const fullPath = '/v1/images/generations';
   const requestId = uuidv4();
   const startTime = Date.now();
@@ -896,7 +903,7 @@ router.post('/v1/images/generations', async (req, res) => {
 // PH8 代理路由（通配符，必须放在最后）
 // [安全修复] 应用认证中间件，防止未授权调用付费AI服务
 router.all('/*', requireAuth, async (req, res) => {
-  const targetHost = 'ph8.co';
+  const targetHost = 'wellai.cc';
   const targetPath = req.params[0] || '';
   let fullPath;
   
@@ -981,14 +988,14 @@ router.all('/*', requireAuth, async (req, res) => {
       const numericUserId = typeof userId === 'number' ? userId : parseInt(userId);
       if (!isNaN(numericUserId) && numericUserId > 0) {
         const [quotaCheck] = await db.query(
-          `SELECT daily_quota, daily_used, total_points, daily_reset_at, tier FROM kbit_users WHERE id = ?`,
+          `SELECT daily_quota, daily_used, total_points, daily_reset_at, user_tier FROM kbit_users WHERE id = ?`,
           [numericUserId]
         );
         if (quotaCheck.length > 0) {
           let dq = parseFloat(quotaCheck[0].daily_quota) || 200;
           let du = parseFloat(quotaCheck[0].daily_used) || 0;
           let tp = parseFloat(quotaCheck[0].total_points) || 0;
-          const tier = quotaCheck[0].tier || 'free';
+          const tier = quotaCheck[0].user_tier || 'free';
           const dailyResetAt = quotaCheck[0].daily_reset_at;
 
           const today = new Date().toISOString().split('T')[0];

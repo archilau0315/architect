@@ -59,11 +59,11 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
     }
   }
 
-  if (url.includes('ph8.co')) {
+  if (url.includes('wellai.cc')) {
     if (useOpenaiPath) {
       let pathSuffix = '';
       if (url.includes('/v1/')) {
-        pathSuffix = url.replace('https://ph8.co/v1/', '');
+        pathSuffix = url.replace('https://wellai.cc/v1/', '');
       } else {
         const urlObj = new URL(url);
         pathSuffix = urlObj.pathname.replace(/^\//, '');
@@ -73,7 +73,7 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
       }
       return `${base}/api/ph8/openai/v1/${pathSuffix}`;
     }
-    return url.replace('https://ph8.co', `${base}/api/ph8`);
+    return url.replace('https://wellai.cc', `${base}/api/ph8`);
   }
 
   return url;
@@ -2241,7 +2241,7 @@ ${colorMappingDescription}
           dynamicEngines.push({
             id: engineId,
             label: engineId,
-            desc: descMap[engineId] || node?.description || `Gateway: ${node?.provider || 'ph8.co'}`,
+            desc: descMap[engineId] || node?.description || `Gateway: ${node?.provider || 'wellai.cc'}`,
             supportedRatios: assetCount >= 2 ? ['16:9'] : supportedRatios,
             duration: duration,
             supportsVideoUpload: engineId === 'SeeDance-2.0' || engineId === 'SeeDance-2.0F',
@@ -2317,7 +2317,7 @@ ${colorMappingDescription}
     if (useThirdPartyGateway) {
       console.log(`[Video Gateway] Using PH8 Video API (forced mode)`);
       try {
-        const proxiedUrl = getProxiedUrl('https://ph8.co');
+        const proxiedUrl = getProxiedUrl('https://wellai.cc');
         
         console.log(`[Video Gateway] Model: ${remoteModelId}, Endpoint: ${proxiedUrl}/videos`);
         
@@ -2418,7 +2418,7 @@ ${colorMappingDescription}
             let statusData: any = null;
             
             // ph8 视频 API 使用 openai/v1 路径进行状态查询
-            const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
+            const openaiProxiedUrl = getProxiedUrl('https://wellai.cc', true);
             
             // 格式1: GET /videos/{id} (使用 openai 路径)
             let statusResponse = await fetchWithRetry(`${openaiProxiedUrl}/videos/${videoId}`, {
@@ -2668,7 +2668,7 @@ ${colorMappingDescription}
           retryCount++;
           
           try {
-            const openaiProxiedUrl = getProxiedUrl('https://ph8.co', true);
+            const openaiProxiedUrl = getProxiedUrl('https://wellai.cc', true);
             let statusResponse = await fetchWithRetry(`${openaiProxiedUrl}/videos/${videoId}`, {
               method: 'GET',
             }, 1);

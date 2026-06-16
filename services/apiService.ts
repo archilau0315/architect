@@ -32,11 +32,11 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
     }
   }
 
-  if (url.includes('ph8.co')) {
+  if (url.includes('wellai.cc')) {
     if (useOpenaiPath) {
       let pathSuffix = '';
       if (url.includes('/v1/')) {
-        pathSuffix = url.replace('https://ph8.co/v1/', '');
+        pathSuffix = url.replace('https://wellai.cc/v1/', '');
       } else {
         const urlObj = new URL(url);
         pathSuffix = urlObj.pathname.replace(/^\//, '');
@@ -47,7 +47,7 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
       }
       return `${base}/api/ph8/openai/v1/${pathSuffix}`;
     }
-    return url.replace('https://ph8.co', `${base}/api/ph8`);
+    return url.replace('https://wellai.cc', `${base}/api/ph8`);
   }
 
   if (url.includes('api.kbitai.com.cn')) {
@@ -178,8 +178,8 @@ export const getAI = (modelConfig?: any, targetModelId?: string) => {
           if (gatewayKey && gateways[gatewayKey]?.api_key) {
             apiKey = gateways[gatewayKey].api_key;
           } else {
-            // 兼容旧配置：如果是 ph8.co 节点，从 api_keys 中获取
-            if (providerName === "ph8.co") {
+            // 兼容旧配置：如果是 wellai.cc 节点，从 api_keys 中获取
+            if (providerName === "wellai.cc") {
                 const ph8Key = ((gatewayConfig as any).api_keys)?.ph8;
                 if (ph8Key) {
                   apiKey = ph8Key;

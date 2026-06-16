@@ -92,7 +92,7 @@ export const sendChatMessage = async (
 
     // 如果使用第三方网关
     if (isUsingThirdPartyGateway()) {
-      const url = getProxiedUrl('https://ph8.co/v1/chat/completions', true);
+      const url = getProxiedUrl('https://wellai.cc/v1/chat/completions', true);
       
       const response = await fetchWithRetry(url, {
         method: 'POST',
@@ -214,7 +214,7 @@ export const sendChatMessageStream = async (
       }
     ];
 
-    const url = getProxiedUrl('https://ph8.co/v1/chat/completions', true);
+    const url = getProxiedUrl('https://wellai.cc/v1/chat/completions', true);
     
     const response = await fetchWithRetry(url, {
       method: 'POST',

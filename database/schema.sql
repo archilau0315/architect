@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS `kbit_channels` (
 -- 初始化渠道配置
 INSERT INTO `kbit_channels` (`channel_id`, `channel_name`, `provider`, `base_url`, `models_supported`, `priority`, `weight`, `status`, `success_rate`, `avg_latency_ms`) VALUES
 ('google-official', 'Google官方直连', 'google', 'https://generativelanguage.googleapis.com', '["gemini-2.5-flash", "gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash-image", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "veo-3.1-fast-generate-preview", "veo-3.1-generate-preview"]', 100, 100, 'active', 99.50, 1200),
-('hp8-accelerator', 'HP8加速节点', 'hp8', 'https://ph8.co/openai/v1', '["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "veo-3.1-fast-generate-preview", "veo-3.1-generate-preview", "deepseek-v3.2"]', 200, 150, 'active', 98.00, 800),
+('hp8-accelerator', 'HP8加速节点', 'hp8', 'https://wellai.cc/openai/v1', '["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "veo-3.1-fast-generate-preview", "veo-3.1-generate-preview", "deepseek-v3.2"]', 200, 150, 'active', 98.00, 800),
 ('backup-proxy-a', '备用代理A', 'proxy', 'https://api.proxy-a.com', '["gemini-2.5-flash", "gemini-3-flash-preview"]', 50, 50, 'active', 95.00, 1500),
 ('backup-proxy-b', '备用代理B', 'proxy', 'https://api.proxy-b.com', '["gemini-2.5-flash", "deepseek-v3.2"]', 30, 30, 'inactive', 90.00, 2000);
 

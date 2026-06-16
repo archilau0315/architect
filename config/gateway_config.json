@@ -1,8 +1,8 @@
 {
   "gateways": {
     "ph8": {
-      "name": "PH8 Gateway",
-      "url": "https://ph8.co",
+      "name": "WellAI Gateway",
+      "url": "https://wellai.cc",
       "proxy_path": "/api/ph8",
       "api_key": "",
       "enabled": true
@@ -11,8 +11,8 @@
   "models": {
     "gemini-3-flash-preview": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "gemini-3-flash-preview",
         "priority": 100,
         "active": true
@@ -20,8 +20,8 @@
     ],
     "gemini-3-pro-preview": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "gemini-3-pro-preview",
         "priority": 100,
         "active": true
@@ -29,8 +29,8 @@
     ],
     "gemini-3.1-flash-lite-preview": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "gemini-3.1-flash-lite-preview",
         "priority": 100,
         "active": true
@@ -38,8 +38,8 @@
     ],
     "qwen3-vl-flash": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "qwen3-vl-flash",
         "priority": 90,
         "active": true
@@ -47,8 +47,8 @@
     ],
     "deepseek-v3.2": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "deepseek-v3.2",
         "priority": 80,
         "active": true
@@ -56,8 +56,8 @@
     ],
     "gemini-3.1-flash-image-preview": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "gemini-3.1-flash-image-preview",
         "priority": 100,
         "active": true
@@ -65,8 +65,8 @@
     ],
     "gemini-3-pro-image-preview": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "gemini-3-pro-image-preview",
         "priority": 100,
         "active": true
@@ -75,8 +75,8 @@
 
     "SeeDance-1.0PF": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "doubao-seedance-1-0-pro-fast-251015",
         "priority": 100,
         "active": true,
@@ -85,8 +85,8 @@
     ],
     "SeeDance-1.5": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "doubao-seedance-1-5-pro-251215",
         "priority": 90,
         "active": true,
@@ -95,8 +95,8 @@
     ],
     "SeeDance-2.0F": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "doubao-seedance-2-0-fast",
         "priority": 80,
         "active": true,
@@ -105,8 +105,8 @@
     ],
     "SeeDance-2.0": [
       {
-        "provider": "ph8.co",
-        "url": "https://ph8.co",
+        "provider": "wellai.cc",
+        "url": "https://wellai.cc",
         "remoteModelId": "doubao-seedance-2-0",
         "priority": 70,
         "active": true,

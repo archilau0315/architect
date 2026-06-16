@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
             rewrite: (path) => path.replace(/^\/architect/, ''),
           },
           '/api/ph8': {
-            target: 'https://ph8.co',
+            target: 'https://wellai.cc',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api\/ph8/, '/v1'),
             headers: {
@@ -72,7 +72,7 @@ export default defineConfig(({ mode }) => {
             proxyTimeout: 300000
           },
           '/api/ph8-openai': {
-            target: 'https://ph8.co',
+            target: 'https://wellai.cc',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api\/ph8-openai/, '/openai/v1'),
             headers: {
