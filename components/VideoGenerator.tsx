@@ -279,16 +279,15 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
                      statusData.output?.url ||
                      statusData.data?.url;
       
-      if (videoUrl) {
-        console.log('[VideoGenerator] 成功恢复视频:', videoUrl);
-        setVideoUrl(videoUrl);
-        // 如果是 blob URL，标记为持久化
-        if (videoUrl.startsWith('blob:')) {
-          videoBlobService.markAsPersistent(videoUrl);
-        }
-      } else {
-        // 尝试下载内容（使用统一路径格式）
-        console.log('[VideoGenerator] 尝试下载视频内容...');
+      // 检查 URL 是否有效（排除 your-domain 等占位符）
+      const isValidUrl = videoUrl && 
+        !videoUrl.includes('your-domain') && 
+        !videoUrl.includes('example.com') &&
+        videoUrl.startsWith('http');
+      
+      // 如果 URL 无效，直接通过后端下载内容
+      if (!isValidUrl) {
+        console.log('[VideoGenerator] 视频 URL 无效，通过后端下载...', { videoUrl });
         const contentUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}/content`;
         const contentResponse = await fetch(contentUrl);
         if (contentResponse.ok) {
@@ -301,6 +300,12 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
           console.log('[VideoGenerator] 成功下载并恢复视频:', objectUrl);
         } else {
           throw new Error('无法获取视频内容');
+        }
+      } else {
+        console.log('[VideoGenerator] 成功恢复视频:', videoUrl);
+        setVideoUrl(videoUrl);
+        if (videoUrl.startsWith('blob:')) {
+          videoBlobService.markAsPersistent(videoUrl);
         }
       }
       

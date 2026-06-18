@@ -143,8 +143,15 @@ export const VideoPlayer = ({
               statusData.output?.url ||
               statusData.data?.url;
 
-            // 如果返回的不是直接 URL，尝试下载内容
-            if (!recoveredUrl) {
+            // 检查 URL 是否有效（排除 your-domain 等占位符）
+            const isValidUrl = recoveredUrl && 
+              !recoveredUrl.includes('your-domain') && 
+              !recoveredUrl.includes('example.com') &&
+              recoveredUrl.startsWith('http');
+
+            // 如果 URL 无效，直接通过后端下载内容
+            if (!isValidUrl) {
+              console.log('[VideoPlayer] 视频 URL 无效，通过后端下载...', { recoveredUrl });
               const contentRes = await fetch(`${apiBase}/api/ph8/openai/v1/videos/${videoRef}/content`);
               if (contentRes.ok) {
                 const arrayBuffer = await contentRes.arrayBuffer();

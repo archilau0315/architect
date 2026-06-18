@@ -2321,6 +2321,35 @@ ${colorMappingDescription}
         
         console.log(`[Video Gateway] Model: ${remoteModelId}, Endpoint: ${proxiedUrl}/videos`);
         
+        const processVideoUrl = async (videoUrl: string, vVideoId: string, vProxiedUrl: string): Promise<{ url: string; videoRef: string }> => {
+          const trustedDomains = ['wellai.cc', 'doubao.com', 'bytedance.com', 'cdn'];
+          const isTrustedUrl = trustedDomains.some(domain => videoUrl.includes(domain));
+          const isInvalidUrl = videoUrl.includes('your-domain') || videoUrl.includes('example.com') || !videoUrl.startsWith('http');
+          
+          if (isTrustedUrl && !isInvalidUrl) {
+            console.log(`[Video Gateway] Video ready: ${videoUrl}`);
+            return { url: videoUrl, videoRef: vVideoId };
+          }
+          
+          console.log(`[Video Gateway] 视频 URL 无效或未知，通过后端下载...`, { videoUrl });
+          try {
+            const contentResponse = await fetchWithRetry(`${vProxiedUrl}/videos/${vVideoId}/content`, {
+              method: 'GET',
+            }, 0);
+            if (contentResponse.ok) {
+              const arrayBuffer = await contentResponse.arrayBuffer();
+              const contentType = contentResponse.headers.get('content-type') || 'video/mp4';
+              const blob = new Blob([arrayBuffer], { type: contentType });
+              const objectUrl = URL.createObjectURL(blob);
+              console.log(`[Video Gateway] 视频已下载为 blob: ${objectUrl}`);
+              return { url: objectUrl, videoRef: vVideoId };
+            }
+          } catch (e) {
+            console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+          }
+          return { url: videoUrl, videoRef: vVideoId };
+        };
+        
         // 构建请求体（使用 UI 传入的参数，带默认值兜底）
         const opt = videoOptions || { resolution: '', duration: 5, camerafixed: false, seed: null };
         const requestBody: any = {
@@ -2404,7 +2433,7 @@ ${colorMappingDescription}
         if (task.url || task.video_url || task.content_url || task.data?.url) {
           const videoUrl = task.url || task.video_url || task.content_url || task.data?.url;
           console.log(`[Video Gateway] Video ready from initial response: ${videoUrl}`);
-          return { url: videoUrl, videoRef: videoId };
+          return processVideoUrl(videoUrl, videoId, proxiedUrl);
         }
         
         while ((status === "in_progress" || status === "queued") && retryCount < maxRetries) {
@@ -2488,8 +2517,7 @@ ${colorMappingDescription}
                 }
                 
                 if (videoUrl) {
-                  console.log(`[Video Gateway] Video ready: ${videoUrl}`);
-                  return { url: videoUrl, videoRef: videoId };
+                  return processVideoUrl(videoUrl, videoId, proxiedUrl);
                 } else {
                   console.log(`[Video Gateway] Completed but no URL found, trying to download content...`);
                   
@@ -2658,6 +2686,28 @@ ${colorMappingDescription}
         
         if (task.url || task.video_url || task.content_url || task.data?.url) {
           const videoUrl = task.url || task.video_url || task.content_url || task.data?.url;
+          const trustedDomains = ['wellai.cc', 'doubao.com', 'bytedance.com', 'cdn'];
+          const isTrustedUrl = trustedDomains.some(domain => videoUrl.includes(domain));
+          const isInvalidUrl = videoUrl.includes('your-domain') || videoUrl.includes('example.com') || !videoUrl.startsWith('http');
+          
+          if (isTrustedUrl && !isInvalidUrl) {
+            return { url: videoUrl, videoRef: videoId };
+          }
+          
+          try {
+            const contentResponse = await fetchWithRetry(`${proxiedUrl}/videos/${videoId}/content`, {
+              method: 'GET',
+            }, 0);
+            if (contentResponse.ok) {
+              const arrayBuffer = await contentResponse.arrayBuffer();
+              const contentType = contentResponse.headers.get('content-type') || 'video/mp4';
+              const blob = new Blob([arrayBuffer], { type: contentType });
+              const objectUrl = URL.createObjectURL(blob);
+              return { url: objectUrl, videoRef: videoId };
+            }
+          } catch (e) {
+            console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+          }
           return { url: videoUrl, videoRef: videoId };
         }
         
@@ -2694,6 +2744,28 @@ ${colorMappingDescription}
                   const videoUrl = statusData.url || statusData.video_url || statusData.content_url ||
                                   statusData.output?.url || statusData.data?.url;
                   if (videoUrl) {
+                    const trustedDomains = ['wellai.cc', 'doubao.com', 'bytedance.com', 'cdn'];
+                    const isTrustedUrl = trustedDomains.some(domain => videoUrl.includes(domain));
+                    const isInvalidUrl = videoUrl.includes('your-domain') || videoUrl.includes('example.com') || !videoUrl.startsWith('http');
+                    
+                    if (isTrustedUrl && !isInvalidUrl) {
+                      return { url: videoUrl, videoRef: videoId };
+                    }
+                    
+                    try {
+                      const contentResponse = await fetchWithRetry(`${proxiedUrl}/videos/${videoId}/content`, {
+                        method: 'GET',
+                      }, 0);
+                      if (contentResponse.ok) {
+                        const arrayBuffer = await contentResponse.arrayBuffer();
+                        const contentType = contentResponse.headers.get('content-type') || 'video/mp4';
+                        const blob = new Blob([arrayBuffer], { type: contentType });
+                        const objectUrl = URL.createObjectURL(blob);
+                        return { url: objectUrl, videoRef: videoId };
+                      }
+                    } catch (e) {
+                      console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+                    }
                     return { url: videoUrl, videoRef: videoId };
                   }
                 }
