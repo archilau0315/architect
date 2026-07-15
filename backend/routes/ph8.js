@@ -62,6 +62,7 @@ const PH8_MODEL_PRICING = {
   'doubao-seedance-1-0-lite-t2v':      { inputPrice: 0.1,  outputPrice: 10.0  },
   'doubao-seedance-1-0-pro':           { inputPrice: 0.1,  outputPrice: 16.0  },
   'doubao-seedance-1-0-pro-fast':      { inputPrice: 0.1,  outputPrice: 4.2   },
+  'doubao-seedance-1-0-pro-fast-251015': { inputPrice: 0.1,  outputPrice: 4.2   },
 
   // ===== DeepSeek 模型（Chat）=====
   'deepseek-chat':      { inputPrice: 0.5,   outputPrice: 2.0  },
@@ -1161,7 +1162,18 @@ router.all('/*', requireAuth, async (req, res) => {
               // POST 时无法知道实际 tokens，先用估算值（默认 input=0, output=50000）
               // GET 完成后用 PH8 返回的真实 token 数据更新并补扣差额
               let videoCost = 0;
-              const videoPricing = PH8_MODEL_PRICING[videoModel];
+              let videoPricing = PH8_MODEL_PRICING[videoModel];
+              
+              // 前缀模糊匹配（处理带版本后缀的变体，如 -251015）
+              if (!videoPricing) {
+                for (const [key, value] of Object.entries(PH8_MODEL_PRICING)) {
+                  if (videoModel.startsWith(key) || key.startsWith(videoModel.split('-')[0] + '-' + videoModel.split('-')[1])) {
+                    videoPricing = value;
+                    break;
+                  }
+                }
+              }
+              
               if (videoPricing) {
                 const estimatedInputTokens = 0;      // 当前视频模型输入token为0
                 const estimatedOutputTokens = 50000; // 默认估算值（约5万输出tokens）
