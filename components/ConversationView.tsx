@@ -449,7 +449,7 @@ const ImageBubble: React.FC<{
 };
 
 // ─── Bubble ───────────────────────────────────────────────────────────────────
-const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-CN', isDeveloper = false, theme = 'dark', userTier }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; language?: Language; isDeveloper?: boolean; theme?: string; userTier?: string }) => {
+const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, updateLast, language = 'zh-CN', isDeveloper = false, theme = 'dark', userTier }: { msg: Message; onInpaint?: (imageUrl: string) => void; onRerun?: (payload: UnifiedPayload) => void; onUpscale?: (imageUrl: string) => void; updateLast?: (patch: Partial<Message>) => void; language?: Language; isDeveloper?: boolean; theme?: string; userTier?: string }) => {
   const isUser = msg.role === 'user';
   const [rerunCount, setRerunCount] = useState(1);
   const [aiLogoError, setAiLogoError] = useState(false);
@@ -590,7 +590,7 @@ const Bubble = React.memo(({ msg, onInpaint, onRerun, onUpscale, language = 'zh-
               videoRef={msg.videoRef}
               onRerun={msg.rerunPayload ? () => onRerun?.(msg.rerunPayload!) : undefined}
               onVideoRestored={(newUrl) => {
-                updateLast({ videoUrl: newUrl });
+                updateLast?.({ videoUrl: newUrl });
                 if (newUrl.startsWith('blob:')) {
                   videoBlobService.markAsPersistent(newUrl);
                 }
@@ -1118,7 +1118,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.map(msg => (
             <div key={msg.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}>
-              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} language={language} isDeveloper={isDeveloper} theme={theme} userTier={userTier} />
+              <Bubble msg={msg} onInpaint={msg.type === 'image' ? setInpaintImage : undefined} onRerun={msg.type === 'image' ? handleSubmit : undefined} onUpscale={handleUpscale} updateLast={updateLast} language={language} isDeveloper={isDeveloper} theme={theme} userTier={userTier} />
             </div>
           ))}
         </div>

@@ -27,11 +27,11 @@
         "active": true
       }
     ],
-    "gemini-3.1-flash-lite-preview": [
+    "gemini-3.1-flash-lite": [
       {
         "provider": "wellai.cc",
         "url": "https://wellai.cc",
-        "remoteModelId": "gemini-3.1-flash-lite-preview",
+        "remoteModelId": "gemini-3.1-flash-lite",
         "priority": 100,
         "active": true
       }

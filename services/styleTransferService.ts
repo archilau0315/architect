@@ -432,10 +432,10 @@ function analyzeMaterial(data: Uint8ClampedArray, width: number, height: number)
       const r = data[idx], g = data[idx + 1], b = data[idx + 2];
       
       const neighbors = [
-        [(y - 1) * width + x] * 4,
-        [(y + 1) * width + x] * 4,
-        [y * width + (x - 1)] * 4,
-        [y * width + (x + 1)] * 4,
+        ((y - 1) * width + x) * 4,
+        ((y + 1) * width + x) * 4,
+        (y * width + (x - 1)) * 4,
+        (y * width + (x + 1)) * 4,
       ];
 
       let localVariance = 0;

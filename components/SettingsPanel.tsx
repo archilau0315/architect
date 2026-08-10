@@ -440,7 +440,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const handleSubmitPayment = async () => {
       if (paymentSubmitting || paymentSubmitted) return;
 
-      const user = getLoggedInUser();
+      let user: any = null;
+      try {
+        const session = localStorage.getItem('architect-invite-session');
+        user = session ? JSON.parse(session) : null;
+      } catch { /* ignore */ }
       if (!user || !user.userId) {
         window.alert('请先登录后再充值');
         return;

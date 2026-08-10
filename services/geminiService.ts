@@ -1820,7 +1820,7 @@ ${colorMappingDescription}
   },
 
   async analyzeImage(image: string, prompt: string, instructions: any, modelConfig: any, signal?: AbortSignal) {
-    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash-lite-preview" : "gemini-3-flash-preview";
+    const defaultModel = useThirdPartyGateway ? "gemini-3.1-flash-lite" : "gemini-3-flash-preview";
     const requestedModel = getModelName(modelConfig, defaultModel);
     const { ai, modelId, node, apiKey } = getAI(modelConfig, requestedModel);
     
@@ -1984,13 +1984,13 @@ ${colorMappingDescription}
       if (files.length === 0) {
         // 纯文字对话
         if (mode === 'DEEP') {
-          defaultModel = 'gemini-3.1-flash-lite-preview';  // 深度模式
+          defaultModel = 'gemini-3.1-flash-lite';  // 深度模式
         } else {
           defaultModel = 'deepseek-v3.2';  // 极速/逻辑模式（性价比高）
         }
       } else {
         // 有图片的多模态对话
-        defaultModel = 'gemini-3.1-flash-lite-preview';
+        defaultModel = 'gemini-3.1-flash-lite';
       }
     } else {
       // 开发模式：使用 Gemini 官方模型
@@ -2345,7 +2345,7 @@ ${colorMappingDescription}
               return { url: objectUrl, videoRef: vVideoId };
             }
           } catch (e) {
-            console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+            console.warn(`[Video Gateway] 后端下载失败: ${(e as Error).message}`);
           }
           return { url: videoUrl, videoRef: vVideoId };
         };
@@ -2706,7 +2706,7 @@ ${colorMappingDescription}
               return { url: objectUrl, videoRef: videoId };
             }
           } catch (e) {
-            console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+            console.warn(`[Video Gateway] 后端下载失败: ${(e as Error).message}`);
           }
           return { url: videoUrl, videoRef: videoId };
         }
@@ -2764,7 +2764,7 @@ ${colorMappingDescription}
                         return { url: objectUrl, videoRef: videoId };
                       }
                     } catch (e) {
-                      console.warn(`[Video Gateway] 后端下载失败: ${e.message}`);
+                      console.warn(`[Video Gateway] 后端下载失败: ${(e as Error).message}`);
                     }
                     return { url: videoUrl, videoRef: videoId };
                   }

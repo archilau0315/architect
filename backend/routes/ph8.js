@@ -47,7 +47,7 @@ const PH8_MODEL_PRICING = {
   'gemini-2.5-flash-image':            { inputPrice: 2.1,  outputPrice: 17.7  },
 
   // ===== Google 多模态大语言模型（来源: https://wellai.cc/models） =====
-  'gemini-3.1-flash-lite-preview':    { inputPrice: 1.7,  outputPrice: 10.6  },
+  'gemini-3.1-flash-lite':    { inputPrice: 1.7,  outputPrice: 10.6  },
   'gemini-3.1-pro-preview':            { inputPrice: 14.2, outputPrice: 85.3  },
   'gemini-3-flash-preview':            { inputPrice: 3.5,  outputPrice: 21.3  },
   'gemini-3-pro-preview':              { inputPrice: 14.2, outputPrice: 85.3  },
@@ -62,7 +62,6 @@ const PH8_MODEL_PRICING = {
   'doubao-seedance-1-0-lite-t2v':      { inputPrice: 0.1,  outputPrice: 10.0  },
   'doubao-seedance-1-0-pro':           { inputPrice: 0.1,  outputPrice: 16.0  },
   'doubao-seedance-1-0-pro-fast':      { inputPrice: 0.1,  outputPrice: 4.2   },
-  'doubao-seedance-1-0-pro-fast-251015': { inputPrice: 0.1,  outputPrice: 4.2   },
 
   // ===== DeepSeek 模型（Chat）=====
   'deepseek-chat':      { inputPrice: 0.5,   outputPrice: 2.0  },
@@ -908,9 +907,9 @@ router.all('/*', requireAuth, async (req, res) => {
   const targetPath = req.params[0] || '';
   let fullPath;
   
-  // 处理 openai/v1 路径
+  // 处理 openai/v1 路径 — 去掉 openai/ 前缀，因为这是前端代理标记，不是 WellAI 实际路径
   if (targetPath.startsWith('openai/v1/')) {
-    fullPath = '/' + targetPath;
+    fullPath = '/v1/' + targetPath.substring('openai/v1/'.length);
   } else if (targetPath.startsWith('v1/')) {
     fullPath = '/' + targetPath;
   } else {
@@ -1162,18 +1161,7 @@ router.all('/*', requireAuth, async (req, res) => {
               // POST 时无法知道实际 tokens，先用估算值（默认 input=0, output=50000）
               // GET 完成后用 PH8 返回的真实 token 数据更新并补扣差额
               let videoCost = 0;
-              let videoPricing = PH8_MODEL_PRICING[videoModel];
-              
-              // 前缀模糊匹配（处理带版本后缀的变体，如 -251015）
-              if (!videoPricing) {
-                for (const [key, value] of Object.entries(PH8_MODEL_PRICING)) {
-                  if (videoModel.startsWith(key) || key.startsWith(videoModel.split('-')[0] + '-' + videoModel.split('-')[1])) {
-                    videoPricing = value;
-                    break;
-                  }
-                }
-              }
-              
+              const videoPricing = PH8_MODEL_PRICING[videoModel];
               if (videoPricing) {
                 const estimatedInputTokens = 0;      // 当前视频模型输入token为0
                 const estimatedOutputTokens = 50000; // 默认估算值（约5万输出tokens）

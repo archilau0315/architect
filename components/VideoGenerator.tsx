@@ -12,7 +12,7 @@ interface VideoGeneratorProps {
   instructions: typeof DEFAULT_SYSTEM_PRESETS;
   onReset: () => void;
   onBack?: () => void;
-  onVideoGenerated?: (result: { url: string; prompt: string }) => void;
+  onVideoGenerated?: (result: { url: string; prompt: string; videoRef?: string }) => void;
   fontSize?: number;
   userTier?: UserTier;
   points: { daily: number; purchased: number; bonus?: number };

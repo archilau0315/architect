@@ -413,7 +413,7 @@ export const VideoPlayer = ({
             {/* 后退10秒 */}
             <button
               onClick={() => {
-                const video = videoRef.current;
+                const video = videoDomRef.current;
                 if (video) video.currentTime = Math.max(0, video.currentTime - 10);
               }}
               className="flex items-center justify-center w-12 h-10 hover:bg-white/10 text-white/70 hover:text-white transition-all"
@@ -440,7 +440,7 @@ export const VideoPlayer = ({
             {/* 前进10秒 */}
             <button
               onClick={() => {
-                const video = videoRef.current;
+                const video = videoDomRef.current;
                 if (video) video.currentTime = Math.min(duration, video.currentTime + 10);
               }}
               className="flex items-center justify-center w-12 h-10 hover:bg-white/10 text-white/70 hover:text-white transition-all"
