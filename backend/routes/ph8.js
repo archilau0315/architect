@@ -108,6 +108,48 @@ function calculateCostFromTokens(model, promptTokens, completionTokens) {
 }
 
 /**
+ * 根据模型和请求类型预估单次生成的最低消耗（积分）
+ * @param {string} model - 模型名称
+ * @param {string} requestType - 请求类型 (image/video/chat/unknown)
+ * @returns {{estimatedPoints: number, estimatedCost: number, source: string}}
+ */
+function estimateCost(model, requestType) {
+  // 查找定价（复用 calculateCostFromTokens 的模糊匹配逻辑）
+  let pricing = PH8_MODEL_PRICING[model];
+  if (!pricing) {
+    for (const [key, value] of Object.entries(PH8_MODEL_PRICING)) {
+      if (model.startsWith(key.split('@')[0]) || key.includes(model) || model.includes(key.replace(/@.*$/, ''))) {
+        pricing = value;
+        break;
+      }
+    }
+  }
+  if (!pricing) {
+    return { estimatedPoints: 0, estimatedCost: 0, source: 'no-pricing' };
+  }
+
+  let cost = 0;
+  let source = '';
+
+  if (requestType === 'image') {
+    // 图片生成：预估 output ~5000 tokens
+    cost = (5000 * pricing.outputPrice) / 1000000;
+    source = `image-estimate:${model}`;
+  } else if (requestType === 'video') {
+    // 视频生成：预估 output ~50000 tokens（与 POST 计费逻辑一致）
+    cost = (50000 * pricing.outputPrice) / 1000000;
+    source = `video-estimate:${model}`;
+  } else {
+    // 聊天/分析：预估 input ~1000 + output ~2000 tokens
+    cost = ((1000 * pricing.inputPrice) + (2000 * pricing.outputPrice)) / 1000000;
+    source = `chat-estimate:${model}`;
+  }
+
+  const estimatedPoints = Math.max(1, Math.round(cost * 1000));
+  return { estimatedPoints, estimatedCost: Math.round(cost * 100000) / 100000, source };
+}
+
+/**
  * 统一日志函数 - 根据日志级别和环境配置决定是否输出
  */
 const ph8Log = {
@@ -526,6 +568,67 @@ router.post('/images/generations', requireAuth, async (req, res) => {
   let bodyData = JSON.stringify(req.body);
   if (LOG_REQUEST_BODY) {
     ph8Log.debug('请求体', { body: sanitizeForLog(req.body, 100) });
+  }
+
+  // 余额预检：检查用户积分是否足以支付本次图片生成
+  const imgUserResult = await getUserId(req);
+  const imgUserId = imgUserResult.userId;
+  const imgModel = getModel(req.body, '/v1/images/generations');
+
+  if (imgUserId && imgUserId !== 'anonymous') {
+    try {
+      const numericUserId = typeof imgUserId === 'number' ? imgUserId : parseInt(imgUserId);
+      if (!isNaN(numericUserId) && numericUserId > 0) {
+        const [quotaCheck] = await db.query(
+          `SELECT daily_quota, daily_used, total_points, daily_reset_at, user_tier FROM kbit_users WHERE id = ?`,
+          [numericUserId]
+        );
+        if (quotaCheck.length > 0) {
+          let dq = parseFloat(quotaCheck[0].daily_quota) || 200;
+          let du = parseFloat(quotaCheck[0].daily_used) || 0;
+          let tp = parseFloat(quotaCheck[0].total_points) || 0;
+          const tier = quotaCheck[0].user_tier || 'free';
+          const dailyResetAt = quotaCheck[0].daily_reset_at;
+
+          const today = new Date().toISOString().split('T')[0];
+          if (dailyResetAt !== today || dailyResetAt === null) du = 0;
+
+          const { getDailyPoints } = require('../config/tierConfig');
+          const configQuota = getDailyPoints(tier);
+          if (configQuota > dq) dq = configQuota;
+
+          const dailyRemaining = Math.max(0, dq - du);
+          const totalAvailable = tp + dailyRemaining;
+
+          const { estimatedPoints } = estimateCost(imgModel, 'image');
+
+          if (totalAvailable <= 0) {
+            return res.status(429).json({
+              error: '配额不足',
+              message: '今日积分已用完，请明天再来或充值积分',
+              code: 'QUOTA_EXCEEDED'
+            });
+          }
+
+          if (estimatedPoints > 0 && totalAvailable < estimatedPoints) {
+            ph8Log.warn('图片生成余额不足-预检拦截', {
+              userId: numericUserId,
+              model: imgModel,
+              estimatedPoints,
+              totalAvailable
+            });
+            return res.status(429).json({
+              error: '余额不足',
+              message: `余额可能不足，本次操作预估需要 ${estimatedPoints} 积分，当前剩余 ${totalAvailable} 积分，请充值`,
+              code: 'INSUFFICIENT_BALANCE',
+              data: { estimatedPoints, totalAvailable, model: imgModel }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      ph8Log.error('图片生成预检失败', { error: e.message });
+    }
   }
 
   const options = {
@@ -1033,6 +1136,34 @@ router.all('/*', requireAuth, async (req, res) => {
               }
             });
           }
+
+          // 预估费用检查：余额是否足以支付本次请求
+          const { estimatedPoints, estimatedCost, source } = estimateCost(model, requestType);
+          if (estimatedPoints > 0 && totalAvailable < estimatedPoints) {
+            ph8Log.warn('余额不足-预检拦截', {
+              userId: numericUserId,
+              model,
+              requestType,
+              estimatedPoints,
+              estimatedCost,
+              totalAvailable,
+              source
+            });
+            return res.status(429).json({
+              error: '余额不足',
+              message: `余额可能不足，本次操作预估需要 ${estimatedPoints} 积分，当前剩余 ${totalAvailable} 积分，请充值`,
+              code: 'INSUFFICIENT_BALANCE',
+              data: {
+                estimatedPoints,
+                estimatedCost,
+                totalAvailable,
+                dailyRemaining,
+                totalPoints: tp,
+                model,
+                source
+              }
+            });
+          }
         }
       }
     } catch (e) {
@@ -1139,14 +1270,14 @@ router.all('/*', requireAuth, async (req, res) => {
             if (videoResp.id && (videoResp.status === 'queued' || videoResp.status === 'in_progress' || videoResp.status === 'completed')) {
               ph8Log.info('视频任务创建成功，执行计费', { requestId, videoId: videoResp.id, model });
 
+              // 从请求体获取模型名（视频模型按固定单价计费）
+              let videoModel = model;
+              try { videoModel = JSON.parse(bodyData || '{}').model || model; } catch(e) {}
+
               // 【关键修复】将 PH8 task ID 附加到 model_id 中，以便后续 GET 轮询能精确匹配 DB 记录
               // 原因: request_id 字段 VARCHAR(50)，UUID(36) + ::(2) + taskId(~25) = 63 超限！
               // 方案: 改存到 model_id 字段，格式 "modelName::ph8-task-id"（GET 端用 model_id LIKE 匹配）
               const videoModelWithTaskId = `${videoModel}::${videoResp.id}`;
-
-              // 从请求体获取模型名（视频模型按固定单价计费）
-              let videoModel = model;
-              try { videoModel = JSON.parse(bodyData || '{}').model || model; } catch(e) {}
 
               // 使用 PH8 官方定价计算视频费用（基于完整 Token 计算）
               // 根据 PH8 调用明细，视频模型的实际计费方式：
