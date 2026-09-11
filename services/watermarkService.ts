@@ -35,11 +35,11 @@ function preloadLogoOnce(): Promise<HTMLImageElement> {
 
   _logoLoadPromise = new Promise((resolve, reject) => {
     // 候选路径（按优先级排序）：
-    // 1. /public/LOGOkbitwater.png    → Nginx alias 直通 /www/wwwroot/kbitai.com.cn/public/ （首选，1步直达）
-    // 2. /architect/LOGOkbitwater.png → Nginx rewrite ^/architect/(LOGOkbitwater) → /public/$1   （备用）
+    // 1. /public/LOGOkbitwater.png          → Nginx alias 直通 /www/wwwroot/kbitai.com.cn/public/ （首选，1步直达）
+    // 2. /aitools/architect/LOGOkbitwater.png → Nginx rewrite → /public/$1   （备用）
     const candidates = [
       '/public/LOGOkbitwater.png',
-      '/architect/LOGOkbitwater.png',
+      '/aitools/architect/LOGOkbitwater.png',
     ];
     let idx = 0;
 
@@ -86,7 +86,7 @@ export const WatermarkUtils = {
         const regPayload = JSON.stringify({ contentId, contentType: 'image', userId, metadata: { generatedAt, platform: 'KBITAI' } });
         const beacon = new Image();
         beacon.onload = beacon.onerror = () => {};
-        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000'
           ? ''
           : 'https://api.kbitai.com.cn';
         beacon.src = `${apiBase}/api/content/register?d=${encodeURIComponent(regPayload.substring(0, 200))}`;

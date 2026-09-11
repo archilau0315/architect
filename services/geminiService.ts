@@ -32,9 +32,10 @@ export const getCurrentUserId = (): string => {
  * [优化修复] 改为导出函数，供其他模块复用（消除与 apiService 的重复）
  */
 export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  // 开发环境使用 /architect 前缀，生产环境使用后端API地址
-  const base = isDev ? '/architect' : 'https://api.kbitai.com.cn';
+  // [修复] 增加端口判定，局域网 IP 访问 dev 服务（端口 3000）也走代理，避免直连公网证书报错
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+  // 开发环境使用 /aitools/architect 前缀，生产环境使用后端API地址
+  const base = isDev ? '/aitools/architect' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {
@@ -74,6 +75,12 @@ export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): stri
       return `${base}/api/ph8/openai/v1/${pathSuffix}`;
     }
     return url.replace('https://wellai.cc', `${base}/api/ph8`);
+  }
+
+  // [修复] geminiService 版本此前缺少该分支，导致 api.kbitai.com.cn 的 URL 被原样返回
+  // （dev 下直连公网，证书异常时直接报错）；与 apiService 版本保持一致
+  if (url.includes('api.kbitai.com.cn')) {
+    return url.replace('https://api.kbitai.com.cn', base);
   }
 
   return url;

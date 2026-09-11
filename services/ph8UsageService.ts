@@ -103,8 +103,9 @@ export const Ph8UsageService = {
     // API Key 由后端代理自动添加，前端不再传递
     console.log('[Ph8Usage] 正在通过后端代理获取用量数据...');
 
-    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const baseUrl = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+    // [修复] 增加端口 3000 判定；dev 统一走 vite 代理相对路径（局域网 IP 亦可访问）
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+    const baseUrl = isDev ? '/aitools/architect' : 'https://api.kbitai.com.cn';
     
     const endpoints = [
       `${baseUrl}/api/ph8/usage`,

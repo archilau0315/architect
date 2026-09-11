@@ -6,8 +6,9 @@ import { getNextApiKey } from "./geminiService";
  * 所有请求都通过后端代理，前端不直接接触 API Key
  */
 export const getProxiedUrl = (url: string, useOpenaiPath: boolean = false): string => {
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const base = isDev ? '/architect' : 'https://api.kbitai.com.cn';
+  // [修复] 增加端口判定，局域网 IP 访问 dev 服务（端口 3000）也走代理，避免直连公网证书报错
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+  const base = isDev ? '/aitools/architect' : 'https://api.kbitai.com.cn';
   const gateways = (gatewayConfig as any).gateways || {};
 
   for (const [key, config] of Object.entries(gateways)) {

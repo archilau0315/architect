@@ -9,7 +9,7 @@
 
 | 访问地址                                   | 说明          |
 | -------------------------------------- | ----------- |
-| <https://www.kbitai.com.cn/architect/> | 前端应用        |
+| <https://www.kbitai.com.cn/aitools/architect/> | 前端应用        |
 | <https://api.kbitai.com.cn>            | 后端API（独立域名） |
 | <https://www.kbitai.com.cn/admin/>     | 管理后台        |
 
@@ -39,10 +39,10 @@
 
 ## 三、目录结构
 
-### 3.1 前端目录（/www/wwwroot/kbitai.com.cn/architect/）
+### 3.1 前端目录（/www/wwwroot/kbitai.com.cn/aitools/architect/）
 
 ```
-/www/wwwroot/kbitai.com.cn/architect/
+/www/wwwroot/kbitai.com.cn/aitools/architect/
 ├── index.html              # 前端入口
 ├── assets/                 # 前端资源（JS/CSS）
 │   ├── index-*.js         # 主JS文件
@@ -85,11 +85,11 @@ npm install
 npm run build
 
 # 2. 上传构建产物到服务器
-# dist/ → /www/wwwroot/kbitai.com.cn/architect/
+# dist/ → /www/wwwroot/kbitai.com.cn/aitools/architect/
 # 注意：上传前删除旧的 .js/.css 文件，只保留新文件
 
 # 3. 公共资源
-# public/ → /www/wwwroot/kbitai.com.cn/architect/public/
+# public/ → /www/wwwroot/kbitai.com.cn/aitools/architect/public/
 ```
 
 ### 4.2 后端部署
@@ -243,7 +243,7 @@ PH8视频费率标准：
 
 | 功能    | 地址                                     |
 | ----- | -------------------------------------- |
-| 前端应用  | <https://www.kbitai.com.cn/architect/> |
+| 前端应用  | <https://www.kbitai.com.cn/aitools/architect/> |
 | 管理后台  | <https://www.kbitai.com.cn/admin/>     |
 | 后端API | <https://api.kbitai.com.cn>            |
 | PH8代理 | <https://api.kbitai.com.cn/api/ph8>    |

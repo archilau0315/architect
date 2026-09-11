@@ -1,8 +1,8 @@
 #!/bin/bash
 # 对比脚本 v2 — 自动剥离路径前缀再比较
 
-LOCAL="/www/wwwroot/kbitai.com.cn/architect/deploy/local-file-manifest.txt"
-SERVER="/www/wwwroot/kbitai.com.cn/architect/deploy/server-file-manifest.txt"
+LOCAL="/www/wwwroot/kbitai.com.cn/aitools/architect/deploy/local-file-manifest.txt"
+SERVER="/www/wwwroot/kbitai.com.cn/aitools/architect/deploy/server-file-manifest.txt"
 
 echo "============================================"
 echo "  同步状态对比报告 v2"

@@ -12,7 +12,7 @@ class APIService {
   private refreshToken: string | null = null;
 
   private constructor() {
-    this.baseURL = (import.meta as any).env?.VITE_API_URL || '/architect/backend';
+    this.baseURL = (import.meta as any).env?.VITE_API_URL || '/aitools/architect/backend';
   }
 
   static getInstance(): APIService {
@@ -73,7 +73,7 @@ class APIService {
           return this.request<T>(endpoint, options);
         } catch {
           this.clearTokens();
-          window.location.href = '/architect/';
+          window.location.href = '/aitools/architect/';
           throw new Error('Session expired');
         }
       }

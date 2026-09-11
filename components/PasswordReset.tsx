@@ -104,8 +104,9 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ onBack }) => {
     }
   }, []);
 
-  const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3001' : '';
+  // [修复] 增加端口 3000 判定；dev 统一走 vite 代理相对路径（局域网 IP 亦可访问）
+  const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000'
+    ? '/aitools/architect' : '';
 
   const verifyToken = async (tokenToVerify: string) => {
     try {

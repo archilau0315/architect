@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      base: '/architect/',
+      base: '/aitools/architect/',
       publicDir: '../public',
       server: {
         port: 3000,
@@ -15,55 +15,69 @@ export default defineConfig(({ mode }) => {
         strictPort: false,
         origin: 'http://localhost:3000',
         proxy: {
-          '/architect/api/auth': {
-            target: 'https://api.kbitai.com.cn',
-            changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/architect\/api\/auth/, '/api/auth'),
-            secure: true,
-            timeout: 30000
-          },
-          '/api/user': {
-            target: 'https://api.kbitai.com.cn',
-            changeOrigin: true,
-            secure: true,
-            timeout: 30000
-          },
+          // 内容登记 beacon（watermarkService 以同域裸路径 /api/content 调用）
           '/api/content': {
             target: 'http://localhost:3002',
             changeOrigin: true,
             timeout: 30000
           },
-          '/api/usage': {
+          // ===== 子应用 /aitools/architect 下的接口（dev base 与 vite base 一致）=====
+          '/aitools/architect/api/auth': {
             target: 'https://api.kbitai.com.cn',
             changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
+            // api.kbitai.com.cn 已部署专属 LiteSSL 证书（2026-09-11 验证通过），保持严格证书校验
             secure: true,
             timeout: 30000
           },
-          '/api/analyze': {
+          '/aitools/architect/api/user': {
             target: 'https://api.kbitai.com.cn',
             changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
             secure: true,
             timeout: 30000
           },
-          '/api/search': {
+          '/aitools/architect/api/usage': {
             target: 'https://api.kbitai.com.cn',
             changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
             secure: true,
             timeout: 30000
           },
-          '/api/ph8/user-info': {
-            target: 'http://localhost:3002',
+          '/aitools/architect/api/analyze': {
+            target: 'https://api.kbitai.com.cn',
             changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
+            secure: true,
+            timeout: 30000
           },
-          '/architect/api/ph8/user-info': {
-            target: 'http://localhost:3002',
+          '/aitools/architect/api/search': {
+            target: 'https://api.kbitai.com.cn',
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/architect/, ''),
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
+            secure: true,
+            timeout: 30000
           },
-          '/api/ph8': {
+          // PH8 用户信息（用户等级）走生产后端（必须排在通用 /api/ph8 之前，避免被 wellai 通配捕获）
+          '/aitools/architect/api/ph8/user-info': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
+            secure: true,
+            timeout: 30000
+          },
+          // PH8 用量类接口属自家后端（ph8UsageService 多候选），必须排在 wellai 通配之前
+          '^/aitools/architect/api/ph8(-openai)?/(usage|dashboard|users)': {
+            target: 'https://api.kbitai.com.cn',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/aitools\/architect/, ''),
+            secure: true,
+            timeout: 30000
+          },
+          '/aitools/architect/api/ph8': {
             target: 'https://wellai.cc',
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/api\/ph8/, '/v1'),
+            rewrite: (path) => path.replace(/^\/aitools\/architect\/api\/ph8/, '/v1'),
             headers: {
               'Authorization': `Bearer ${env.PH8_GATEWAY_KEY}`
             },
@@ -71,10 +85,10 @@ export default defineConfig(({ mode }) => {
             timeout: 300000,
             proxyTimeout: 300000
           },
-          '/api/ph8-openai': {
+          '/aitools/architect/api/ph8-openai': {
             target: 'https://wellai.cc',
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/api\/ph8-openai/, '/openai/v1'),
+            rewrite: (path) => path.replace(/^\/aitools\/architect\/api\/ph8-openai/, '/openai/v1'),
             headers: {
               'Authorization': `Bearer ${env.PH8_GATEWAY_KEY}`
             },

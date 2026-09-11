@@ -2,7 +2,7 @@
 
 > 项目名称：首席图像架构师（Chief Image Architect）
 > 所属域名：[www.kbitai.com.cn](https://www.kbitai.com.cn)
-> 子应用路径：`/architect/`
+> 子应用路径：`/aitools/architect/`
 > 文档版本：v1.0
 > 最后更新：2026-08-18
 
@@ -31,7 +31,7 @@
 
 ### 1.1 项目定位
 
-"首席图像架构师"是天津匡形无界智能科技有限公司旗下 **KbitAI 平台**的子应用，部署于 `https://www.kbitai.com.cn/architect/`。它是一个面向创意设计领域的 **AI 生成内容（AIGC）工作站**，集成图像生成、视频生成、对话、图像分析、联网搜索、图像修复（Inpainting）等多种能力。
+"首席图像架构师"是天津匡形无界智能科技有限公司旗下 **KbitAI 平台**的子应用，部署于 `https://www.kbitai.com.cn/aitools/architect/`。它是一个面向创意设计领域的 **AI 生成内容（AIGC）工作站**，集成图像生成、视频生成、对话、图像分析、联网搜索、图像修复（Inpainting）等多种能力。
 
 ### 1.2 核心能力
 
@@ -49,7 +49,7 @@
 
 | 功能 | 地址 |
 | ---- | ---- |
-| 前端应用 | https://www.kbitai.com.cn/architect/ |
+| 前端应用 | https://www.kbitai.com.cn/aitools/architect/ |
 | 后端 API | https://api.kbitai.com.cn |
 | 管理后台 | https://www.kbitai.com.cn/admin/ |
 | PH8 代理 | https://api.kbitai.com.cn/api/ph8 |
@@ -65,7 +65,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                         浏览器客户端                          │
-│  www.kbitai.com.cn/architect/  (React SPA, Vite 构建)        │
+│  www.kbitai.com.cn/aitools/architect/  (React SPA, Vite 构建)        │
 └────────────┬───────────────────────────────┬─────────────────┘
              │ /api/* 请求                    │ /api/ph8/* 视频/图像
              ▼                                ▼
@@ -583,7 +583,7 @@ npm install
 
 # 2. 启动开发服务器（端口 3000）
 npm run dev
-# 访问 http://localhost:3000/architect/
+# 访问 http://localhost:3000/aitools/architect/
 
 # 3. 类型检查
 npm run lint      # tsc --noEmit
@@ -594,7 +594,7 @@ npm run preview   # 本地预览构建产物
 ```
 
 **Vite 配置要点**（[vite.config.ts](file:///e:/works/Aidev/Kbitai绝对安全/kbitai_com_cn/Architect(NewUI)/vite.config.ts)）：
-- `base: '/architect/'`：子应用路径前缀。
+- `base: '/aitools/architect/'`：子应用路径前缀。
 - `publicDir: '../public'`：Logo 等公共资源。
 - 代理：`/api/ph8` → `https://wellai.cc/v1`（注入 `PH8_GATEWAY_KEY`），`/api/user` 等 → `https://api.kbitai.com.cn`。
 - 自定义插件 `serve-public-dir`：开发态服务 `/public` 静态资源。
@@ -659,9 +659,9 @@ npm test           # 运行 run-tests.js
 
 | 项目 | 服务器路径 |
 | ---- | ---------- |
-| 前端根目录 | `/www/wwwroot/kbitai.com.cn/architect` |
-| 前端部署产物 | `/www/wwwroot/kbitai.com.cn/architect/dist` |
-| 公共资源 | `/www/wwwroot/kbitai.com.cn/architect/public` |
+| 前端根目录 | `/www/wwwroot/kbitai.com.cn/aitools/architect` |
+| 前端部署产物 | `/www/wwwroot/kbitai.com.cn/aitools/architect/dist` |
+| 公共资源 | `/www/wwwroot/kbitai.com.cn/aitools/architect/public` |
 | 后端部署目录 | `/www/wwwroot/api.kbitai.com.cn` |
 | 后端控制器 | `/www/wwwroot/api.kbitai.com.cn/controllers` |
 | 后端路由 | `/www/wwwroot/api.kbitai.com.cn/routes` |
@@ -677,8 +677,8 @@ npm run build
 # 删除 dist/assets/ 中无用旧文件后再上传
 
 # 2. 上传前端产物
-# dist/ → /www/wwwroot/kbitai.com.cn/architect/dist
-# public/ → /www/wwwroot/kbitai.com.cn/architect/public
+# dist/ → /www/wwwroot/kbitai.com.cn/aitools/architect/dist
+# public/ → /www/wwwroot/kbitai.com.cn/aitools/architect/public
 
 # 3. 上传后端代码
 # backend/controllers/  → /www/wwwroot/api.kbitai.com.cn/controllers
@@ -695,7 +695,7 @@ nginx -s reload
 ### 11.4 Nginx 关键配置
 
 参考 [deploy/nginx.conf](file:///e:/works/Aidev/Kbitai绝对安全/kbitai_com_cn/Architect(NewUI)/deploy/nginx.conf) 与 [deploy/www.kbitai.com.cn.conf](file:///e:/works/Aidev/Kbitai绝对安全/kbitai_com_cn/Architect(NewUI)/deploy/www.kbitai.com.cn.conf)：
-- `location /public/` → `root /www/wwwroot/kbitai.com.cn/architect/public;`
+- `location /public/` → `root /www/wwwroot/kbitai.com.cn/aitools/architect/public;`
 - `/api/*` 反向代理到后端 3001。
 - CORS 由 Nginx 统一处理，后端不再添加 CORS 头。
 

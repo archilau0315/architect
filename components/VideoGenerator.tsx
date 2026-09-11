@@ -259,8 +259,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
       console.log('[VideoGenerator] 开始重新获取视频:', videoRef);
       
       // 使用 PH8 网关获取视频（与 geminiService.getProxiedUrl 保持一致的路径格式）
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isDev ? '/architect' : `${window.location.origin}`;
+      // [修复] 增加端口 3000 判定，局域网 IP 访问 dev 也走 /aitools/architect 代理
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+      const apiBase = isDev ? '/aitools/architect' : `${window.location.origin}`;
       const proxiedUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}`;
       console.log('[VideoGenerator] 请求URL:', proxiedUrl, `(环境: ${isDev ? '开发' : '生产'})`);
       
@@ -628,8 +629,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ instructions, onReset, 
         if (session) {
           try { const sd = JSON.parse(session); userId = sd.user_id || sd.email || ''; } catch {}
         }
-        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-          ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+        // [修复] 增加端口 3000 判定；dev 统一走 vite 代理相对路径（局域网 IP 亦可访问）
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000'
+          ? '/aitools/architect' : 'https://api.kbitai.com.cn';
         const checkRes = await fetch(`${apiBase}/api/usage/video-download/check`, {
           method: 'POST',
           headers: { 

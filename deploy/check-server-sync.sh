@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================
 # 服务器端同步检查 v4 — 匹配实际部署结构
-# 前端: /www/wwwroot/kbitai.com.cn/architect/
+# 前端: /www/wwwroot/kbitai.com.cn/aitools/architect/
 # 后端: /www/wwwroot/api.kbitai.com.cn/
 # 用法: bash deploy/check-server-sync.sh
 # ============================================
@@ -13,7 +13,7 @@ echo "  KbitAI Architect - 服务器同步检查"
 echo "============================================"
 echo ""
 
-FRONT="/www/wwwroot/kbitai.com.cn/architect"
+FRONT="/www/wwwroot/kbitai.com.cn/aitools/architect"
 BACKEND="/www/wwwroot/api.kbitai.com.cn"
 OUT="$FRONT/deploy/server-file-manifest.txt"
 

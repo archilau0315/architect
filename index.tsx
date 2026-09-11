@@ -13,7 +13,8 @@ const checkAdminResetPassword = () => {
   const search = window.location.search;
   
   if (pathname === '/admin/reset-password' || pathname === '/admin/reset-password.html') {
-    const apiDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    // [修复] 增加端口 3000 判定（注：dev 跳转到本机后端 3001 的 admin 静态页，需本机运行后端）
+    const apiDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000'
       ? 'http://localhost:3001'
       : 'https://api.kbitai.com.cn';
     

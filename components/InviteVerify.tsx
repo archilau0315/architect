@@ -150,8 +150,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     setError('');
 
     try {
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+      // [修复] 增加端口 3000 判定；dev 统一走 vite 代理相对路径（局域网 IP 亦可访问）
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+      const apiBase = isDev ? '/aitools/architect' : 'https://api.kbitai.com.cn';
       console.log('登录请求URL:', `${apiBase}/api/auth/login`);
       console.log('登录请求数据:', {
         email: registerData.email,
@@ -247,8 +248,9 @@ const InviteVerify: React.FC<InviteVerifyProps> = ({ onVerified }) => {
     }
 
     try {
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isDev ? 'http://localhost:3001' : 'https://api.kbitai.com.cn';
+      // [修复] 增加端口 3000 判定；dev 统一走 vite 代理相对路径（局域网 IP 亦可访问）
+      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+      const apiBase = isDev ? '/aitools/architect' : 'https://api.kbitai.com.cn';
       const response = await fetch(`${apiBase}/api/invite/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

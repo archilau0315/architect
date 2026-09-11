@@ -128,8 +128,9 @@ export const VideoPlayer = ({
         // 异步恢复视频
         (async () => {
           try {
-            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const apiBase = isDev ? '/architect' : `${window.location.origin}`;
+            // [修复] 增加端口 3000 判定，局域网 IP 访问 dev 也走 /aitools/architect 代理
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+            const apiBase = isDev ? '/aitools/architect' : `${window.location.origin}`;
             const restoreUrl = `${apiBase}/api/ph8/openai/v1/videos/${videoRef}`;
             console.log('[VideoPlayer] 恢复请求:', restoreUrl);
 

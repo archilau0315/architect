@@ -86,7 +86,7 @@ echo -e "${BLUE}[2/5] 检测前端代码修改...${NC}"
 echo "------------------------------------------------------------"
 
 # 2.1 检查 VideoGenerator.tsx 是否包含 videoBlobService 导入
-FRONTEND_DIST="/www/wwwroot/kbitai.com.cn/architect/dist/assets"
+FRONTEND_DIST="/www/wwwroot/kbitai.com.cn/aitools/architect/assets"
 
 echo -n "  [2.1] videoBlobService导入检查... "
 if ls $FRONTEND_DIST/index-*.js 1>/dev/null 2>&1; then

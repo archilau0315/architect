@@ -4,7 +4,7 @@ echo "=========================================="
 echo "首席图像架构师 - 子应用部署脚本"
 echo "版本: 1.0.0"
 echo "公司: 天津匡形无界智能科技有限公司"
-echo "部署路径: www.kbitai.com.cn/architect/"
+echo "部署路径: www.kbitai.com.cn/aitools/architect/"
 echo "=========================================="
 
 set -e
@@ -26,7 +26,7 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-DEPLOY_DIR="/www/wwwroot/kbitai.com.cn/architect"
+DEPLOY_DIR="/www/wwwroot/kbitai.com.cn/aitools/architect"
 
 check_requirements() {
     print_info "检查系统环境..."
@@ -178,15 +178,15 @@ print_summary() {
     echo "=========================================="
     echo ""
     echo "访问地址:"
-    echo "  前端应用: https://www.kbitai.com.cn/architect/"
-    echo "  管理后台: https://www.kbitai.com.cn/architect/admin/"
-    echo "  API接口:  https://www.kbitai.com.cn/architect/backend/api/"
+    echo "  前端应用: https://www.kbitai.com.cn/aitools/architect/"
+    echo "  管理后台: https://api.kbitai.com.cn/admin/"
+    echo "  API接口:  https://api.kbitai.com.cn/api/"
     echo ""
     echo "后续步骤:"
     echo "1. 修改 $DEPLOY_DIR/backend/.env 中的数据库密码"
     echo "2. 将 deploy/nginx.conf 配置合并到主站 Nginx 配置"
     echo "3. 重启 Nginx: nginx -s reload"
-    echo "4. 访问管理后台: https://www.kbitai.com.cn/architect/admin/"
+    echo "4. 访问管理后台: https://api.kbitai.com.cn/admin/"
     echo "5. 默认管理员账号: admin / admin123"
     echo ""
     echo "请及时修改管理员密码！"
