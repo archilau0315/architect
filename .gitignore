@@ -50,3 +50,9 @@ coverage
 # Temporary files
 *.tmp
 *.temp
+
+# README 素材原图备份（仅本地留档，不入库）
+DOCS/images/_originals/
+
+# 根目录下的嵌套旧拷贝（完整项目副本，避免重复入库）
+/architect/
